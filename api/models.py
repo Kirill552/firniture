@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .database import Base
 
@@ -83,11 +84,26 @@ class HardwareItem(Base):
     brand: Mapped[str | None] = mapped_column(String(80), nullable=True)
     type: Mapped[str] = mapped_column(String(40))
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     params: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     compat: Mapped[list[str]] = mapped_column(JSON, default=list)
     url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     supplier_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="SET NULL"))
+    
+    # Поля для векторного поиска (добавлены для 2025)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(256), nullable=True)
+    embedding_version: Mapped[str | None] = mapped_column(String(40), nullable=True)  # Версия модели эмбеддингов
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Хеш контента для проверки актуальности
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Время индексации
+    
+    # Дополнительные поля для каталога фурнитуры
+    category: Mapped[str | None] = mapped_column(String(60), nullable=True)  # Категория фурнитуры
+    material_type: Mapped[str | None] = mapped_column(String(40), nullable=True)  # Тип материала для совместимости
+    thickness_min_mm: Mapped[float | None] = mapped_column(Float, nullable=True)  # Минимальная толщина материала
+    thickness_max_mm: Mapped[float | None] = mapped_column(Float, nullable=True)  # Максимальная толщина материала
+    price_rub: Mapped[float | None] = mapped_column(Float, nullable=True)  # Цена в рублях
+    is_active: Mapped[bool] = mapped_column(default=True)  # Активность позиции
 
 
 class BOMItem(Base):
@@ -120,12 +136,14 @@ class CAMJob(Base):
     id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     order_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"))
     job_kind: Mapped[str] = mapped_column(String(20))  # DXF | GCODE
+    artifact_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("artifacts.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(Enum(
         JobStatusEnum.Created,
         JobStatusEnum.Processing,
         JobStatusEnum.Completed,
         JobStatusEnum.Failed,
         name="job_status",
+        native_enum=False,
     ), default=JobStatusEnum.Created)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
@@ -155,6 +173,7 @@ class Validation(Base):
         ValidationStatusEnum.Approved,
         ValidationStatusEnum.Rejected,
         name="validation_status",
+        native_enum=False,
     ), default=ValidationStatusEnum.Pending)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

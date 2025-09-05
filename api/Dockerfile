@@ -7,7 +7,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy asyncpg alembic redis boto3 pydantic-settings
+    && pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy asyncpg alembic redis boto3 pydantic-settings "psycopg[binary]" ezdxf==1.4.2 aiohttp>=3.10.0 numpy>=1.26.0 scipy>=1.13.0 pgvector>=0.4.1
 
 COPY api ./api
 COPY shared ./shared

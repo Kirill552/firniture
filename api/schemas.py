@@ -73,6 +73,8 @@ class ValidationApproveResponse(BaseModel):
 
 class CAMJobRequest(BaseModel):
     product_config_id: str
+    order_id: Optional[str] = None
+    context: Dict[str, Any] = Field(default_factory=dict)
 
 
 class CAMJobResponse(BaseModel):
@@ -81,10 +83,23 @@ class CAMJobResponse(BaseModel):
     status: Literal["processing", "created"]
 
 
+class CAMJobStatusResponse(BaseModel):
+    job_id: str
+    job_kind: Literal["DXF", "GCODE"]
+    status: Literal["Created", "Processing", "Completed", "Failed"]
+    artifact_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ArtifactDownloadResponse(BaseModel):
+    artifact_id: str
+    url: str
+
+
 class Export1CRequest(BaseModel):
     order_id: str
 
 
 class Export1CResponse(BaseModel):
     success: bool
-    _1c_order_id: Optional[str] = Field(None, alias="1c_order_id")
+    one_c_order_id: Optional[str] = Field(None, alias="1c_order_id")
