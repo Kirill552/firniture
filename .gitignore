@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local data
+*.sqlite
+dist/
+build/
+coverage/
