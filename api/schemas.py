@@ -25,9 +25,11 @@ class HardwareSelectRequest(BaseModel):
 
 class BOMItem(BaseModel):
     hardware_item_id: str
+    sku: str
     name: Optional[str] = None
     quantity: int
     supplier: Optional[str] = None
+    version: Optional[str] = None
 
 
 class HardwareSelectResponse(BaseModel):
@@ -49,6 +51,7 @@ class SpecValidateRequest(BaseModel):
 
 
 class SpecValidateResponse(BaseModel):
+    validation_id: str
     validation_required: bool
     approvals_needed: int
     next_step_allowed: bool
@@ -74,6 +77,7 @@ class ValidationApproveResponse(BaseModel):
 class CAMJobRequest(BaseModel):
     product_config_id: str
     order_id: Optional[str] = None
+    dxf_job_id: Optional[str] = None # For G-code jobs
     context: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -98,6 +102,11 @@ class ArtifactDownloadResponse(BaseModel):
 
 class Export1CRequest(BaseModel):
     order_id: str
+
+class ZIPJobRequest(BaseModel):
+    order_id: str
+    job_ids: List[str]
+
 
 
 class Export1CResponse(BaseModel):

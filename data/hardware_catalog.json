@@ -1,0 +1,39 @@
+
+[
+  {
+    "sku": "HNG-001",
+    "brand": "Blum",
+    "type": "hinge",
+    "name": "CLIP top BLUMOTION 110°",
+    "params": {
+      "opening_angle": 110,
+      "soft_close": true
+    },
+    "compat": ["ldsp-16", "ldsp-18"],
+    "url": "https://www.blum.com/us/en/products/hingesystems/clip-top-blumotion/overview/"
+  },
+  {
+    "sku": "SLD-001",
+    "brand": "Hettich",
+    "type": "slide",
+    "name": "Quadro 4D V6",
+    "params": {
+      "extension_length": 500,
+      "load_capacity_kg": 30
+    },
+    "compat": ["kitchen-drawer", "office-furniture"],
+    "url": "https://web.hettich.com/en-us/products-e-shop/runner-systems/quadro/quadro-4d-v6"
+  },
+  {
+    "sku": "HND-001",
+    "brand": "IKEA",
+    "type": "handle",
+    "name": "BAGGANÄS",
+    "params": {
+      "material": "stainless_steel",
+      "color": "black"
+    },
+    "compat": [],
+    "url": "https://www.ikea.com/us/en/p/bagganaes-handle-black-80338413/"
+  }
+]

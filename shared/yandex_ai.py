@@ -15,6 +15,9 @@ import time
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
+from api.models import HardwareItem, ProductConfig
+from shared.embeddings import concat_product_config_text
+
 import aiohttp
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
@@ -282,7 +285,36 @@ class YandexVisionClient(YandexCloudClient):
         )
 
 
+from api.models import HardwareItem, ProductConfig
+
+async def rank_hardware_with_gpt(
+    product_config: ProductConfig,
+    hardware_items: List[HardwareItem],
+    settings: YandexCloudSettings
+) -> List[HardwareItem]:
+    """Ranks hardware items using YandexGPT."""
+    
+    prompt = f"""Given the following product configuration:
+{concat_product_config_text(product_config)}
+
+Rank the following hardware items based on their suitability for this product, from most to least suitable. Return a comma-separated list of SKUs.
+
+Hardware items:
+"""
+
+    for item in hardware_items:
+        prompt += f"- SKU: {item.sku}, Name: {item.name}, Params: {item.params}\n"
+
+    async with create_gpt_client(settings) as client:
+        response = await client.generate_text(prompt)
+        ranked_skus = [sku.strip() for sku in response.text.split(',')]
+
+    # Reorder the hardware items based on the ranked SKUs
+    ranked_items = sorted(hardware_items, key=lambda item: ranked_skus.index(item.sku) if item.sku in ranked_skus else len(ranked_skus))
+    return ranked_items
+
 # Удобные фабрики
+
 def create_embeddings_client(settings: YandexCloudSettings) -> YandexEmbeddingsClient:
     """Создать клиент эмбеддингов."""
     return YandexEmbeddingsClient(settings)

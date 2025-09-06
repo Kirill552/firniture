@@ -11,6 +11,7 @@ from .settings import settings
 
 DXF_QUEUE = "cam:dxf"
 GCODE_QUEUE = "cam:gcode"
+ZIP_QUEUE = "cam:zip"
 DLQ_QUEUE = "cam:dlq"
 
 
@@ -18,8 +19,11 @@ def get_redis() -> AsyncRedis:
     return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
+import uuid
+
 async def enqueue(queue: str, payload: dict[str, Any]) -> int:
     r = get_redis()
+    payload["idempotency_key"] = str(uuid.uuid4())
     return await cast(Awaitable[int], r.lpush(queue, json.dumps(payload)))
 
 
