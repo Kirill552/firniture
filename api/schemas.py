@@ -1,6 +1,8 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Literal, Optional
+from uuid import UUID
+from datetime import datetime
 
 
 class SpecExtractRequest(BaseModel):
@@ -98,6 +100,27 @@ class CAMJobStatusResponse(BaseModel):
 class ArtifactDownloadResponse(BaseModel):
     artifact_id: str
     url: str
+
+
+class DialogueMessageBase(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+class DialogueMessageCreate(DialogueMessageBase):
+    pass
+
+class DialogueMessage(DialogueMessageBase):
+    id: UUID
+    order_id: UUID
+    turn_number: int
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
+
+class DialogueTurnRequest(BaseModel):
+    order_id: UUID
+    messages: list[DialogueMessageCreate]
 
 
 class Export1CRequest(BaseModel):

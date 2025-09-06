@@ -12,8 +12,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 from dataclasses import dataclass
+import json
 
 from api.models import HardwareItem, ProductConfig
 from shared.embeddings import concat_product_config_text
@@ -37,9 +38,9 @@ class YandexCloudSettings(BaseSettings):
     yc_ocr_endpoint: str = "https://ocr.api.cloud.yandex.net"
     
     # Модели
-    yc_gpt_model: str = "gpt://folder_id/yandexgpt/latest"
-    yc_embedding_doc_model: str = "emb://folder_id/text-search-doc/latest"
-    yc_embedding_query_model: str = "emb://folder_id/text-search-query/latest"
+    yc_gpt_model: str = "gpt://{folder_id}/yandexgpt/latest"
+    yc_embedding_doc_model: str = "emb://{folder_id}/text-search-doc/latest"
+    yc_embedding_query_model: str = "emb://{folder_id}/text-search-query/latest"
     
     # Retry/timeout
     yc_timeout_seconds: int = 30
@@ -160,9 +161,9 @@ class YandexEmbeddingsClient(YandexCloudClient):
         """Получить эмбеддинг для текста."""
         
         if model_type == "doc":
-            model_uri = self.settings.yc_embedding_doc_model.replace("folder_id", self.settings.yc_folder_id)
+            model_uri = self.settings.yc_embedding_doc_model.replace("{folder_id}", self.settings.yc_folder_id)
         elif model_type == "query":
-            model_uri = self.settings.yc_embedding_query_model.replace("folder_id", self.settings.yc_folder_id)
+            model_uri = self.settings.yc_embedding_query_model.replace("{folder_id}", self.settings.yc_folder_id)
         else:
             raise ValueError(f"Unknown model_type: {model_type}")
         
@@ -195,7 +196,7 @@ class YandexGPTClient(YandexCloudClient):
     ) -> GPTResponse:
         """Генерация текста через YandexGPT."""
         
-        model_uri = self.settings.yc_gpt_model.replace("folder_id", self.settings.yc_folder_id)
+        model_uri = self.settings.yc_gpt_model.replace("{folder_id}", self.settings.yc_folder_id)
         
         payload = {
             "modelUri": model_uri,
@@ -213,7 +214,6 @@ class YandexGPTClient(YandexCloudClient):
         
         response = await self._request_with_retry("POST", url, json_data=payload)
         
-        # Структура ответа YandexGPT
         result = response["result"]
         alternatives = result["alternatives"]
         if not alternatives:
@@ -227,6 +227,51 @@ class YandexGPTClient(YandexCloudClient):
             usage=usage,
             model_version=result.get("modelVersion", "unknown")
         )
+
+    async def stream_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.3,
+        max_tokens: int = 2000
+    ) -> AsyncGenerator[str, None]:
+        """
+        Генерация текста в режиме диалога с потоковой передачей.
+        """
+        if not self.session:
+            raise RuntimeError("Client session not initialized. Use 'async with' context.")
+
+        model_uri = self.settings.yc_gpt_model.replace("{folder_id}", self.settings.yc_folder_id)
+        
+        payload = {
+            "modelUri": model_uri,
+            "completionOptions": {
+                "stream": True,
+                "temperature": temperature,
+                "maxTokens": max_tokens
+            },
+            "messages": messages
+        }
+        
+        url = f"{self.settings.yc_llm_endpoint}/foundationModels/v1/completionStream"
+        
+        async with self.session.post(url, json=payload, headers=self._get_headers()) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                log.error(f"YandexGPT streaming failed with status {resp.status}: {error_text}")
+                raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
+
+            async for chunk in resp.content.iter_any():
+                try:
+                    chunk_str = chunk.decode('utf-8')
+                    for part in chunk_str.split('\n'):
+                        if part.strip():
+                            data = json.loads(part)
+                            alternatives = data.get("result", {}).get("alternatives", [])
+                            if alternatives and "text" in alternatives[0]["message"]:
+                                yield alternatives[0]["message"]["text"]
+                except (json.JSONDecodeError, KeyError) as e:
+                    log.warning(f"Could not decode or parse streaming chunk: {chunk}, error: {e}")
+                    continue
 
 
 class YandexVisionClient(YandexCloudClient):
@@ -242,12 +287,11 @@ class YandexVisionClient(YandexCloudClient):
         if language_codes is None:
             language_codes = ["ru", "en"]
         
-        # Vision OCR принимает base64
         import base64
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
         
         payload = {
-            "mimeType": "image/jpeg",  # Можно детектить автоматически
+            "mimeType": "image/jpeg",
             "languageCodes": language_codes,
             "model": "page",
             "content": image_base64
@@ -257,14 +301,11 @@ class YandexVisionClient(YandexCloudClient):
         
         response = await self._request_with_retry("POST", url, json_data=payload)
         
-        # Парсинг результата OCR
         result = response["result"]
         text_annotation = result.get("textAnnotation", {})
         
-        # Собираем весь текст
         full_text = text_annotation.get("fullText", "")
         
-        # Средняя уверенность
         blocks = text_annotation.get("blocks", [])
         total_confidence = 0.0
         confidence_count = 0
@@ -284,8 +325,6 @@ class YandexVisionClient(YandexCloudClient):
             blocks=blocks
         )
 
-
-from api.models import HardwareItem, ProductConfig
 
 async def rank_hardware_with_gpt(
     product_config: ProductConfig,
@@ -309,7 +348,6 @@ Hardware items:
         response = await client.generate_text(prompt)
         ranked_skus = [sku.strip() for sku in response.text.split(',')]
 
-    # Reorder the hardware items based on the ranked SKUs
     ranked_items = sorted(hardware_items, key=lambda item: ranked_skus.index(item.sku) if item.sku in ranked_skus else len(ranked_skus))
     return ranked_items
 

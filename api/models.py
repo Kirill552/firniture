@@ -34,6 +34,7 @@ class Order(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     products: Mapped[list["ProductConfig"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    dialogue_messages: Mapped[list["DialogueMessage"]] = relationship(back_populates="order", cascade="all, delete-orphan")
 
 
 class ProductConfig(Base):
@@ -162,6 +163,18 @@ class AuditLog(Base):
     entity: Mapped[str] = mapped_column(String(40))
     entity_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True))
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class DialogueMessage(Base):
+    __tablename__ = "dialogue_messages"
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    order_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"))
+    turn_number: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(20))  # user, assistant
+    content: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    order: Mapped["Order"] = relationship(back_populates="dialogue_messages")
 
 
 class Validation(Base):
