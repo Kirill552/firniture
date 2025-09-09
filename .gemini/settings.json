@@ -2,9 +2,18 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"],
+      "args": [
+        "@playwright/mcp@latest"
+      ],
       "timeout": 15000,
       "trust": true
+    },
+    "context7": {
+      "httpUrl": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "ctx7sk-0f59cc1c-30f0-4251-a713-0c97cc491b92",
+        "Accept": "application/json, text/event-stream"
+      }
     }
   }
 }
