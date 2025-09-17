@@ -5,6 +5,24 @@ from uuid import UUID
 from datetime import datetime
 
 
+class OrderBase(BaseModel):
+    customer_ref: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class OrderCreate(OrderBase):
+    pass
+
+
+class Order(OrderBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
 class SpecExtractRequest(BaseModel):
     input_type: Literal["text", "image", "sketch"]
     content: str

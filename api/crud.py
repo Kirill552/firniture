@@ -8,6 +8,15 @@ from sqlalchemy.orm import selectinload
 from . import models, schemas
 
 
+async def create_order(db: AsyncSession, order: schemas.OrderCreate) -> models.Order:
+    """Создать новый заказ."""
+    db_order = models.Order(**order.dict())
+    db.add(db_order)
+    await db.commit()
+    await db.refresh(db_order)
+    return db_order
+
+
 async def get_order_with_history(db: AsyncSession, order_id: UUID) -> models.Order | None:
     """Получить заказ и историю его диалога."""
     stmt = (

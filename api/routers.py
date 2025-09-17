@@ -15,6 +15,7 @@ from .models import (
 )
 from .queues import enqueue, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE
 from .schemas import (
+    OrderCreate, Order as OrderSchema,
     SpecExtractRequest, SpecExtractResponse,
     HardwareSelectRequest, HardwareSelectResponse,
     SpecValidateRequest, SpecValidateResponse,
@@ -38,6 +39,12 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
 dialogue_router = APIRouter(prefix="/api/v1/dialogue", tags=["Dialogue"])
+
+
+@router.post("/orders", response_model=OrderSchema)
+async def create_order(order: OrderCreate, db: AsyncSession = Depends(get_db)):
+    return await crud.create_order(db=db, order=order)
+
 
 # ... (existing routes are kept the same, so they are omitted for brevity) ...
 

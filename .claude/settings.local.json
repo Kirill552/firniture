@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Read(//c/Users/whirp/Pictures/Screenshots/**)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm uninstall:*)",
+      "WebSearch",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_snapshot",
+      "Bash(cat:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(tasklist)",
+      "Bash(del srcmiddleware.ts)",
+      "Read(//c/Users/whirp/**)",
+      "Bash(claude --debug)",
+      "Bash(npm config:*)",
+      "Read(//c/nvm4w/nodejs/node_modules/@playwright/mcp//**)",
+      "mcp__context7__resolve-library-id",
+      "mcp__rube__RUBE_SEARCH_TOOLS",
+      "mcp__context7__get-library-docs",
+      "WebFetch(domain:github.com)",
+      "Bash(npx shadcn@latest add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enabledMcpjsonServers": [
+    "playwright",
+    "context7"
+  ]
+}

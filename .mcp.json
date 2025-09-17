@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "node",
+      "args": [
+        "C:\\nvm4w\\nodejs\\node_modules\\@playwright\\mcp\\index.js"
+      ]
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "ctx7sk-0f59cc1c-30f0-4251-a713-0c97cc491b92"
+      }
+    },
+    "rube": {
+      "type": "http", 
+      "url": "https://rube.app/mcp"
+    }
+  }
+}
