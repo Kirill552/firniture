@@ -44,6 +44,8 @@ class HardwareType(str, Enum):
     HINGE = "hinge"
     SLIDE = "slide"
     HANDLE = "handle"
+    LIFT = "lift"
+    LEG = "leg"
     CONNECTOR = "connector"
     OTHER = "other"
 
@@ -95,11 +97,18 @@ class HardwareItem(BaseModel):
     brand: Optional[str] = None
     type: HardwareType = HardwareType.OTHER
     name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
     params: Dict[str, Any] = Field(default_factory=dict)
     compat: List[str] = Field(default_factory=list, description="Список совместимостей/тегов")
     url: Optional[HttpUrl] = None
     version: Optional[str] = None
     supplier_id: Optional[UUID] = None
+    # Поля для совместимости с материалами
+    material_type: Optional[str] = None
+    thickness_min_mm: Optional[float] = None
+    thickness_max_mm: Optional[float] = None
+    price_rub: Optional[float] = None
 
 
 class Supplier(BaseModel):

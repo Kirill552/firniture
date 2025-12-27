@@ -300,6 +300,24 @@ class YandexGPTClient(YandexCloudClient):
                     continue
 
 
+@dataclass
+class ToolCall:
+    """Вызов инструмента от модели."""
+    id: str
+    name: str
+    arguments: Dict[str, Any]
+
+
+@dataclass
+class GPTResponseWithTools:
+    """Ответ от YandexGPT с поддержкой tool calls."""
+    text: Optional[str]
+    tool_calls: List[ToolCall]
+    usage: Dict[str, int]
+    model_version: str
+    finish_reason: str
+
+
 class YandexOpenAIClient(YandexCloudClient):
     """
     Клиент для YandexGPT через OpenAI-совместимый API.
@@ -308,6 +326,7 @@ class YandexOpenAIClient(YandexCloudClient):
     - Стандартный SSE streaming
     - Дополнительные параметры (top_p, frequency_penalty, presence_penalty)
     - Совместимость с OpenAI SDK и LangChain
+    - Поддержка Function Calling (tools)
     - Готовность к Alice AI LLM
     """
 
@@ -326,6 +345,81 @@ class YandexOpenAIClient(YandexCloudClient):
         if not model.startswith("gpt://"):
             model = f"gpt://{self.settings.yc_folder_id}/{model}/latest"
         return model
+
+    async def chat_completion_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: str = "auto",
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> GPTResponseWithTools:
+        """
+        Генерация с поддержкой Function Calling (tools).
+
+        Args:
+            messages: История сообщений (включая tool results)
+            tools: Список доступных инструментов в формате OpenAI
+            tool_choice: "auto", "none", или {"type": "function", "function": {"name": "..."}}
+            temperature: Температура генерации
+            top_p: Nucleus sampling
+            max_tokens: Максимум токенов
+
+        Returns:
+            GPTResponseWithTools с текстом и/или вызовами инструментов
+        """
+        if not self.session:
+            raise RuntimeError("Client session not initialized. Use 'async with' context.")
+
+        payload = {
+            "model": self._get_model_uri(),
+            "messages": messages,
+            "temperature": temperature or self.settings.yc_default_temperature,
+            "top_p": top_p or self.settings.yc_default_top_p,
+            "max_tokens": max_tokens or self.settings.yc_default_max_tokens,
+            "stream": False,
+        }
+
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
+
+        url = f"{self.settings.yc_openai_endpoint}/chat/completions"
+        log.info(f"OpenAI API request with tools: model={payload['model']}, tools_count={len(tools or [])}")
+
+        async with self.session.post(url, json=payload, headers=self._get_openai_headers()) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                log.error(f"YandexGPT OpenAI API with tools failed: {resp.status}: {error_text}")
+                raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
+
+            data = await resp.json()
+            choice = data["choices"][0]
+            message = choice["message"]
+
+            # Парсим tool_calls если есть
+            tool_calls = []
+            if "tool_calls" in message and message["tool_calls"]:
+                for tc in message["tool_calls"]:
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except (json.JSONDecodeError, KeyError):
+                        args = {}
+
+                    tool_calls.append(ToolCall(
+                        id=tc.get("id", ""),
+                        name=tc["function"]["name"],
+                        arguments=args
+                    ))
+
+            return GPTResponseWithTools(
+                text=message.get("content"),
+                tool_calls=tool_calls,
+                usage=data.get("usage", {}),
+                model_version=data.get("model", "unknown"),
+                finish_reason=choice.get("finish_reason", "stop")
+            )
 
     async def chat_completion(
         self,

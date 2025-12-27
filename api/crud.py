@@ -29,10 +29,10 @@ async def get_order_with_history(db: AsyncSession, order_id: UUID) -> models.Ord
 
 
 async def create_dialogue_message(
-    db: AsyncSession, 
-    order_id: UUID, 
-    turn_number: int, 
-    role: str, 
+    db: AsyncSession,
+    order_id: UUID,
+    turn_number: int,
+    role: str,
     content: str
 ) -> models.DialogueMessage:
     """Создать новое сообщение в диалоге."""
@@ -46,3 +46,16 @@ async def create_dialogue_message(
     await db.commit()
     await db.refresh(db_message)
     return db_message
+
+
+async def get_order_with_products(db: AsyncSession, order_id: UUID) -> models.Order | None:
+    """Получить заказ с его изделиями и панелями."""
+    stmt = (
+        select(models.Order)
+        .where(models.Order.id == order_id)
+        .options(
+            selectinload(models.Order.products).selectinload(models.ProductConfig.panels)
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()

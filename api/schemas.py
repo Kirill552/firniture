@@ -142,14 +142,18 @@ class DialogueTurnRequest(BaseModel):
 
 
 class Export1CRequest(BaseModel):
-    order_id: str
-
-class ZIPJobRequest(BaseModel):
-    order_id: str
-    job_ids: List[str]
-
+    order_id: UUID
+    format: Literal["excel", "csv"] = "excel"
 
 
 class Export1CResponse(BaseModel):
     success: bool
-    one_c_order_id: Optional[str] = Field(None, alias="1c_order_id")
+    format: str
+    filename: str
+    download_url: str
+    expires_in_seconds: int = 900  # 15 минут
+
+
+class ZIPJobRequest(BaseModel):
+    order_id: str
+    job_ids: List[str]
