@@ -6,14 +6,17 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  getGroupedRowModel, // группировка
+  getExpandedRowModel, // разворачивание групп
   useReactTable,
   SortingState,
   ColumnFiltersState,
   RowSelectionState,
   VisibilityState,
+  GroupingState,
 } from "@tanstack/react-table"
 
-import { ArrowUpDown, ChevronDown, Download, Search } from "lucide-react"
+import { ArrowUpDown, ChevronDown, Download, Search, ChevronRight } from "lucide-react" // Добавлен ChevronRight для индикатора разворачивания
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -33,18 +36,22 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   tableId?: string
+  initialGrouping?: GroupingState // Добавлено для начального состояния группировки
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   tableId = "datatable",
+  initialGrouping = [], // Инициализация начального состояния группировки
 }: DataTableProps<TData, TValue>) {
   const isMobile = useIsMobile()
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+  // Переводим grouping в неконтролируемый режим (React Table сам хранит состояние)
+  // чтобы снизить риск ранних обновлений во время рендера.
 
   // Колонка выбора строк добавляется автоматически
   const columnsWithSelection = React.useMemo<ColumnDef<TData, any>[]>(() => {
@@ -64,17 +71,21 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+  // grouping оставляем неконтролируемым
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    onRowSelectionChange: setRowSelection,
+    getGroupedRowModel: getGroupedRowModel(), // Добавлено для группировки
+    getExpandedRowModel: getExpandedRowModel(), // Добавлено для разворачивания групп
     state: {
       sorting,
       columnFilters,
       rowSelection,
       columnVisibility,
     },
+    initialState: { grouping: initialGrouping },
   })
 
   // ======= Persistence (localStorage) =======
@@ -182,6 +193,13 @@ export function DataTable<TData, TValue>({
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="outline"
+          onClick={() => table.toggleAllRowsExpanded(!table.getIsAllRowsExpanded())}
+          className="ml-2"
+        >
+          {table.getIsAllRowsExpanded() ? "Свернуть все" : "Развернуть все"}
+        </Button>
         <div className="ml-2 flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => handleExport(false, "csv")}>
             <Download className="h-4 w-4 mr-1" /> CSV
@@ -219,6 +237,15 @@ export function DataTable<TData, TValue>({
                                 <ArrowUpDown className="ml-2 h-4 w-4" />
                               </Button>
                             )}
+                            {header.column.getCanGroup() ? (
+                              <Button
+                                variant="ghost"
+                                onClick={header.column.getToggleGroupingHandler()}
+                                className="px-2 h-8 w-8"
+                              >
+                                {header.column.getIsGrouped() ? "-G" : "+G"}
+                              </Button>
+                            ) : null}
                             {flexRender(
                               header.column.columnDef.header,
                               header.getContext()
@@ -233,27 +260,62 @@ export function DataTable<TData, TValue>({
             </TableHeader>
             <TableBody>
               {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {cell.column.id === "select" ? (
-                          <Checkbox
-                            data-testid={`table-select-row-${row.id}`}
-                            checked={row.getIsSelected()}
-                            onCheckedChange={(value) => row.toggleSelected(!!value)}
-                            aria-label="Выбрать строку"
-                          />
-                        ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                table.getRowModel().rows.map((row) => {
+                  if (row.getIsGrouped()) {
+                    return (
+                      <TableRow key={row.id} className="bg-muted/50">
+                        <TableCell colSpan={row.getVisibleCells().length} className="font-medium">
+                          <div
+                            style={{
+                              paddingLeft: `${row.depth * 2}rem`,
+                            }}
+                            className="flex items-center space-x-2"
+                          >
+                            {row.getCanExpand() ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={row.getToggleExpandedHandler()}
+                                className="h-8 w-8 p-0"
+                              >
+                                <ChevronRight
+                                  className={`h-4 w-4 transition-transform ${row.getIsExpanded() ? "rotate-90" : "rotate-0"}`}
+                                />
+                              </Button>
+                            ) : null}
+                            {flexRender(
+                              row.getVisibleCells()[0].column.columnDef.cell,
+                              row.getVisibleCells()[0].getContext()
+                            )}
+                            <span className="ml-2 text-muted-foreground">({row.subRows.length})</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  }
+
+                  return (
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && "selected"}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {cell.column.id === "select" ? (
+                            <Checkbox
+                              data-testid={`table-select-row-${row.id}`}
+                              checked={row.getIsSelected()}
+                              onCheckedChange={(value) => row.toggleSelected(!!value)}
+                              aria-label="Выбрать строку"
+                            />
+                          ) : (
+                            flexRender(cell.column.columnDef.cell, cell.getContext())
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-48 text-center">
@@ -270,32 +332,83 @@ export function DataTable<TData, TValue>({
                 </TableRow>
               )}
             </TableBody>
+            {table.getFooterGroups().some(g => g.headers.some(h => h.column.columnDef.footer)) && (
+              <tfoot>
+                {table.getFooterGroups().map(footerGroup => (
+                  <TableRow key={footerGroup.id}>
+                    {footerGroup.headers.map(header => (
+                      <TableCell key={header.id}>
+                        {header.isPlaceholder ? null :
+                          flexRender(header.column.columnDef.footer, header.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </tfoot>
+            )}
           </Table>
         ) : (
           <div className="divide-y">
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <div key={row.id} className="p-3">
-                  <div className="flex items-start justify-between">
-                    <div className="text-sm font-medium text-foreground">Запись</div>
-                    <Checkbox
-                      checked={row.getIsSelected()}
-                      onCheckedChange={(value) => row.toggleSelected(!!value)}
-                      aria-label="Выбрать запись"
-                    />
-                  </div>
-                  <div className="mt-2 grid grid-cols-1 gap-2">
-                    {row.getVisibleCells().filter(c => c.column.id !== "select").map((cell) => (
-                      <div key={cell.id} className="flex items-start justify-between gap-4">
-                        <div className="text-xs text-muted-foreground capitalize">{cell.column.id}</div>
-                        <div className="text-sm text-foreground max-w-[60%]">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              table.getRowModel().rows.map((row) => {
+                if (row.getIsGrouped()) {
+                  return (
+                    <div key={row.id} className="p-3 bg-muted/50">
+                      <div
+                        style={{
+                          paddingLeft: `${row.depth * 1.5}rem`,
+                        }}
+                        className="flex items-center justify-between gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          {row.getCanExpand() ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={row.getToggleExpandedHandler()}
+                              className="h-8 w-8 p-0"
+                            >
+                              <ChevronRight
+                                className={`h-4 w-4 transition-transform ${row.getIsExpanded() ? "rotate-90" : "rotate-0"}`}
+                              />
+                            </Button>
+                          ) : null}
+                          <div className="text-sm font-medium text-foreground">
+                            {flexRender(
+                              row.getVisibleCells()[0].column.columnDef.cell,
+                              row.getVisibleCells()[0].getContext()
+                            )}
+                            <span className="ml-2 text-muted-foreground">({row.subRows.length})</span>
+                          </div>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={row.id} className="p-3">
+                    <div className="flex items-start justify-between">
+                      <div className="text-sm font-medium text-foreground">Запись</div>
+                      <Checkbox
+                        checked={row.getIsSelected()}
+                        onCheckedChange={(value) => row.toggleSelected(!!value)}
+                        aria-label="Выбрать запись"
+                      />
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 gap-2">
+                      {row.getVisibleCells().filter(c => c.column.id !== "select").map((cell) => (
+                        <div key={cell.id} className="flex items-start justify-between gap-4">
+                          <div className="text-xs text-muted-foreground capitalize">{cell.column.id}</div>
+                          <div className="text-sm text-foreground max-w-[60%]">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <div className="p-6 text-center">
                 <div className="flex flex-col items-center justify-center space-y-2">

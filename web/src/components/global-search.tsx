@@ -37,7 +37,7 @@ const mockSearchResults: SearchResult[] = [
     score: 95
   },
   {
-    id: "2", 
+    id: "2",
     title: "Спецификация материалов (BOM)",
     description: "Просмотр и управление спецификациями материалов и компонентов",
     url: "/bom",
@@ -53,7 +53,7 @@ const mockSearchResults: SearchResult[] = [
     description: "Управление CAM задачами, генерация G-code и предпросмотр DXF",
     url: "/cam",
     type: "page",
-    category: "Производство", 
+    category: "Производство",
     keywords: ["cam", "dxf", "gcode", "обработка", "чпу", "станок"],
     icon: Wrench,
     score: 88
@@ -86,7 +86,7 @@ const mockSearchResults: SearchResult[] = [
     title: "Пользователь: technologist@furniture.ru",
     description: "Технолог-конструктор • Последняя активность: 2 часа назад",
     url: "/users/technologist",
-    type: "user", 
+    type: "user",
     category: "Пользователи",
     keywords: ["технолог", "пользователь", "активность", "конструктор"],
     icon: User,
@@ -102,17 +102,6 @@ const mockSearchResults: SearchResult[] = [
     keywords: ["история", "архив", "заказы", "отчеты", "фильтр"],
     icon: History,
     score: 70
-  },
-  {
-    id: "8",
-    title: "Аудит системы",
-    description: "Журнал действий пользователей и события безопасности",
-    url: "/audit",
-    type: "page",
-    category: "Безопасность",
-    keywords: ["аудит", "логи", "безопасность", "мониторинг", "журнал"],
-    icon: Shield,
-    score: 65
   },
   {
     id: "9",
@@ -167,10 +156,10 @@ export function GlobalSearch() {
     }
 
     setLoading(true)
-    
+
     // Simulate AI-powered search with delay
     await new Promise(resolve => setTimeout(resolve, 300))
-    
+
     try {
       // Smart fuzzy search with AI-like scoring
       const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 1)
@@ -182,39 +171,39 @@ export function GlobalSearch() {
           item.category,
           ...item.keywords
         ].join(' ').toLowerCase()
-        
+
         // Exact title match gets highest score
         if (item.title.toLowerCase().includes(query.toLowerCase())) {
           score += 50
         }
-        
+
         // Category match
         if (item.category.toLowerCase().includes(query.toLowerCase())) {
           score += 30
         }
-        
+
         // Description match
         if (item.description.toLowerCase().includes(query.toLowerCase())) {
           score += 20
         }
-        
+
         // Keywords match
         searchTerms.forEach(term => {
           if (searchableText.includes(term)) {
             score += 10
           }
         })
-        
+
         // Recent items get boost
         if (item.timestamp) {
           score += 5
         }
-        
+
         return { ...item, searchScore: score }
       })
-      .filter(item => item.searchScore > 0)
-      .sort((a, b) => b.searchScore - a.searchScore)
-      .slice(0, 8)
+        .filter(item => item.searchScore > 0)
+        .sort((a, b) => b.searchScore - a.searchScore)
+        .slice(0, 8)
 
       setResults(scoredResults)
       setSelectedIndex(0)
@@ -259,7 +248,7 @@ export function GlobalSearch() {
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
       "Заказы": "bg-blue-50 text-blue-700 border-blue-200",
-      "Производство": "bg-green-50 text-green-700 border-green-200", 
+      "Производство": "bg-green-50 text-green-700 border-green-200",
       "Настройки": "bg-gray-50 text-gray-700 border-gray-200",
       "Пользователи": "bg-purple-50 text-purple-700 border-purple-200",
       "Отчеты": "bg-orange-50 text-orange-700 border-orange-200",
@@ -324,7 +313,7 @@ export function GlobalSearch() {
                   <span className="text-sm text-muted-foreground">Поиск с помощью ИИ...</span>
                 </motion.div>
               )}
-              
+
               {!loading && results.length === 0 && value && (
                 <CommandEmpty>
                   <motion.div
@@ -344,12 +333,12 @@ export function GlobalSearch() {
                   {popularPages.map((page, index) => (
                     <CommandItem
                       key={page.url}
-                      onSelect={() => handleResultSelect({ 
-                        ...page, 
-                        id: page.url, 
-                        type: "page", 
-                        category: "", 
-                        keywords: [] 
+                      onSelect={() => handleResultSelect({
+                        ...page,
+                        id: page.url,
+                        type: "page",
+                        category: "",
+                        keywords: []
                       })}
                       className="flex items-center gap-3 px-4 py-3"
                     >
@@ -375,27 +364,26 @@ export function GlobalSearch() {
                     >
                       <CommandItem
                         onSelect={() => handleResultSelect(result)}
-                        className={`flex items-center gap-3 px-4 py-3 ${
-                          index === selectedIndex ? "bg-accent" : ""
-                        }`}
+                        className={`flex items-center gap-3 px-4 py-3 ${index === selectedIndex ? "bg-accent" : ""
+                          }`}
                       >
                         <result.icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="text-sm font-medium truncate">{result.title}</p>
-                            <Badge 
-                              variant="outline" 
+                            <Badge
+                              variant="outline"
                               className={`text-xs px-2 py-0 ${getCategoryColor(result.category)}`}
                             >
                               {result.category}
                             </Badge>
                           </div>
-                          
+
                           <p className="text-xs text-muted-foreground truncate">
                             {result.description}
                           </p>
-                          
+
                           {result.timestamp && (
                             <div className="flex items-center gap-1 mt-1">
                               <Clock className="h-3 w-3 text-muted-foreground" />
@@ -414,7 +402,7 @@ export function GlobalSearch() {
               )}
             </AnimatePresence>
           </CommandList>
-          
+
           {(results.length > 0 || (!loading && !value)) && (
             <div className="border-t px-4 py-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">

@@ -56,6 +56,9 @@ services:
       S3_SECRET_KEY: minio123
       S3_BUCKET: artifacts
       S3_PRESIGNED_TTL_SECONDS: 900
+      # Yandex Cloud AI
+      YC_FOLDER_ID: ${YC_FOLDER_ID}
+      YC_API_KEY: ${YC_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

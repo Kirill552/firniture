@@ -2,9 +2,14 @@
 Yandex Cloud AI клиенты для мебель-ИИ проекта.
 
 Поддерживаемые сервисы:
-- YandexGPT (текстовая генерация)
+- YandexGPT (текстовая генерация) - нативный и OpenAI-совместимый API
 - Yandex Embeddings (векторизация текста)
 - Yandex Vision OCR (распознавание текста с изображений)
+
+OpenAI-совместимый API дает доступ к:
+- Дополнительным параметрам (top_p, frequency_penalty, presence_penalty)
+- Стандартному SSE streaming
+- Будущим моделям (Alice AI LLM)
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ from dataclasses import dataclass
 import json
 
 from api.models import HardwareItem, ProductConfig
-from shared.embeddings import concat_product_config_text
+# Ленивый импорт concat_product_config_text для избежания circular import
 
 import aiohttp
 from pydantic import BaseModel
@@ -29,26 +34,38 @@ log = logging.getLogger(__name__)
 
 class YandexCloudSettings(BaseSettings):
     """Настройки Yandex Cloud API."""
-    
+
     yc_folder_id: str
     yc_api_key: str
-    
+
     # Endpoints
     yc_llm_endpoint: str = "https://llm.api.cloud.yandex.net"
+    yc_openai_endpoint: str = "https://llm.api.cloud.yandex.net/v1"  # OpenAI-совместимый
     yc_ocr_endpoint: str = "https://ocr.api.cloud.yandex.net"
-    
-    # Модели
+
+    # Модели (нативный API)
     yc_gpt_model: str = "gpt://{folder_id}/yandexgpt/latest"
     yc_embedding_doc_model: str = "emb://{folder_id}/text-search-doc/latest"
     yc_embedding_query_model: str = "emb://{folder_id}/text-search-query/latest"
-    
+
+    # Модели (OpenAI-совместимый API)
+    yc_openai_model: str = "yandexgpt"  # yandexgpt, yandexgpt-lite, или alice (когда появится)
+
+    # Параметры генерации по умолчанию
+    yc_default_temperature: float = 0.3
+    yc_default_top_p: float = 0.9
+    yc_default_max_tokens: int = 2000
+
     # Retry/timeout
-    yc_timeout_seconds: int = 30
+    yc_timeout_seconds: int = 60  # Увеличил для длинных ответов
     yc_max_retries: int = 3
     yc_backoff_factor: float = 1.5
-    
+
     class Config:
         env_prefix = ""
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"  # Игнорируем POSTGRES_*, S3_* и другие переменные
 
 
 @dataclass
@@ -252,13 +269,17 @@ class YandexGPTClient(YandexCloudClient):
             "messages": messages
         }
         
-        url = f"{self.settings.yc_llm_endpoint}/foundationModels/v1/completionStream"
+        url = f"{self.settings.yc_llm_endpoint}/foundationModels/v1/completion"
         
         async with self.session.post(url, json=payload, headers=self._get_headers()) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
                 log.error(f"YandexGPT streaming failed with status {resp.status}: {error_text}")
                 raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
+
+            # YandexGPT возвращает полный текст в каждом чанке (кумулятивно)
+            # Отслеживаем предыдущий текст, чтобы отправлять только дельту
+            previous_text = ""
 
             async for chunk in resp.content.iter_any():
                 try:
@@ -268,9 +289,161 @@ class YandexGPTClient(YandexCloudClient):
                             data = json.loads(part)
                             alternatives = data.get("result", {}).get("alternatives", [])
                             if alternatives and "text" in alternatives[0]["message"]:
-                                yield alternatives[0]["message"]["text"]
+                                full_text = alternatives[0]["message"]["text"]
+                                # Вычисляем дельту - только новые символы
+                                if len(full_text) > len(previous_text):
+                                    delta = full_text[len(previous_text):]
+                                    previous_text = full_text
+                                    yield delta
                 except (json.JSONDecodeError, KeyError) as e:
                     log.warning(f"Could not decode or parse streaming chunk: {chunk}, error: {e}")
+                    continue
+
+
+class YandexOpenAIClient(YandexCloudClient):
+    """
+    Клиент для YandexGPT через OpenAI-совместимый API.
+
+    Преимущества:
+    - Стандартный SSE streaming
+    - Дополнительные параметры (top_p, frequency_penalty, presence_penalty)
+    - Совместимость с OpenAI SDK и LangChain
+    - Готовность к Alice AI LLM
+    """
+
+    def _get_openai_headers(self) -> Dict[str, str]:
+        """Заголовки для OpenAI-совместимого API."""
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Api-Key {self.settings.yc_api_key}",
+            "x-folder-id": self.settings.yc_folder_id,
+        }
+
+    def _get_model_uri(self) -> str:
+        """Получить полный URI модели для OpenAI API."""
+        # OpenAI-совместимый API требует полный URI: gpt://<folder_id>/<model>
+        model = self.settings.yc_openai_model
+        if not model.startswith("gpt://"):
+            model = f"gpt://{self.settings.yc_folder_id}/{model}/latest"
+        return model
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
+    ) -> GPTResponse:
+        """
+        Синхронная генерация через OpenAI-совместимый API.
+
+        Args:
+            messages: Список сообщений в формате [{"role": "system/user/assistant", "content": "..."}]
+            temperature: Температура генерации (0.0-1.0)
+            top_p: Nucleus sampling (0.0-1.0)
+            max_tokens: Максимальное количество токенов
+            frequency_penalty: Штраф за повторение токенов
+            presence_penalty: Штраф за упоминание тем
+        """
+        if not self.session:
+            raise RuntimeError("Client session not initialized. Use 'async with' context.")
+
+        payload = {
+            "model": self._get_model_uri(),
+            "messages": messages,
+            "temperature": temperature or self.settings.yc_default_temperature,
+            "top_p": top_p or self.settings.yc_default_top_p,
+            "max_tokens": max_tokens or self.settings.yc_default_max_tokens,
+            "frequency_penalty": frequency_penalty,
+            "presence_penalty": presence_penalty,
+            "stream": False,
+        }
+
+        url = f"{self.settings.yc_openai_endpoint}/chat/completions"
+
+        async with self.session.post(url, json=payload, headers=self._get_openai_headers()) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                log.error(f"YandexGPT OpenAI API failed with status {resp.status}: {error_text}")
+                raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
+
+            data = await resp.json()
+            choice = data["choices"][0]
+
+            return GPTResponse(
+                text=choice["message"]["content"],
+                usage=data.get("usage", {}),
+                model_version=data.get("model", "unknown")
+            )
+
+    async def stream_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Потоковая генерация через OpenAI-совместимый API (SSE).
+
+        Использует стандартный формат Server-Sent Events.
+        Возвращает дельты (только новые символы).
+        """
+        if not self.session:
+            raise RuntimeError("Client session not initialized. Use 'async with' context.")
+
+        payload = {
+            "model": self._get_model_uri(),
+            "messages": messages,
+            "temperature": temperature or self.settings.yc_default_temperature,
+            "top_p": top_p or self.settings.yc_default_top_p,
+            "max_tokens": max_tokens or self.settings.yc_default_max_tokens,
+            "frequency_penalty": frequency_penalty,
+            "presence_penalty": presence_penalty,
+            "stream": True,
+        }
+
+        url = f"{self.settings.yc_openai_endpoint}/chat/completions"
+        log.info(f"OpenAI API request: model={payload['model']}, url={url}")
+
+        async with self.session.post(url, json=payload, headers=self._get_openai_headers()) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                log.error(f"YandexGPT OpenAI streaming failed with status {resp.status}: {error_text}")
+                raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
+
+            # SSE формат: data: {...}\n\n
+            async for line in resp.content:
+                try:
+                    line_str = line.decode('utf-8').strip()
+
+                    # Пропускаем пустые строки и комментарии
+                    if not line_str or line_str.startswith(':'):
+                        continue
+
+                    # SSE data event
+                    if line_str.startswith('data: '):
+                        data_str = line_str[6:]  # Убираем 'data: '
+
+                        # Конец потока
+                        if data_str == '[DONE]':
+                            break
+
+                        data = json.loads(data_str)
+                        choices = data.get("choices", [])
+
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield content
+
+                except (json.JSONDecodeError, KeyError, UnicodeDecodeError) as e:
+                    log.warning(f"Could not parse SSE chunk: {line}, error: {e}")
                     continue
 
 
@@ -332,7 +505,9 @@ async def rank_hardware_with_gpt(
     settings: YandexCloudSettings
 ) -> List[HardwareItem]:
     """Ranks hardware items using YandexGPT."""
-    
+    # Ленивый импорт для избежания circular import
+    from shared.embeddings import concat_product_config_text
+
     prompt = f"""Given the following product configuration:
 {concat_product_config_text(product_config)}
 
@@ -359,8 +534,20 @@ def create_embeddings_client(settings: YandexCloudSettings) -> YandexEmbeddingsC
 
 
 def create_gpt_client(settings: YandexCloudSettings) -> YandexGPTClient:
-    """Создать клиент YandexGPT."""
+    """Создать клиент YandexGPT (нативный API)."""
     return YandexGPTClient(settings)
+
+
+def create_openai_client(settings: YandexCloudSettings) -> YandexOpenAIClient:
+    """
+    Создать клиент YandexGPT через OpenAI-совместимый API.
+
+    Рекомендуется использовать этот клиент для:
+    - Тонкой настройки генерации (top_p, penalties)
+    - Стандартного SSE streaming
+    - Совместимости с OpenAI экосистемой
+    """
+    return YandexOpenAIClient(settings)
 
 
 def create_vision_client(settings: YandexCloudSettings) -> YandexVisionClient:

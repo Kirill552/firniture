@@ -1,0 +1,56 @@
+"use client"
+import * as React from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Sparkles, Filter } from 'lucide-react'
+
+interface AdvancedFiltersProps {
+  confidenceRange: [number, number]
+  onConfidenceChange: (range: [number, number]) => void
+  query: string
+  onQueryChange: (q: string) => void
+  aiSuggestion?: string
+  onApplySuggestion: () => void
+}
+
+export function HardwareAdvancedFilters({ confidenceRange, onConfidenceChange, query, onQueryChange, aiSuggestion, onApplySuggestion }: AdvancedFiltersProps) {
+  const [minVal, setMinVal] = React.useState(Math.round(confidenceRange[0]*100))
+  const [maxVal, setMaxVal] = React.useState(Math.round(confidenceRange[1]*100))
+
+  React.useEffect(() => {
+    setMinVal(Math.round(confidenceRange[0]*100))
+    setMaxVal(Math.round(confidenceRange[1]*100))
+  }, [confidenceRange])
+
+  const applyRange = () => {
+    const min = Math.min(Math.max(0, minVal), 100)
+    const max = Math.min(Math.max(min, maxVal), 100)
+    onConfidenceChange([min/100, max/100])
+  }
+
+  return (
+    <div className="flex flex-col gap-4 p-4 border rounded-lg bg-muted/30">
+      <div className="flex items-center gap-2 text-sm font-medium"><Filter className="h-4 w-4"/> Расширенные фильтры</div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label className="text-xs uppercase text-muted-foreground">Поиск</label>
+          <Input value={query} onChange={e => onQueryChange(e.target.value)} placeholder="Например: петля 110 мягкое закрывание" />
+          {aiSuggestion && (
+            <Button size="sm" variant="ghost" className="justify-start gap-2" onClick={onApplySuggestion}>
+              <Sparkles className="h-4 w-4 text-primary" /> Подсказка: {aiSuggestion}
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs uppercase text-muted-foreground">Уверенность ИИ (%)</label>
+          <div className="flex items-center gap-2">
+            <Input type="number" min={0} max={100} value={minVal} onChange={e => setMinVal(Number(e.target.value))} className="w-20" />
+            <span>—</span>
+            <Input type="number" min={0} max={100} value={maxVal} onChange={e => setMaxVal(Number(e.target.value))} className="w-20" />
+            <Button size="sm" variant="secondary" onClick={applyRange}>OK</Button>
+          </div>
+          <div className="text-xs text-muted-foreground">Текущий диапазон: {confidenceRange.map(v => Math.round(v*100)).join('%–')}%</div>
+        </div>
+      </div>
+    </div>
+  )}

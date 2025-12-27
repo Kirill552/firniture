@@ -22,7 +22,6 @@ const sidebarNavItems = [
   { title: "CAM (DXF/G-code)", url: "/cam", icon: Zap },
   { title: "Интеграции (1С)", url: "/integrations", icon: Users },
   { title: "История заказов", url: "/history", icon: History },
-  { title: "Аудит", url: "/audit", icon: Shield },
   { title: "Настройки", url: "/settings", icon: Settings },
 ]
 

@@ -15,9 +15,35 @@ out/
 .DS_Store
 Thumbs.db
 .vscode/
+.idea/
+.claude/
+.cursor/
+.kilocode/
+.qoder/
+.codex/
+.gigaide/
+
+# Documentation (local only, not in repo)
+docs/
+
+# Root level documentation
+FRONTEND_TASKS.md
+описание.md
+дизайн.md
+План задач.md
 
 # Local data
 *.sqlite
 dist/
 build/
 coverage/
+
+# Temporary test files
+dialogue-test-result
+final-test
+gpt-response
+openai-api-success
+nul
+
+# Local config
+ngrok.yml

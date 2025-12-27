@@ -23,3 +23,20 @@
 
 ## Лицензия
 TBD
+
+Команды для запуска через ngrok:
+
+  Терминал 1 — Backend:
+  cd "C:\Users\whirp\Desktop\bots\мебель ИИ"
+  venv\Scripts\activate
+  uvicorn api.main:app --reload --port 8000
+
+  Терминал 2 — Frontend:
+  cd "C:\Users\whirp\Desktop\bots\мебель ИИ\web"
+  npm run dev
+
+  Терминал 3 — ngrok:
+  ngrok http 3000
+
+  ---
+  Публичная ссылка появится в консоли ngrok (типа https://xxx.ngrok-free.app).   

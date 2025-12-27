@@ -1,6 +1,8 @@
 "use client"
 
-import { motion, Variants } from "framer-motion"
+import { motion } from "framer-motion"
+import { StaggerContainer } from '@/components/animation/stagger-container'
+import { fadeInUp } from '@/lib/motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +10,7 @@ import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import Link from "next/link"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useState, useEffect } from "react"
 
 // Определяем тип для данных заказа
 type Order = {
@@ -38,11 +41,22 @@ const columns: ColumnDef<Order>[] = [
   {
     accessorKey: "name",
     header: "Название",
+    // Для агрегированных групп можно показать количество элементов в группе.
+    // В @tanstack/react-table v8 aggregation задаётся через aggregationFn, но нам
+    // достаточно отобразить счетчик в cell когда строка сгруппирована.
+    // aggregatedCell уберём, оставим обычный cell и будем проверять row.subRows.
+    cell: ({ row, getValue }) => {
+      if (row.getIsGrouped()) {
+        return `${getValue()} (${row.subRows.length})`
+      }
+      return getValue() as string
+    },
   },
   {
     accessorKey: "status",
     header: "Статус",
-    cell: ({ row }) => { // Тип для row выводится автоматически
+    enableGrouping: true,
+    cell: ({ row }) => {
       const status = row.getValue("status") as string
       const variant = status === "active" ? "default" : "secondary"
       return (
@@ -58,32 +72,19 @@ const columns: ColumnDef<Order>[] = [
   },
 ]
 
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 100,
-    },
-  },
-};
-
-import { useState } from "react"
+// Используем общие motion пресеты из lib/motion
 
 export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  if (!isMounted) {
+    return null
+  }
 
   const handleCreateOrder = async () => {
     setIsLoading(true)
@@ -100,13 +101,8 @@ export default function Dashboard() {
   }
   return (
     <div className="p-6 w-full min-w-0">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid w-full grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4"
-      >
-        <motion.div variants={itemVariants} className="lg:col-span-2">
+      <StaggerContainer className="grid w-full grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <motion.div variants={fadeInUp} className="lg:col-span-2">
           <Card className="h-full">
             <CardHeader>
               <CardTitle>Создать заказ из ТЗ</CardTitle>
@@ -120,7 +116,7 @@ export default function Dashboard() {
           </Card>
         </motion.div>
 
-        <motion.div variants={itemVariants}>
+  <motion.div variants={fadeInUp}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle>Очередь CAM</CardTitle>
@@ -139,7 +135,7 @@ export default function Dashboard() {
           </Card>
         </motion.div>
 
-        <motion.div variants={itemVariants}>
+  <motion.div variants={fadeInUp}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle>AI-ассистент</CardTitle>
@@ -151,7 +147,7 @@ export default function Dashboard() {
           </Card>
         </motion.div>
 
-        <motion.div variants={itemVariants} className="lg:col-span-2">
+  <motion.div variants={fadeInUp} className="lg:col-span-2">
           <Card className="h-full">
             <CardHeader>
               <CardTitle>Статистика заказов</CardTitle>
@@ -172,19 +168,31 @@ export default function Dashboard() {
           </Card>
         </motion.div>
 
-        <motion.div variants={itemVariants} className="lg:col-span-4">
+  <motion.div variants={fadeInUp} className="lg:col-span-4">
           <Card>
             <CardHeader>
               <CardTitle>Активные заказы</CardTitle>
               <CardDescription>Текущие заказы в работе</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable columns={columns} data={orders} tableId="dashboard-orders" />
+              {isMounted ? (
+                <DataTable
+                  columns={columns}
+                  data={orders}
+                  tableId="dashboard-orders"
+                  // GroupingState = string[]; группируем по статусу
+                  initialGrouping={['status']}
+                />
+              ) : (
+                <div className="h-64 flex items-center justify-center">
+                  <p className="text-muted-foreground">Загрузка таблицы...</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
 
-      </motion.div>
+  </StaggerContainer>
     </div>
   )
 }

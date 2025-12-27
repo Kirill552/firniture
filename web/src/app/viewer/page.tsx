@@ -1,11 +1,11 @@
 'use client'
 
-import { ThreeViewer } from "@/components/three-viewer"
+import { LazyThreeViewer } from "@/components/lazy"
 
 export default function ViewerPage() {
   return (
     <div className="w-full h-screen">
-      <ThreeViewer />
+      <LazyThreeViewer />
     </div>
   )
 }

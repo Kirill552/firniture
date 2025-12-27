@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, FileText } from "lucide-react"
+import { FileDropzone } from '@/components/upload/file-dropzone'
 
 export default function TzUploadPage() {
   const router = useRouter()
@@ -54,20 +55,19 @@ export default function TzUploadPage() {
                 className="min-h-[120px]"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="files">Загрузить файлы</Label>
-              <div className="flex items-center space-x-2">
-                <Upload className="h-4 w-4" />
-                <Input
-                  id="files"
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.txt,.doc,.docx"
-                  onChange={handleFileChange}
-                />
-              </div>
+            <div className="space-y-3">
+              <Label>Загрузить файлы</Label>
+              <FileDropzone
+                onFiles={(newFiles) => setFiles(prev => [...prev, ...newFiles])}
+                onReject={(reasons) => console.warn('reject', reasons)}
+                accept={['.png','.jpg','.jpeg','.pdf','.txt','.doc','.docx']}
+                maxFiles={8}
+                description="Поддерживаются изображения, PDF и текстовые документы"
+              />
               {files.length > 0 && (
-                <p className="text-sm text-muted-foreground">Выбрано файлов: {files.length}</p>
+                <ul className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-auto border rounded p-2">
+                  {files.map(f => <li key={f.name}>{f.name} • {Math.round(f.size/1024)} KB</li>)}
+                </ul>
               )}
             </div>
             <Button type="submit" className="w-full" disabled={isLoading || !orderId}>
