@@ -5,9 +5,8 @@ Revises: 0005_cleanup_embedding_array
 Create Date: 2025-09-06 11:04:55.475691
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = 'bfd67af6351f'

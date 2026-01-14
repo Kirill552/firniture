@@ -3,9 +3,9 @@ Mock ответы для диалога с ИИ-технологом.
 Используется для локальной разработки когда нет Yandex Cloud ключей.
 """
 import asyncio
-import random
 import logging
-from typing import AsyncGenerator
+import random
+from collections.abc import AsyncGenerator
 
 log = logging.getLogger(__name__)
 
@@ -121,7 +121,8 @@ def get_dialogue_state(order_id: int) -> MockDialogueState:
 async def generate_mock_dialogue_response(
     order_id: int,
     user_message: str,
-    is_first_message: bool = False
+    is_first_message: bool = False,
+    extracted_context: str | None = None
 ) -> AsyncGenerator[str, None]:
     """
     Генерирует mock ответ ИИ-технолога с потоковой отдачей (streaming).
@@ -130,6 +131,7 @@ async def generate_mock_dialogue_response(
         order_id: ID заказа
         user_message: Последнее сообщение пользователя
         is_first_message: Это первое сообщение в диалоге?
+        extracted_context: Контекст из Vision OCR (размеры, материал и т.д.)
 
     Yields:
         Части ответа (chunks) для имитации streaming
@@ -139,14 +141,25 @@ async def generate_mock_dialogue_response(
     state = get_dialogue_state(order_id)
 
     # Определяем, какой ответ генерировать
-    if is_first_message:
-        response_text = state.get_current_response()
+    # Случай 1: Автостарт диалога (есть контекст, но нет сообщения пользователя)
+    if extracted_context and not user_message.strip():
+        # ИИ начинает диалог первым с подтверждением данных
+        response_text = f"Здравствуйте! Я получил данные по вашему изделию:\n\n{extracted_context}\n\nВсё верно? Если да — давайте уточним детали по фурнитуре и приступим к проектированию."
+    elif is_first_message:
+        if extracted_context:
+            # Если есть контекст из Vision OCR — используем его
+            response_text = f"Добрый день! Спасибо за предоставленные данные. Я вижу из загруженного изображения:\n\n{extracted_context}\n\nВсё верно? Если да — давайте уточним детали по фурнитуре."
+        else:
+            response_text = state.get_current_response()
     else:
         # Проверяем на ключевые фразы в сообщении пользователя
-        message_lower = user_message.lower().strip()
+        message_lower = user_message.lower().strip() if user_message else ""
 
+        # Если сообщение пустое — используем дефолтный ответ
+        if not message_lower:
+            response_text = state.get_current_response()
         # Простая реакция на базовые ответы
-        if any(word in message_lower for word in ["да", "ок", "хорошо", "согласен", "подходит"]):
+        elif any(word in message_lower for word in ["да", "ок", "хорошо", "согласен", "подходит"]):
             # Переходим к следующему этапу
             state.get_next_stage()
             response_text = random.choice(MOCK_REACTIONS["да"]) + " " + state.get_current_response()
@@ -213,7 +226,7 @@ async def mock_function_call_response(function_name: str, **kwargs) -> dict:
         }
 
     elif function_name == "find_hardware":
-        query = kwargs.get("query", "")
+        _query = kwargs.get("query", "")  # noqa: F841 - для будущего использования
         # Mock результаты поиска фурнитуры
         return [
             {

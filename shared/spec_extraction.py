@@ -9,17 +9,14 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from typing import Any
 
 from shared.yandex_ai import (
-    YandexGPTClient,
-    YandexVisionClient,
     YandexCloudSettings,
     create_gpt_client,
     create_vision_client,
 )
-
 
 log = logging.getLogger(__name__)
 
@@ -30,15 +27,15 @@ class ExtractedParameter:
     name: str
     value: Any
     confidence: float
-    unit: Optional[str] = None
-    question: Optional[str] = None  # Вопрос для уточнения
+    unit: str | None = None
+    question: str | None = None  # Вопрос для уточнения
 
 
 @dataclass
 class SpecExtractionResult:
     """Результат извлечения спецификации."""
     product_config_id: str
-    parameters: List[ExtractedParameter]
+    parameters: list[ExtractedParameter]
     confidence_overall: float
     processing_time_seconds: float
     source_type: str  # "text", "image", "sketch"
@@ -225,7 +222,7 @@ class SpecExtractionService:
 - Фокусируйся только на чётких технических данных
 """
     
-    def _parse_gpt_parameters_response(self, response_text: str) -> List[ExtractedParameter]:
+    def _parse_gpt_parameters_response(self, response_text: str) -> list[ExtractedParameter]:
         """Парсинг ответа YandexGPT в структуру параметров."""
         try:
             # Ищем JSON блок в ответе

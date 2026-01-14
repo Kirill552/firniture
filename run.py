@@ -1,20 +1,17 @@
 
 import asyncio
 import importlib
+import logging
 import sys
 
-from typing import List
-
 import typer
-
-import logging
 
 logging.basicConfig(level=logging.INFO)
 
 app = typer.Typer()
 
 @app.command()
-def run_script(script_name: str, args: List[str] = typer.Argument(None)):
+def run_script(script_name: str, args: list[str] = typer.Argument(None)):
     """Runs a script from the api.scripts directory."""
     try:
         # Ensure the script name is a valid module name

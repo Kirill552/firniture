@@ -8,13 +8,18 @@
 import argparse
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.future import select
 
 from api.database import SessionLocal
 from api.models import HardwareItem
-from shared.embeddings import embed_text, concat_hardware_item_text, _content_fingerprint, EMBED_VERSION
+from shared.embeddings import (
+    EMBED_VERSION,
+    _content_fingerprint,
+    concat_hardware_item_text,
+    embed_text,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,7 +60,7 @@ async def main(limit: int | None = None) -> None:
                 item.embedding = emb  # type: ignore[assignment]
                 item.embedding_version = EMBED_VERSION
                 item.content_hash = fingerprint
-                item.indexed_at = datetime.now(timezone.utc)
+                item.indexed_at = datetime.now(UTC)
                 await session.flush()
                 processed_count += 1
             except Exception as e:

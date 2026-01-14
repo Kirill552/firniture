@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,13 +9,40 @@ from sqlalchemy.orm import selectinload
 from . import models, schemas
 
 
-async def create_order(db: AsyncSession, order: schemas.OrderCreate) -> models.Order:
-    """Создать новый заказ."""
-    db_order = models.Order(**order.dict())
+async def create_order(
+    db: AsyncSession,
+    order: schemas.OrderCreate,
+    factory_id: UUID | None = None,
+    created_by_id: UUID | None = None
+) -> models.Order:
+    """Создать новый заказ с привязкой к фабрике."""
+    db_order = models.Order(
+        **order.dict(),
+        factory_id=factory_id,
+        created_by_id=created_by_id
+    )
     db.add(db_order)
     await db.commit()
     await db.refresh(db_order)
     return db_order
+
+
+async def get_orders_by_factory(
+    db: AsyncSession,
+    factory_id: UUID,
+    limit: int = 50,
+    offset: int = 0
+) -> list[models.Order]:
+    """Получить заказы фабрики с пагинацией."""
+    stmt = (
+        select(models.Order)
+        .where(models.Order.factory_id == factory_id)
+        .order_by(models.Order.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def get_order_with_history(db: AsyncSession, order_id: UUID) -> models.Order | None:

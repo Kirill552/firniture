@@ -1,57 +1,80 @@
 'use client'
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Mail, Building2, CheckCircle2 } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
-type AuthStep = "enter-email" | "login" | "register"
+type AuthStep = "enter-email" | "check-email" | "register"
 
-// Mock API call
-const checkUserExists = async (email: string): Promise<boolean> => {
-  console.log(`Checking if ${email} exists...`)
-  await new Promise(resolve => setTimeout(resolve, 500)) // Simulate network delay
-  // In a real app, you'd make a request to your backend.
-  // For this mock, let's say users with `registered` in their email exist.
-  const exists = email.includes("registered")
-  console.log(`User exists: ${exists}`)
-  return exists
-}
-
-export default function SmartLoginPage() {
-  const router = useRouter()
+export default function LoginPage() {
   const [step, setStep] = useState<AuthStep>("enter-email")
   const [email, setEmail] = useState("")
+  const [factoryName, setFactoryName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isNewUser, setIsNewUser] = useState(false)
+  const [devMagicLink, setDevMagicLink] = useState<string | null>(null)
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
+
     setIsLoading(true)
-    const userExists = await checkUserExists(email)
-    setIsLoading(false)
-    setStep(userExists ? "login" : "register")
+    setError(null)
+
+    try {
+      // Пробуем отправить magic link
+      const response = await apiClient.login({ email })
+      setIsNewUser(false)
+      setDevMagicLink(response.dev_magic_link || null)
+      setStep("check-email")
+    } catch (err: unknown) {
+      // Если пользователь не найден — предлагаем регистрацию
+      if (err && typeof err === 'object' && 'status' in err && err.status === 404) {
+        setIsNewUser(true)
+        setStep("register")
+      } else {
+        // Для других ошибок или успеха показываем "проверьте почту"
+        // (API всегда возвращает 200 для защиты от перебора)
+        setStep("check-email")
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleLogin = async () => {
-    setIsLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    router.push('/dashboard')
-  }
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !factoryName) return
 
-  const handleRegister = async () => {
     setIsLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    router.push('/dashboard')
+    setError(null)
+
+    try {
+      const response = await apiClient.register({ email, factory_name: factoryName })
+      setIsNewUser(true)
+      setDevMagicLink(response.dev_magic_link || null)
+      setStep("check-email")
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'detail' in err) {
+        setError(String(err.detail))
+      } else {
+        setError("Не удалось зарегистрироваться. Попробуйте позже.")
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const resetFlow = () => {
     setStep("enter-email")
-    // setEmail("") // Optionally keep email for better UX
+    setError(null)
+    setDevMagicLink(null)
   }
 
   const formVariants = {
@@ -62,7 +85,7 @@ export default function SmartLoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
-      <Card className="w-[400px] h-[350px] overflow-hidden relative">
+      <Card className="w-[420px] overflow-hidden relative">
         <AnimatePresence initial={false} mode="wait">
           <motion.div
             key={step}
@@ -71,70 +94,155 @@ export default function SmartLoginPage() {
             animate="animate"
             exit="exit"
             transition={{ type: "tween", duration: 0.35, ease: "easeInOut" }}
-            className="h-full w-full absolute"
           >
             {step === "enter-email" && (
-              <form onSubmit={handleEmailSubmit} className="h-full">
+              <form onSubmit={handleEmailSubmit}>
                 <CardHeader>
-                  <CardTitle>Войдите или создайте аккаунт</CardTitle>
-                  <CardDescription>Введите ваш email для продолжения.</CardDescription>
+                  <CardTitle>Вход в Мебель-ИИ</CardTitle>
+                  <CardDescription>
+                    Введите email — мы отправим ссылку для входа
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="email@example.com" 
-                      required 
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="director@mebel-pro.ru"
+                      required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
                     />
                   </div>
+                  {error && (
+                    <p className="text-sm text-red-500">{error}</p>
+                  )}
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Проверка..." : "Продолжить"}
+                    {isLoading ? "Отправка..." : "Продолжить"}
                   </Button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Нет аккаунта?{" "}
+                    <button
+                      type="button"
+                      onClick={() => setStep("register")}
+                      className="text-primary hover:underline"
+                    >
+                      Зарегистрируйте фабрику
+                    </button>
+                  </p>
                 </CardContent>
               </form>
             )}
 
-            {step === "login" && (
-              <div className="h-full">
+            {step === "check-email" && (
+              <div>
                 <CardHeader>
-                   <button onClick={resetFlow} className="flex items-center text-sm text-gray-500 hover:text-primary transition-colors"><ArrowLeft className="w-4 h-4 mr-1"/> {email}</button>
-                  <CardTitle>С возвращением!</CardTitle>
-                  <CardDescription>Введите пароль, чтобы войти.</CardDescription>
+                  <div className="flex justify-center mb-4">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Mail className="w-8 h-8 text-primary" />
+                    </div>
+                  </div>
+                  <CardTitle className="text-center">Проверьте почту</CardTitle>
+                  <CardDescription className="text-center">
+                    {isNewUser
+                      ? `Мы отправили ссылку для завершения регистрации на ${email}`
+                      : `Мы отправили ссылку для входа на ${email}`
+                    }
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Пароль</Label>
-                      <Input id="password" type="password" required />
+                  {devMagicLink && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                      <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                        🔧 DEV MODE — Magic Link:
+                      </p>
+                      <a
+                        href={devMagicLink}
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                      >
+                        {devMagicLink}
+                      </a>
                     </div>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Вход..." : "Войти"}
-                    </Button>
-                  </form>
-                  <Button onClick={handleLogin} variant="outline" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Вход..." : "Войти с помощью Passkey"}
+                  )}
+                  <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+                    <p className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+                      Ссылка действительна 15 минут
+                    </p>
+                    <p className="flex items-start gap-2 mt-2">
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+                      Проверьте папку «Спам» если письма нет
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={resetFlow}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Изменить email
                   </Button>
                 </CardContent>
               </div>
             )}
 
             {step === "register" && (
-              <div className="h-full">
-                 <CardHeader>
-                   <button onClick={resetFlow} className="flex items-center text-sm text-gray-500 hover:text-primary transition-colors"><ArrowLeft className="w-4 h-4 mr-1"/> {email}</button>
-                  <CardTitle>Создать аккаунт</CardTitle>
-                  <CardDescription>Мы не нашли аккаунт с этим email. Создайте новый, получив волшебную ссылку.</CardDescription>
+              <form onSubmit={handleRegister}>
+                <CardHeader>
+                  <button
+                    type="button"
+                    onClick={resetFlow}
+                    className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-2"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-1" />
+                    Назад
+                  </button>
+                  <CardTitle>Регистрация фабрики</CardTitle>
+                  <CardDescription>
+                    Создайте аккаунт для вашей мебельной фабрики
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Button onClick={handleRegister} className="w-full" disabled={isLoading}>
-                    {isLoading ? "Отправка..." : "Отправить волшебную ссылку"}
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-email">Email</Label>
+                    <Input
+                      id="reg-email"
+                      type="email"
+                      placeholder="director@mebel-pro.ru"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="factory-name">Название фабрики</Label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="factory-name"
+                        type="text"
+                        placeholder="ООО Мебель-Про"
+                        required
+                        value={factoryName}
+                        onChange={(e) => setFactoryName(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  {error && (
+                    <p className="text-sm text-red-500">{error}</p>
+                  )}
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Регистрация..." : "Зарегистрироваться"}
                   </Button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Нажимая кнопку, вы соглашаетесь с условиями использования
+                  </p>
                 </CardContent>
-              </div>
+              </form>
             )}
           </motion.div>
         </AnimatePresence>

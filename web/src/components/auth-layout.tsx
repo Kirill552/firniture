@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/sidebar"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { ReactNode } from 'react'
 import { Breadcrumbs } from "@/components/breadcrumbs"
+import { AuthProvider } from "@/components/auth-provider"
 
 interface AuthLayoutProps {
   children: ReactNode
@@ -14,13 +15,28 @@ interface AuthLayoutProps {
 export default function AuthLayout({ children }: AuthLayoutProps) {
   const pathname = usePathname()
 
-  const publicPaths = ['/', '/login', '/pricing']
+  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup']
 
-  const isPublic = publicPaths.includes(pathname)
+  const isPublic = publicPaths.some(path => {
+    if (path === pathname) return true
+    if (path === '/login' && pathname.startsWith('/login/')) return true
+    return false
+  })
 
+  // Публичные страницы без AuthProvider
   if (isPublic) {
     return <>{children}</>
   }
+
+  // Защищённые страницы с AuthProvider
+  return (
+    <AuthProvider>
+      <AuthenticatedLayout>{children}</AuthenticatedLayout>
+    </AuthProvider>
+  )
+}
+
+function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>

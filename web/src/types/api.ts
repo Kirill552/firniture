@@ -612,3 +612,102 @@ export interface OrderStatistics {
   /** Заказы с ошибками */
   failed: number
 }
+
+// ============================================================================
+// Vision OCR — извлечение параметров из изображений (P0)
+// ============================================================================
+
+/** Категория мебели */
+export type FurnitureCategory =
+  | 'навесной_шкаф'
+  | 'напольный_шкаф'
+  | 'тумба'
+  | 'пенал'
+  | 'столешница'
+  | 'фасад'
+  | 'полка'
+  | 'ящик'
+  | 'другое'
+
+/** Тип материала */
+export type MaterialType =
+  | 'ЛДСП'
+  | 'МДФ'
+  | 'массив'
+  | 'фанера'
+  | 'ДВП'
+  | 'стекло'
+  | 'металл'
+  | 'другое'
+
+/** Тип мебели */
+export interface FurnitureType {
+  category: FurnitureCategory
+  subcategory?: string | null
+  description?: string | null
+}
+
+/** Извлечённые размеры */
+export interface ExtractedDimensions {
+  width_mm?: number | null
+  height_mm?: number | null
+  depth_mm?: number | null
+  thickness_mm?: number | null
+}
+
+/** Извлечённый материал */
+export interface ExtractedMaterial {
+  type?: MaterialType | null
+  color?: string | null
+  texture?: string | null
+  brand?: string | null
+}
+
+/** Извлечённые параметры мебели */
+export interface ExtractedFurnitureParams {
+  furniture_type?: FurnitureType | null
+  dimensions?: ExtractedDimensions | null
+  body_material?: ExtractedMaterial | null
+  facade_material?: ExtractedMaterial | null
+  door_count?: number | null
+  drawer_count?: number | null
+  shelf_count?: number | null
+  has_legs?: boolean | null
+  raw_text?: string | null
+  confidence: number
+  needs_clarification: boolean
+  clarification_questions: string[]
+}
+
+/** MIME типы изображений */
+export type ImageMimeType = 'image/jpeg' | 'image/png' | 'image/webp'
+
+/** Запрос на извлечение параметров из изображения */
+export interface ImageExtractRequest {
+  /** Base64 закодированное изображение */
+  image_base64: string
+  /** MIME тип изображения */
+  image_mime_type?: ImageMimeType
+  /** UUID заказа (опционально) */
+  order_id?: string | null
+  /** Подсказка языка для OCR */
+  language_hint?: 'ru' | 'en' | 'auto'
+}
+
+/** Ответ на запрос извлечения параметров */
+export interface ImageExtractResponse {
+  /** Успешность операции */
+  success: boolean
+  /** Извлечённые параметры */
+  parameters?: ExtractedFurnitureParams | null
+  /** Нужен ли переход к диалогу */
+  fallback_to_dialogue: boolean
+  /** Промпт для диалога (если fallback) */
+  dialogue_prompt?: string | null
+  /** Уверенность OCR (0-1) */
+  ocr_confidence: number
+  /** Время обработки в мс */
+  processing_time_ms: number
+  /** Ошибка (если есть) */
+  error?: string | null
+}

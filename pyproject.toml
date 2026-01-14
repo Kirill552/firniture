@@ -5,12 +5,20 @@ target-version = ["py312"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-select = ["E", "F", "I", "B", "UP"]
-ignore = ["E203", "W503"]
 
-[tool.ruff.isort]
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = [
+    "E203",  # whitespace before ':'
+    "E501",  # длинные строки в миграциях
+    "B008",  # Depends() в defaults (FastAPI)
+    "E712",  # == True/False (SQLAlchemy требует)
+    "B904",  # raise from (стиль)
+    "E402",  # import not at top (иногда необходимо)
+]
+
+[tool.ruff.lint.isort]
 known-first-party = ["api", "integrations", "cad-cam", "shared"]
-profile = "black"
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -37,5 +45,23 @@ dependencies = [
 	"pandas>=2.2.0",
 	"openpyxl>=3.1.0",
 	"typer>=0.9.0",
-	"psycopg-binary>=3.1.0",
+	"psycopg[binary]>=3.1.0",
+	"ezdxf>=1.4.3",
+	"pillow>=12.1.0",
+	"rectpack>=0.2.2",
+	"pyjwt>=2.8.0",
+	"passlib[bcrypt]>=1.7.4",
+	"email-validator>=2.3.0",
+	"pymupdf>=1.26.7",
+	"openai>=2.15.0",
+	"python-dotenv>=1.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.12.0",
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.14.11",
 ]

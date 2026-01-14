@@ -1,10 +1,9 @@
 
 import hashlib
 import os
-from typing import List
 
-from shared.yandex_ai import YandexCloudSettings, create_embeddings_client
 from api.models import HardwareItem, ProductConfig
+from shared.yandex_ai import YandexCloudSettings, create_embeddings_client
 
 EMBED_VERSION = "yc-text-emb-doc-latest-256"
 
@@ -14,20 +13,26 @@ def _content_fingerprint(item: HardwareItem) -> str:
         (item.name or "")
         + "|" + (item.description or "")
         + "|" + (item.type or "")
-        + "|" + (" ".join((item.compat or [])))
+        + "|" + (" ".join(item.compat or []))
         + "|" + str(item.params or {{}})
     )
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
-async def embed_text(text: str) -> list[float]:
-    # Читаем ключи из env; если отсутствуют — используем фолбэк (детерминированный)
-    folder_id = os.getenv("yc_folder_id")
-    api_key = os.getenv("yc_api_key")
+async def embed_text(text: str, model_type: str = "doc") -> list[float]:
+    """
+    Получить embedding для текста.
+
+    Args:
+        text: Текст для векторизации
+        model_type: "doc" для индексации документов, "query" для поисковых запросов
+                   Yandex использует асимметричный поиск — разные модели для doc/query!
+    """
+    folder_id = os.getenv("YC_FOLDER_ID")
+    api_key = os.getenv("YC_API_KEY")
     if not folder_id or not api_key:
         # Фолбэк: детерминированный вектор по SHA256
         h = hashlib.sha256(text.encode("utf-8")).digest()
-        # растянем до 256 значений
         vals: list[float] = []
         while len(vals) < 256:
             for b in h:
@@ -38,8 +43,19 @@ async def embed_text(text: str) -> list[float]:
 
     settings = YandexCloudSettings(yc_folder_id=folder_id, yc_api_key=api_key)
     async with create_embeddings_client(settings) as client:
-        resp = await client.get_embedding(text, model_type="doc")
+        resp = await client.get_embedding(text, model_type=model_type)
         return resp.embedding
+
+
+async def embed_query(text: str) -> list[float]:
+    """
+    Embedding для поискового запроса.
+
+    Примечание: Yandex рекомендует text-search-query для запросов,
+    но для коротких описаний фурнитуры симметричный поиск (doc-doc)
+    даёт лучшие результаты.
+    """
+    return await embed_text(text, model_type="doc")
 
 
 def concat_hardware_item_text(item: HardwareItem) -> str:

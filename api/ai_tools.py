@@ -12,13 +12,10 @@ AI-инструменты (Function Calling) для ИИ-технолога.
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any, Dict, List, Optional
-from uuid import UUID
+from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import SessionLocal
 from api.models import HardwareItem
@@ -31,7 +28,7 @@ log = logging.getLogger(__name__)
 # Определения инструментов (JSON Schema для OpenAI Function Calling)
 # ============================================================================
 
-HARDWARE_TOOLS: List[Dict[str, Any]] = [
+HARDWARE_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
@@ -162,9 +159,9 @@ HARDWARE_TOOLS: List[Dict[str, Any]] = [
 
 async def handle_find_hardware(
     query: str,
-    hardware_type: Optional[str] = None,
+    hardware_type: str | None = None,
     limit: int = 5
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Поиск фурнитуры по текстовому запросу с использованием векторного поиска.
 
@@ -235,7 +232,7 @@ async def handle_check_hardware_compatibility(
     sku: str,
     material: str,
     thickness_mm: float
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Проверка совместимости фурнитуры с материалом и толщиной.
 
@@ -332,7 +329,7 @@ async def handle_check_hardware_compatibility(
         }
 
 
-async def handle_get_hardware_details(sku: str) -> Dict[str, Any]:
+async def handle_get_hardware_details(sku: str) -> dict[str, Any]:
     """
     Получение детальной информации о позиции фурнитуры.
 
@@ -389,11 +386,11 @@ async def handle_get_hardware_details(sku: str) -> Dict[str, Any]:
 
 async def handle_calculate_hardware_qty(
     hardware_type: str,
-    door_count: Optional[int] = None,
-    door_height_mm: Optional[float] = None,
-    drawer_count: Optional[int] = None,
-    cabinet_width_mm: Optional[float] = None
-) -> Dict[str, Any]:
+    door_count: int | None = None,
+    door_height_mm: float | None = None,
+    drawer_count: int | None = None,
+    cabinet_width_mm: float | None = None
+) -> dict[str, Any]:
     """
     Расчёт количества фурнитуры для изделия.
 
@@ -536,8 +533,8 @@ TOOL_HANDLERS = {
 
 async def execute_tool_call(
     tool_name: str,
-    arguments: Dict[str, Any]
-) -> Dict[str, Any]:
+    arguments: dict[str, Any]
+) -> dict[str, Any]:
     """
     Выполнение вызова инструмента.
 
@@ -577,6 +574,6 @@ async def execute_tool_call(
         }
 
 
-def get_tools_schema() -> List[Dict[str, Any]]:
+def get_tools_schema() -> list[dict[str, Any]]:
     """Получить схему всех инструментов для передачи в YandexGPT."""
     return HARDWARE_TOOLS

@@ -3,8 +3,8 @@
 Запуск: python -m api.mocks.test_dialogue_mock
 """
 import asyncio
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Устанавливаем UTF-8 для Windows консоли
@@ -17,9 +17,9 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from api.mocks.dialogue_mocks import (
+    are_yc_keys_available,
     generate_mock_dialogue_response,
     mock_function_call_response,
-    are_yc_keys_available
 )
 
 

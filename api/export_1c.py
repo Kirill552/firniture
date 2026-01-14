@@ -18,14 +18,11 @@ import csv
 import io
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-from uuid import UUID
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from api.models import Order, ProductConfig, Panel, BOMItem
+from api.models import BOMItem, Order, ProductConfig
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +66,7 @@ def _auto_column_width(ws, min_width: int = 10, max_width: int = 50):
                 try:
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
-                except:
+                except Exception:
                     pass
         if column:
             adjusted_width = min(max(max_length + 2, min_width), max_width)
@@ -78,8 +75,8 @@ def _auto_column_width(ws, min_width: int = 10, max_width: int = 50):
 
 def generate_order_excel(
     order: Order,
-    products: List[ProductConfig],
-    bom_items: Optional[List[BOMItem]] = None
+    products: list[ProductConfig],
+    bom_items: list[BOMItem] | None = None
 ) -> bytes:
     """
     Генерация Excel файла для заказа.
@@ -156,7 +153,7 @@ def generate_order_excel(
 
     panel_row = 2
     for product in products:
-        product_name = product.name or f"Изделие"
+        product_name = product.name or "Изделие"
         for panel in (product.panels or []):
             data = [
                 panel_row - 1,
@@ -218,9 +215,9 @@ def generate_order_excel(
 
 def generate_order_csv(
     order: Order,
-    products: List[ProductConfig],
-    bom_items: Optional[List[BOMItem]] = None
-) -> Dict[str, bytes]:
+    products: list[ProductConfig],
+    bom_items: list[BOMItem] | None = None
+) -> dict[str, bytes]:
     """
     Генерация CSV файлов для заказа.
 

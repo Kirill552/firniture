@@ -3,23 +3,21 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-from pathlib import Path
-from typing import Optional
 from logging.config import fileConfig
+from pathlib import Path
+
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Connection
 
 from alembic import context  # type: ignore
-from sqlalchemy import pool, create_engine
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import AsyncEngine
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from api import models  # noqa: F401,E402  # ensure models imported
 from api.database import Base  # noqa: E402
 from api.settings import settings  # noqa: E402
-from api import models  # noqa: F401,E402  # ensure models imported
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -68,7 +66,7 @@ def run_migrations_online() -> None:
 
     attempts = 10
     delay = 0.5
-    last_error: Optional[BaseException] = None
+    last_error: BaseException | None = None
 
     for i in range(attempts):
         try:

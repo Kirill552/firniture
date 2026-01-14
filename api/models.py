@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
 
 from .database import Base
+
+# Примечание: Роли убраны для MVP (YAGNI). Добавим когда понадобится.
 
 
 class JobStatusEnum(str):
@@ -25,16 +27,68 @@ class ValidationStatusEnum(str):
     Rejected = "Rejected"
 
 
-class Order(Base):
-    __tablename__ = "orders"
+class Factory(Base):
+    """Фабрика (tenant) — изолированная сущность для мультитенантности."""
+    __tablename__ = "factories"
+
     id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(255))  # "ООО Мебель-Про"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Связи
+    users: Mapped[list[User]] = relationship(back_populates="factory", cascade="all, delete-orphan")
+    orders: Mapped[list[Order]] = relationship(back_populates="factory", cascade="all, delete-orphan")
+
+
+class User(Base):
+    """Пользователь системы (сотрудник фабрики). Magic Link аутентификация."""
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    factory_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("factories.id", ondelete="CASCADE"))
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)  # Владелец фабрики
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Связи
+    factory: Mapped[Factory] = relationship(back_populates="users")
+
+
+class MagicToken(Base):
+    """Токен для Magic Link входа (живёт 15 минут)."""
+    __tablename__ = "magic_tokens"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Связи
+    user: Mapped[User] = relationship()
+
+
+class Order(Base):
+    """Заказ мебели, принадлежит фабрике (мультитенантность)."""
+    __tablename__ = "orders"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    factory_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("factories.id", ondelete="CASCADE"), nullable=True)
+    created_by_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     customer_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    products: Mapped[list["ProductConfig"]] = relationship(back_populates="order", cascade="all, delete-orphan")
-    dialogue_messages: Mapped[list["DialogueMessage"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    # Связи
+    factory: Mapped[Factory | None] = relationship(back_populates="orders")
+    created_by: Mapped[User | None] = relationship()
+    products: Mapped[list[ProductConfig]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    dialogue_messages: Mapped[list[DialogueMessage]] = relationship(back_populates="order", cascade="all, delete-orphan")
 
 
 class ProductConfig(Base):
@@ -50,8 +104,8 @@ class ProductConfig(Base):
     params: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    order: Mapped["Order"] = relationship(back_populates="products")
-    panels: Mapped[list["Panel"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    order: Mapped[Order] = relationship(back_populates="products")
+    panels: Mapped[list[Panel]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
 
 class Panel(Base):
@@ -66,7 +120,7 @@ class Panel(Base):
     edge_band_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    product: Mapped["ProductConfig"] = relationship(back_populates="panels")
+    product: Mapped[ProductConfig] = relationship(back_populates="panels")
 
 
 class Supplier(Base):
@@ -174,7 +228,7 @@ class DialogueMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
-    order: Mapped["Order"] = relationship(back_populates="dialogue_messages")
+    order: Mapped[Order] = relationship(back_populates="dialogue_messages")
 
 
 class Validation(Base):

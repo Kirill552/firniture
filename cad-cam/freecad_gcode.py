@@ -1,10 +1,11 @@
 
-import sys
 import os
-import FreeCAD
-import Part
-import Path
+import sys
+
 import Draft
+import FreeCAD
+import Path
+
 
 def generate_gcode_from_dxf(dxf_file, gcode_file, tool_diameter=3.175, post_processor='grbl'):
     """

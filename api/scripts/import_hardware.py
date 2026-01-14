@@ -1,40 +1,37 @@
 
 import argparse
+import asyncio
 import json
 import logging
-from typing import List, Dict, Any
-import asyncio
+
+# Need to configure the path to import from the parent directory
+from typing import Any
 
 import pandas as pd
 from pydantic import ValidationError
-from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.future import select
 
-# Need to configure the path to import from the parent directory
-import sys
-import os
-
-
+from api.database import SessionLocal
 from api.domain_schemas import HardwareItem as HardwareItemSchema
-from api.database import get_db, SessionLocal
 from api.models import HardwareItem as HardwareItemModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def load_data_from_file(file_path: str) -> List[Dict[str, Any]]:
+def load_data_from_file(file_path: str) -> list[dict[str, Any]]:
     """Loads data from a file (CSV, XLSX, or JSON)."""
     if file_path.endswith('.csv'):
         return pd.read_csv(file_path).to_dict('records')
     elif file_path.endswith(('.xls', '.xlsx')):
         return pd.read_excel(file_path).to_dict('records')
     elif file_path.endswith('.json'):
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             return json.load(f)
     else:
         raise ValueError("Unsupported file format. Please use CSV, XLSX, or JSON.")
 
-def normalize_and_validate(data: List[Dict[str, Any]]) -> List[HardwareItemSchema]:
+def normalize_and_validate(data: list[dict[str, Any]]) -> list[HardwareItemSchema]:
     """Normalizes and validates data against the HardwareItem schema."""
     validated_items = []
     for item_data in data:
@@ -46,7 +43,7 @@ def normalize_and_validate(data: List[Dict[str, Any]]) -> List[HardwareItemSchem
             logger.warning(f"Skipping item due to validation error: {item_data}. Error: {e}")
     return validated_items
 
-async def save_items_to_db(items: List[HardwareItemSchema]):
+async def save_items_to_db(items: list[HardwareItemSchema]):
     """Saves a list of HardwareItem to the database."""
     logger.info(f"Attempting to save {len(items)} items to the database.")
     async with SessionLocal() as db:

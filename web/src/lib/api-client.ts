@@ -23,7 +23,10 @@ import {
   Export1CResponse,
   ZIPJobRequest,
   APIError,
+  ImageExtractRequest,
+  ImageExtractResponse,
 } from '@/types/api'
+import { getAuthHeader, TokenResponse, AuthUser } from './auth'
 
 /**
  * Базовый URL API бэкенда
@@ -51,7 +54,8 @@ export class APIClientError extends Error {
  */
 async function fetchAPI<T>(
   endpoint: string,
-  options?: RequestInit
+  options?: RequestInit,
+  skipAuth: boolean = false
 ): Promise<T> {
   const url = `${API_BASE_URL}${API_PREFIX}${endpoint}`
 
@@ -60,6 +64,7 @@ async function fetchAPI<T>(
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(skipAuth ? {} : getAuthHeader()),
         ...options?.headers,
       },
     })
@@ -87,10 +92,73 @@ async function fetchAPI<T>(
   }
 }
 
+// ============================================================================
+// Auth типы
+// ============================================================================
+
+export interface RegisterRequest {
+  email: string
+  factory_name: string
+}
+
+export interface LoginRequest {
+  email: string
+}
+
+export interface VerifyRequest {
+  token: string
+}
+
+export interface MessageResponse {
+  message: string
+  dev_magic_link?: string  // Только в dev режиме (mock email)
+}
+
 /**
  * API клиент с типизированными методами
  */
 export const apiClient = {
+  // ============================================================================
+  // Аутентификация (Auth)
+  // ============================================================================
+
+  /**
+   * Регистрация новой фабрики
+   */
+  async register(data: RegisterRequest): Promise<MessageResponse> {
+    return fetchAPI<MessageResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, true)
+  },
+
+  /**
+   * Запрос magic link для входа
+   */
+  async login(data: LoginRequest): Promise<MessageResponse> {
+    return fetchAPI<MessageResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, true)
+  },
+
+  /**
+   * Проверка magic token и получение JWT
+   */
+  async verify(data: VerifyRequest): Promise<TokenResponse> {
+    return fetchAPI<TokenResponse>('/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, true)
+  },
+
+  /**
+   * Получить текущего пользователя
+   */
+  async getMe(): Promise<AuthUser> {
+    return fetchAPI<AuthUser>('/auth/me')
+  },
+
   // ============================================================================
   // Заказы (Orders)
   // ============================================================================
@@ -121,6 +189,17 @@ export const apiClient = {
    */
   async extractSpec(data: SpecExtractRequest): Promise<SpecExtractResponse> {
     return fetchAPI<SpecExtractResponse>('/spec/extract', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  /**
+   * Извлечь параметры мебели из изображения (Vision OCR)
+   * P0: Ключевой дифференциатор — фото → параметры
+   */
+  async extractFromImage(data: ImageExtractRequest): Promise<ImageExtractResponse> {
+    return fetchAPI<ImageExtractResponse>('/spec/extract-from-image', {
       method: 'POST',
       body: JSON.stringify(data),
     })

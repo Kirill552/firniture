@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Awaitable, cast
+from collections.abc import Awaitable
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 from redis.asyncio import Redis as AsyncRedis
 
 from .settings import settings
-
 
 DXF_QUEUE = "cam:dxf"
 GCODE_QUEUE = "cam:gcode"
@@ -20,6 +20,7 @@ def get_redis() -> AsyncRedis:
 
 
 import uuid
+
 
 async def enqueue(queue: str, payload: dict[str, Any]) -> int:
     r = get_redis()

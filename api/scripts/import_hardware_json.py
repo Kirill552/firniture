@@ -7,13 +7,13 @@
 """
 
 import argparse
+import asyncio
 import json
 import logging
-import asyncio
-from typing import List, Dict, Any
+from typing import Any
 
-from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.future import select
 
 from api.database import SessionLocal
 from api.models import HardwareItem as HardwareItemModel
@@ -22,13 +22,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_json(file_path: str) -> List[Dict[str, Any]]:
+def load_json(file_path: str) -> list[dict[str, Any]]:
     """Загружает данные из JSON файла."""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         return json.load(f)
 
 
-async def import_items(items: List[Dict[str, Any]]) -> tuple[int, int]:
+async def import_items(items: list[dict[str, Any]]) -> tuple[int, int]:
     """
     Импортирует позиции в БД.
     Возвращает (created, updated).

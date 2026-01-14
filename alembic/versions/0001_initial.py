@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from alembic import op  # type: ignore
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op  # type: ignore
 
 # revision identifiers, used by Alembic.
 revision = "0001_initial"

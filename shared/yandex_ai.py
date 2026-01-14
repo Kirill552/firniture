@@ -15,19 +15,17 @@ OpenAI-совместимый API дает доступ к:
 from __future__ import annotations
 
 import asyncio
-import logging
-import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
-from dataclasses import dataclass
 import json
+import logging
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from typing import Any
 
-from api.models import HardwareItem, ProductConfig
 # Ленивый импорт concat_product_config_text для избежания circular import
-
 import aiohttp
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
+from api.models import HardwareItem, ProductConfig
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +69,7 @@ class YandexCloudSettings(BaseSettings):
 @dataclass
 class EmbeddingResponse:
     """Ответ от Embeddings API."""
-    embedding: List[float]
+    embedding: list[float]
     num_tokens: int
     model_version: str
 
@@ -80,7 +78,7 @@ class EmbeddingResponse:
 class GPTResponse:
     """Ответ от YandexGPT."""
     text: str
-    usage: Dict[str, int]
+    usage: dict[str, int]
     model_version: str
 
 
@@ -89,7 +87,7 @@ class OCRResponse:
     """Ответ от Vision OCR."""
     text: str
     confidence: float
-    blocks: List[Dict[str, Any]]
+    blocks: list[dict[str, Any]]
 
 
 class YandexCloudClient:
@@ -97,7 +95,7 @@ class YandexCloudClient:
     
     def __init__(self, settings: YandexCloudSettings):
         self.settings = settings
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
     
     async def __aenter__(self):
         self.session = aiohttp.ClientSession(
@@ -109,7 +107,7 @@ class YandexCloudClient:
         if self.session:
             await self.session.close()
     
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Заголовки авторизации."""
         return {
             "Content-Type": "application/json",
@@ -121,9 +119,9 @@ class YandexCloudClient:
         self,
         method: str,
         url: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: dict[str, Any] | None = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """HTTP запрос с retry логикой."""
         if not self.session:
             raise RuntimeError("Client session not initialized. Use 'async with' context.")
@@ -155,7 +153,7 @@ class YandexCloudClient:
                     else:  # Client errors -> no retry
                         raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
             
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (TimeoutError, aiohttp.ClientError) as e:
                 last_error = e
                 log.warning(f"Attempt {attempt + 1} failed: {e}")
             
@@ -173,7 +171,7 @@ class YandexEmbeddingsClient(YandexCloudClient):
         self,
         text: str,
         model_type: str = "doc",  # "doc" или "query"
-        dim: Optional[int] = None
+        dim: int | None = None
     ) -> EmbeddingResponse:
         """Получить эмбеддинг для текста."""
         
@@ -247,7 +245,7 @@ class YandexGPTClient(YandexCloudClient):
 
     async def stream_chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.3,
         max_tokens: int = 2000
     ) -> AsyncGenerator[str, None]:
@@ -305,15 +303,15 @@ class ToolCall:
     """Вызов инструмента от модели."""
     id: str
     name: str
-    arguments: Dict[str, Any]
+    arguments: dict[str, Any]
 
 
 @dataclass
 class GPTResponseWithTools:
     """Ответ от YandexGPT с поддержкой tool calls."""
-    text: Optional[str]
-    tool_calls: List[ToolCall]
-    usage: Dict[str, int]
+    text: str | None
+    tool_calls: list[ToolCall]
+    usage: dict[str, int]
     model_version: str
     finish_reason: str
 
@@ -330,7 +328,7 @@ class YandexOpenAIClient(YandexCloudClient):
     - Готовность к Alice AI LLM
     """
 
-    def _get_openai_headers(self) -> Dict[str, str]:
+    def _get_openai_headers(self) -> dict[str, str]:
         """Заголовки для OpenAI-совместимого API."""
         return {
             "Content-Type": "application/json",
@@ -348,12 +346,12 @@ class YandexOpenAIClient(YandexCloudClient):
 
     async def chat_completion_with_tools(
         self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
         tool_choice: str = "auto",
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
     ) -> GPTResponseWithTools:
         """
         Генерация с поддержкой Function Calling (tools).
@@ -423,10 +421,10 @@ class YandexOpenAIClient(YandexCloudClient):
 
     async def chat_completion(
         self,
-        messages: List[Dict[str, str]],
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        messages: list[dict[str, str]],
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
     ) -> GPTResponse:
@@ -474,10 +472,10 @@ class YandexOpenAIClient(YandexCloudClient):
 
     async def stream_chat_completion(
         self,
-        messages: List[Dict[str, str]],
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        messages: list[dict[str, str]],
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
     ) -> AsyncGenerator[str, None]:
@@ -547,7 +545,7 @@ class YandexVisionClient(YandexCloudClient):
     async def extract_text_from_image(
         self,
         image_bytes: bytes,
-        language_codes: Optional[List[str]] = None
+        language_codes: list[str] | None = None
     ) -> OCRResponse:
         """Извлечение текста из изображения."""
         
@@ -595,9 +593,9 @@ class YandexVisionClient(YandexCloudClient):
 
 async def rank_hardware_with_gpt(
     product_config: ProductConfig,
-    hardware_items: List[HardwareItem],
+    hardware_items: list[HardwareItem],
     settings: YandexCloudSettings
-) -> List[HardwareItem]:
+) -> list[HardwareItem]:
     """Ranks hardware items using YandexGPT."""
     # Ленивый импорт для избежания circular import
     from shared.embeddings import concat_product_config_text

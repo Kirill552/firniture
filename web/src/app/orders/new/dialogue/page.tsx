@@ -1,14 +1,25 @@
 "use client"
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { LazyAiChat } from "@/components/lazy";
 
 export default function NewOrderDialoguePage() {
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const orderIdParam = searchParams.get('orderId');
+  const extractedContext = searchParams.get('context'); // Закодированный контекст из Vision OCR
+
+  const [orderId, setOrderId] = useState<string | null>(orderIdParam);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Создаём новый заказ при загрузке страницы
+    // Если orderId уже передан в URL — используем его
+    if (orderIdParam) {
+      setOrderId(orderIdParam);
+      return;
+    }
+
+    // Иначе создаём новый заказ
     async function createOrder() {
       try {
         const response = await fetch('/api/v1/orders', {
@@ -32,7 +43,7 @@ export default function NewOrderDialoguePage() {
     }
 
     createOrder();
-  }, []);
+  }, [orderIdParam]);
 
   if (error) {
     return (
@@ -50,9 +61,14 @@ export default function NewOrderDialoguePage() {
     );
   }
 
+  // Декодируем контекст если есть
+  const decodedContext = extractedContext
+    ? decodeURIComponent(extractedContext)
+    : undefined;
+
   return (
     <div className="p-6 w-full">
-      <LazyAiChat orderId={orderId} />
+      <LazyAiChat orderId={orderId} extractedContext={decodedContext} />
     </div>
   );
 }

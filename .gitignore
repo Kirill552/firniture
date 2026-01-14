@@ -22,15 +22,15 @@ Thumbs.db
 .qoder/
 .codex/
 .gigaide/
+.gemini/
+
+# Test artifacts
+tests/
+etl_pipeline/
 
 # Documentation (local only, not in repo)
 docs/
-
-# Root level documentation
-FRONTEND_TASKS.md
-описание.md
-дизайн.md
-План задач.md
+*.md
 
 # Local data
 *.sqlite
@@ -38,12 +38,12 @@ dist/
 build/
 coverage/
 
-# Temporary test files
-dialogue-test-result
-final-test
-gpt-response
-openai-api-success
-nul
 
 # Local config
 ngrok.yml
+tmpclau*
+.tmp_*.py
+*.egg-info/
+screens/
+furnitura_catalogi/
+CLAUDE.md

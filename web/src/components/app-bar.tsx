@@ -1,3 +1,5 @@
+'use client'
+
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { GlobalSearch } from "@/components/global-search"
@@ -9,12 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
-import { User, Settings, LogOut } from "lucide-react"
+import { Settings, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useAuth } from "@/components/auth-provider"
 
 export function AppBar() {
+  const { user, logout } = useAuth()
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="w-full flex h-14 items-center px-6">
@@ -36,16 +40,20 @@ export function AppBar() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback>Т</AvatarFallback>
+                      <AvatarFallback>
+                        {user?.email?.[0]?.toUpperCase() || 'У'}
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">Технолог</p>
+                      <p className="text-sm font-medium leading-none">
+                        {user?.factory_name || 'Моя фабрика'}
+                      </p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        m@example.com
+                        {user?.email || 'Загрузка...'}
                       </p>
                     </div>
                   </DropdownMenuLabel>
@@ -57,7 +65,7 @@ export function AppBar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={logout} className="cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Выход</span>
                   </DropdownMenuItem>

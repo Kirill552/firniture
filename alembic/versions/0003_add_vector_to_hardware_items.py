@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from alembic import op  # type: ignore
 import sqlalchemy as sa  # type: ignore
 from sqlalchemy.dialects import postgresql  # type: ignore
 
+from alembic import op  # type: ignore
 
 revision = "0003_vector_fields_hardware"
 down_revision = "0002_add_artifact_id_to_cam_jobs"

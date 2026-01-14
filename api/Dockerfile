@@ -1,18 +1,25 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    UV_SYSTEM_PYTHON=1
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy asyncpg alembic redis boto3 pydantic-settings "psycopg[binary]" ezdxf==1.4.2 aiohttp>=3.10.0 numpy>=1.26.0 scipy>=1.13.0 pgvector>=0.4.1 openpyxl>=3.1.0
+# Установка uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Копируем файлы зависимостей
+COPY pyproject.toml uv.lock ./
+
+# Устанавливаем зависимости (без dev группы)
+RUN uv sync --frozen --no-dev
+
+# Копируем код
 COPY api ./api
 COPY shared ./shared
 COPY docs ./docs
 COPY data ./data
 
 EXPOSE 8000
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

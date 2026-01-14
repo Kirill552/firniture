@@ -20,6 +20,19 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "artifacts"
     S3_PRESIGNED_TTL_SECONDS: int = 900  # 15 минут
 
+    # JWT Authentication
+    JWT_SECRET: str = "CHANGE_ME_IN_PRODUCTION_super_secret_key_2026"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_DAYS: int = 30  # 30 дней сессия
+
+    # Magic Link
+    MAGIC_TOKEN_EXPIRE_MINUTES: int = 15
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # RuSender (email)
+    RUSENDER_API_KEY: str = ""  # Пустой = mock режим
+    EMAIL_FROM: str = "noreply@mebel-ai.ru"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

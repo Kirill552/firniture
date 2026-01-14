@@ -5,25 +5,34 @@ import json
 import logging
 import os
 import signal
-import sys
 import traceback
-from typing import Any, Awaitable, cast
-
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import insert
+from collections.abc import Awaitable
+from typing import Any, cast
 from uuid import uuid4
 
-from .database import SessionLocal
-from .models import CAMJob, JobStatusEnum, Artifact
-from .queues import get_redis, DXF_QUEUE, GCODE_QUEUE, DLQ_QUEUE
+from sqlalchemy import insert, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.storage import ObjectStorage
-import io
+
+from .database import SessionLocal
+from .models import Artifact, CAMJob, JobStatusEnum
+from .queues import DLQ_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
 
 try:
     import ezdxf  # type: ignore
+
+    from .dxf_generator import Panel, generate_panel_dxf
+    DXF_GENERATOR_AVAILABLE = True
 except Exception:  # pragma: no cover - установим в контейнере
     ezdxf = None
+    DXF_GENERATOR_AVAILABLE = False
+
+try:
+    from .gcode_generator import MACHINE_PROFILES, MachineProfile, dxf_to_gcode
+    GCODE_GENERATOR_AVAILABLE = True
+except Exception:  # pragma: no cover
+    GCODE_GENERATOR_AVAILABLE = False
 
 
 log = logging.getLogger("cam-worker")
@@ -48,59 +57,79 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
     # небольшая задержка для имитации работы
     await asyncio.sleep(0.1)
 
-    # Узнаем вид работы
-    # (в простом MVP берём из контекста только для DXF)
-    # Если DXF — генерируем прямоугольник 1000x500 мм
-        artifact_id = None
-    if payload.get("job_kind") == "DXF" and ezdxf is not None:
-        doc = ezdxf.new(dxfversion="R2010")
-        # Set units to millimeters
-        doc.header['$INSUNITS'] = ezdxf.units.MM
+    # Узнаем вид работы и генерируем артефакт
+    artifact_id = None
+    context = payload.get("context", {})
 
-        # Add metadata
-        doc.header['$AUTHOR'] = "Мебель-ИИ"
-        doc.header['$DATETIME'] = ezdxf.ezdxf_datetime_to_header_str(ezdxf.now())
+    if payload.get("job_kind") == "DXF" and DXF_GENERATOR_AVAILABLE:
+        # Извлекаем панели из контекста
+        panels_data = context.get("panels", [])
+        if not panels_data:
+            # Fallback на демо-панель
+            panels_data = [
+                {"name": "Демо-панель", "width_mm": 600, "height_mm": 400, "thickness_mm": 16}
+            ]
 
-        msp = doc.modelspace()
+        # Конвертируем в объекты Panel
+        panels = []
+        for p in panels_data:
+            panels.append(Panel(
+                id=p.get("id", str(uuid4())),
+                name=p.get("name", "Панель"),
+                width_mm=float(p.get("width_mm", 600)),
+                height_mm=float(p.get("height_mm", 400)),
+                thickness_mm=float(p.get("thickness_mm", 16)),
+                material=p.get("material", "ЛДСП"),
+                edge_top=p.get("edge_top", False),
+                edge_bottom=p.get("edge_bottom", False),
+                edge_left=p.get("edge_left", False),
+                edge_right=p.get("edge_right", False),
+                edge_thickness_mm=float(p.get("edge_thickness_mm", 0.4)),
+                drilling_holes=p.get("drilling_holes", []),
+                notes=p.get("notes", ""),
+            ))
 
-        # Add layers
-        outline_layer = doc.layers.new(name="OUTLINE", dxfattribs={'color': 7}) # White/Black
-        annotations_layer = doc.layers.new(name="ANNOTATIONS", dxfattribs={'color': 1}) # Red
+        # Параметры листа
+        sheet_width = float(context.get("sheet_width", 2800))
+        sheet_height = float(context.get("sheet_height", 2070))
+        optimize = context.get("optimize", True)
+        gap_mm = float(context.get("gap_mm", 4.0))
 
-        width, height = 1000.0, 500.0  # мм
+        log.info(f"[DXF] Generating for {len(panels)} panels on sheet {sheet_width}x{sheet_height}")
 
-        # CAM checks
-        if width <= 0 or height <= 0:
-            raise ValueError("Panel dimensions must be positive")
-        
-        tool_diameter = 3.175 # мм
-        if tool_diameter >= width or tool_diameter >= height:
-            raise ValueError("Tool diameter is too large for the panel")
+        # Генерируем DXF
+        data, layout = generate_panel_dxf(
+            panels=panels,
+            sheet_size=(sheet_width, sheet_height),
+            optimize=optimize,
+            gap_mm=gap_mm,
+        )
 
-        msp.add_lwpolyline([(0, 0), (width, 0), (width, height), (0, height), (0, 0)], close=True, dxfattribs={'layer': outline_layer.name})
+        log.info(f"[DXF] Layout: {len(layout.placed_panels)} placed, {len(layout.unplaced_panels)} unplaced, utilization: {layout.utilization_percent:.1f}%")
 
-        # Add a simple dimension annotation
-        dim = msp.add_aligned_dim(p1=(0, 0), p2=(width, 0), distance=20, dxfattribs={'layer': annotations_layer.name})
-        dim.render()
+        # Сохраняем результат раскладки в контексте задачи
+        layout_result = {
+            "utilization_percent": layout.utilization_percent,
+            "panels_placed": len(layout.placed_panels),
+            "panels_unplaced": len(layout.unplaced_panels),
+        }
+        await session.execute(
+            update(CAMJob)
+            .where(CAMJob.id == job_id)
+            .values(context={**context, "layout_result": layout_result})
+        )
 
-        # ezdxf.write пишет ТЕКСТ в поток, получаем str и кодируем по правильной кодировке
-        buf = io.StringIO()
-        try:
-            doc.write(buf)
-            text = buf.getvalue()
-        finally:
-            buf.close()
-        encoding = getattr(doc, "output_encoding", "utf-8")
-        data = text.encode(encoding or "utf-8")
         # Сохраняем в хранилище
         storage = ObjectStorage()
         storage.ensure_bucket()
         key = f"dxf/{job_id}.dxf"
         storage.put_object(key, data, content_type="application/dxf")
+
         # Создаем Artifact в БД
         ins = insert(Artifact).values(type="DXF", storage_key=key, size_bytes=len(data))
         res = await session.execute(ins.returning(Artifact.id))
         artifact_id = res.scalar_one()
+
         # Присвоим артефакт задаче
         await session.execute(
             update(CAMJob)
@@ -109,11 +138,15 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
         )
         await session.commit()
     elif payload.get("job_kind") == "GCODE":
-        dxf_artifact_id = payload.get("context", {}).get("dxf_artifact_id")
+        if not GCODE_GENERATOR_AVAILABLE:
+            raise RuntimeError("G-code generator not available (missing ezdxf)")
+
+        context = payload.get("context", {})
+        dxf_artifact_id = context.get("dxf_artifact_id")
         if not dxf_artifact_id:
             raise ValueError("dxf_artifact_id not found in GCODE job context")
 
-        # Get DXF file from storage
+        # Получаем DXF файл из хранилища
         dxf_artifact = await session.get(Artifact, dxf_artifact_id)
         if not dxf_artifact:
             raise ValueError(f"DXF artifact {dxf_artifact_id} not found")
@@ -121,58 +154,74 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
         storage = ObjectStorage()
         dxf_data = storage.get_object(dxf_artifact.storage_key)
 
-        # Write DXF data to a temporary file
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".dxf", delete=False) as dxf_file:
-            dxf_file.write(dxf_data)
-            dxf_file_path = dxf_file.name
+        # Получаем профиль станка
+        machine_profile = context.get("machine_profile", "mach3")
+        log.info(f"[GCODE] Generating G-code from DXF {dxf_artifact_id}, profile={machine_profile}")
 
-        # Generate G-code
-        gcode_file_path = tempfile.mktemp(suffix=".gcode")
-        freecad_cmd = "freecadcmd"
-        script_path = "cad-cam/freecad_gcode.py"
+        # Создаём кастомный профиль с переопределёнными параметрами
+        base_profile = MACHINE_PROFILES.get(machine_profile)
+        if not base_profile:
+            log.warning(f"Unknown profile {machine_profile}, using mach3")
+            base_profile = MACHINE_PROFILES["mach3"]
 
-        process = await asyncio.create_subprocess_exec(
-            freecad_cmd, script_path, dxf_file_path, gcode_file_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+        # Применяем переопределения из контекста
+        custom_profile = MachineProfile(
+            name=base_profile.name,
+            machine_type=base_profile.machine_type,
+            spindle_speed=context.get("spindle_speed", base_profile.spindle_speed),
+            feed_rate_cutting=context.get("feed_rate_cutting", base_profile.feed_rate_cutting),
+            feed_rate_plunge=context.get("feed_rate_plunge", base_profile.feed_rate_plunge),
+            feed_rate_rapid=base_profile.feed_rate_rapid,
+            safe_height=context.get("safe_height", base_profile.safe_height),
+            cut_depth=context.get("cut_depth", base_profile.cut_depth),
+            step_down=base_profile.step_down,
+            tool_diameter=context.get("tool_diameter", base_profile.tool_diameter),
+            tool_number=base_profile.tool_number,
+            drill_peck_depth=base_profile.drill_peck_depth,
+            drill_retract=base_profile.drill_retract,
+            use_coolant=base_profile.use_coolant,
+            use_tool_change=base_profile.use_tool_change,
+            use_line_numbers=base_profile.use_line_numbers,
+            line_number_increment=base_profile.line_number_increment,
+            comment_start=base_profile.comment_start,
+            comment_end=base_profile.comment_end,
+            program_start=base_profile.program_start,
+            program_end=base_profile.program_end,
         )
-        stdout, stderr = await process.communicate()
 
-        if process.returncode != 0:
-            raise RuntimeError(f"FreeCAD G-code generation failed: {stderr.decode()}")
+        # Генерируем G-code
+        gcode_text = dxf_to_gcode(
+            dxf_data=dxf_data,
+            custom_profile=custom_profile,
+            cut_depth=context.get("cut_depth"),
+        )
+        gcode_data = gcode_text.encode("utf-8")
 
-        # Read G-code data
-        with open(gcode_file_path, "rb") as gcode_file:
-            gcode_data = gcode_file.read()
+        log.info(f"[GCODE] Generated {len(gcode_data)} bytes of G-code")
 
-        # Save G-code to storage
+        # Сохраняем в хранилище
         key = f"gcode/{job_id}.gcode"
-        storage.put_object(key, gcode_data, content_type="text/plain")
+        storage.put_object(key, gcode_data, content_type="text/plain; charset=utf-8")
 
-        # Create Artifact in DB
+        # Создаём Artifact в БД
         ins = insert(Artifact).values(type="GCODE", storage_key=key, size_bytes=len(gcode_data))
         res = await session.execute(ins.returning(Artifact.id))
         artifact_id = res.scalar_one()
 
-        # Assign artifact to job
+        # Присваиваем артефакт задаче
         await session.execute(
             update(CAMJob)
             .where(CAMJob.id == job_id)
             .values(artifact_id=artifact_id)
         )
         await session.commit()
-
-        # Clean up temporary files
-        os.remove(dxf_file_path)
-        os.remove(gcode_file_path)
     elif payload.get("job_kind") == "ZIP":
         job_ids = payload.get("context", {}).get("job_ids")
         if not job_ids:
             raise ValueError("job_ids not found in ZIP job context")
 
-        import zipfile
         import io
+        import zipfile
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
@@ -228,15 +277,6 @@ async def run_worker(stop_event: asyncio.Event) -> None:
             queue, raw = res
             payload = json.loads(raw)
 
-            idempotency_key = payload.get("idempotency_key")
-            if idempotency_key:
-                existing_job = await session.execute(
-                    select(CAMJob).where(CAMJob.idempotency_key == idempotency_key)
-                )
-                if existing_job.scalar_one_or_none():
-                    log.warning(f"Job with idempotency key {idempotency_key} already processed, skipping.")
-                    continue
-
             job_id = payload.get("job_id")
             if not job_id:
                 log.error("Payload without job_id, sending to DLQ")
@@ -244,6 +284,16 @@ async def run_worker(stop_event: asyncio.Event) -> None:
                 continue
 
             async with SessionLocal() as session:
+                # Проверка idempotency_key
+                idempotency_key = payload.get("idempotency_key")
+                if idempotency_key:
+                    existing_job = await session.execute(
+                        select(CAMJob).where(CAMJob.idempotency_key == idempotency_key)
+                    )
+                    if existing_job.scalar_one_or_none():
+                        log.warning(f"Job with idempotency key {idempotency_key} already processed, skipping.")
+                        continue
+
                 session_typed: AsyncSession = cast(AsyncSession, session)
                 try:
                     await process_job(session_typed, payload)
