@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class OrderBase(BaseModel):
@@ -211,13 +211,19 @@ class ExtractedFurnitureParams(BaseModel):
     # Уверенность распознавания
     confidence: float = Field(0.0, ge=0.0, le=1.0, description="Уверенность распознавания (0-1)")
     needs_clarification: bool = Field(False, description="Требуется уточнение от пользователя")
-    clarification_questions: list[str] = Field(default_factory=list, description="Вопросы для уточнения")
+    clarification_questions: list[str] | None = Field(default=None, description="Вопросы для уточнения")
+
+    @field_validator("clarification_questions", mode="before")
+    @classmethod
+    def convert_none_to_empty_list(cls, v):
+        """Конвертирует None в пустой список."""
+        return v if v is not None else []
 
 
 class ImageExtractRequest(BaseModel):
-    """Запрос на извлечение параметров из изображения."""
-    image_base64: str = Field(..., description="Изображение в формате base64")
-    image_mime_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
+    """Запрос на извлечение параметров из изображения или PDF."""
+    image_base64: str = Field(..., description="Изображение или PDF в формате base64")
+    image_mime_type: Literal["image/jpeg", "image/png", "image/webp", "application/pdf"] = "image/jpeg"
     order_id: UUID | None = Field(None, description="ID заказа для привязки")
     language_hint: Literal["ru", "en", "auto"] = "ru"
 
@@ -235,6 +241,12 @@ class ImageExtractResponse(BaseModel):
     ocr_confidence: float = Field(0.0, description="Уверенность OCR")
     processing_time_ms: int = Field(0, description="Время обработки в мс")
     error: str | None = None
+
+    # Новые поля для валидации модулей
+    error_type: Literal["multiple_modules", "file_too_large", "unsupported_format", "ocr_failed"] | None = Field(
+        None, description="Тип ошибки для программной обработки"
+    )
+    module_count: int | None = Field(None, description="Количество модулей на изображении (если определено)")
 
 
 # ============================================================================
