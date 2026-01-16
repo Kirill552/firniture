@@ -679,8 +679,8 @@ export interface ExtractedFurnitureParams {
   clarification_questions: string[]
 }
 
-/** MIME типы изображений */
-export type ImageMimeType = 'image/jpeg' | 'image/png' | 'image/webp'
+/** MIME типы изображений и PDF */
+export type ImageMimeType = 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
 
 /** Запрос на извлечение параметров из изображения */
 export interface ImageExtractRequest {
