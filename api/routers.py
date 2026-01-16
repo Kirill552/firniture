@@ -33,6 +33,8 @@ from .models import (
 )
 from .queues import DXF_QUEUE, GCODE_QUEUE, enqueue
 from .schemas import (
+    CAMJobListItem,
+    CAMJobsListResponse,
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
@@ -377,6 +379,54 @@ async def create_dxf_job(req: DXFJobRequest, db: AsyncSession = Depends(get_db))
         status="created",
         panels_count=len(req.panels),
         sheet_size=(sheet_width, sheet_height),
+    )
+
+
+@router.get("/cam/jobs", response_model=CAMJobsListResponse)
+async def list_cam_jobs(
+    limit: int = 50,
+    offset: int = 0,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> CAMJobsListResponse:
+    """
+    Получить список CAM задач.
+
+    Параметры:
+    - limit: максимальное количество (по умолчанию 50)
+    - offset: смещение для пагинации
+    - status: фильтр по статусу (Created, Processing, Completed, Failed)
+    """
+    query = select(CAMJob).order_by(CAMJob.created_at.desc())
+
+    if status:
+        query = query.where(CAMJob.status == status)
+
+    query = query.limit(limit).offset(offset)
+
+    result = await db.execute(query)
+    jobs = result.scalars().all()
+
+    # Общее количество
+    count_query = select(CAMJob)
+    if status:
+        count_query = count_query.where(CAMJob.status == status)
+    count_result = await db.execute(count_query)
+    total = len(count_result.scalars().all())
+
+    return CAMJobsListResponse(
+        jobs=[
+            CAMJobListItem(
+                job_id=job.id,
+                job_kind=job.job_kind,
+                status=job.status,
+                order_id=job.order_id,
+                created_at=job.created_at,
+                updated_at=job.updated_at,
+            )
+            for job in jobs
+        ],
+        total=total,
     )
 
 

@@ -318,6 +318,22 @@ class CAMJobStatus(BaseModel):
     panels_unplaced: int | None = Field(None, description="Не размещено панелей")
 
 
+class CAMJobListItem(BaseModel):
+    """Краткая информация о CAM задаче для списка."""
+    job_id: UUID
+    job_kind: Literal["DXF", "GCODE", "ZIP"]
+    status: Literal["Created", "Processing", "Completed", "Failed"]
+    order_id: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CAMJobsListResponse(BaseModel):
+    """Список CAM задач."""
+    jobs: list[CAMJobListItem]
+    total: int
+
+
 class ArtifactDownload(BaseModel):
     """Информация для скачивания артефакта."""
     artifact_id: UUID
