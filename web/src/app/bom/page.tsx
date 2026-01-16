@@ -30,6 +30,8 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -819,50 +821,37 @@ export default function BomPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <Filter className="h-4 w-4 mr-2" />
-                Фильтры
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  )
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="flex items-center space-x-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
                 <Settings2 className="h-4 w-4 mr-2" />
-                Настройки
+                Колонки
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Видимость колонок</DropdownMenuLabel>
+              <DropdownMenuSeparator />
               {table
                 .getAllColumns()
                 .filter((column) => column.getCanHide())
                 .map((column) => {
+                  const labels: Record<string, string> = {
+                    sku: 'Артикул',
+                    name: 'Название',
+                    category: 'Категория',
+                    material: 'Материал',
+                    thickness: 'Толщина',
+                    quantity: 'Кол-во',
+                    unit: 'Ед.изм.',
+                    supplier: 'Поставщик',
+                    cost: 'Цена',
+                    totalCost: 'Сумма',
+                    status: 'Статус',
+                  }
                   return (
                     <DropdownMenuCheckboxItem
                       key={column.id}
-                      className="capitalize"
                       checked={column.getIsVisible()}
                       onCheckedChange={(value) => column.toggleVisibility(!!value)}
                     >
-                      {column.id}
+                      {labels[column.id] || column.id}
                     </DropdownMenuCheckboxItem>
                   )
                 })}
