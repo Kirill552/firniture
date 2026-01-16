@@ -710,4 +710,8 @@ export interface ImageExtractResponse {
   processing_time_ms: number
   /** Ошибка (если есть) */
   error?: string | null
+  /** Тип ошибки */
+  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed'
+  /** Количество модулей (если обнаружено несколько) */
+  module_count?: number
 }

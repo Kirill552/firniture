@@ -29,15 +29,16 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 /** Получение MIME типа из File */
-function getMimeType(file: File): 'image/jpeg' | 'image/png' | 'image/webp' {
+function getMimeType(file: File): 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf' {
   if (file.type === 'image/png') return 'image/png'
   if (file.type === 'image/webp') return 'image/webp'
+  if (file.type === 'application/pdf') return 'application/pdf'
   return 'image/jpeg'
 }
 
-/** Проверка, является ли файл изображением */
-function isImageFile(file: File): boolean {
-  return file.type.startsWith('image/')
+/** Проверка, является ли файл изображением или PDF */
+function isImageOrPdfFile(file: File): boolean {
+  return file.type.startsWith('image/') || file.type === 'application/pdf'
 }
 
 /** Компонент отображения извлечённых параметров */
@@ -163,6 +164,7 @@ export default function TzUploadPage() {
   const [extractionError, setExtractionError] = useState<string | null>(null)
   const [fallbackToDialogue, setFallbackToDialogue] = useState(false)
   const [dialoguePrompt, setDialoguePrompt] = useState<string | null>(null)
+  const [lastResponse, setLastResponse] = useState<ImageExtractResponse | null>(null)
 
   // Режим редактирования параметров
   const [isEditing, setIsEditing] = useState(false)
@@ -174,15 +176,17 @@ export default function TzUploadPage() {
   const handleFiles = useCallback(async (newFiles: File[]) => {
     setFiles(prev => [...prev, ...newFiles])
 
-    // Если есть изображение — автоматически запускаем анализ
-    const imageFile = newFiles.find(isImageFile)
-    if (imageFile) {
-      // Создаём превью
-      const previewUrl = URL.createObjectURL(imageFile)
-      setImagePreview(previewUrl)
+    // Если есть изображение или PDF — автоматически запускаем анализ
+    const imageOrPdfFile = newFiles.find(isImageOrPdfFile)
+    if (imageOrPdfFile) {
+      // Создаём превью (только для изображений)
+      if (imageOrPdfFile.type.startsWith('image/')) {
+        const previewUrl = URL.createObjectURL(imageOrPdfFile)
+        setImagePreview(previewUrl)
+      }
 
       // Запускаем Vision OCR
-      await analyzeImage(imageFile)
+      await analyzeImage(imageOrPdfFile)
     }
   }, [])
 
@@ -207,6 +211,8 @@ export default function TzUploadPage() {
         order_id: orderId || undefined,
         language_hint: 'ru',
       })
+
+      setLastResponse(response)
 
       if (response.success && response.parameters) {
         setExtractedParams(response.parameters)
@@ -234,7 +240,7 @@ export default function TzUploadPage() {
   /** Удаление файла */
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index))
-    if (files[index] && isImageFile(files[index])) {
+    if (files[index] && isImageOrPdfFile(files[index])) {
       setImagePreview(null)
       setExtractedParams(null)
     }
@@ -365,9 +371,10 @@ export default function TzUploadPage() {
               <FileDropzone
                 onFiles={handleFiles}
                 onReject={(reasons) => console.warn('Отклонено:', reasons)}
-                accept={['.png', '.jpg', '.jpeg', '.webp']}
+                accept={['.png', '.jpg', '.jpeg', '.webp', '.pdf']}
                 maxFiles={1}
-                description="Поддерживаются изображения PNG, JPG, WebP"
+                maxSize={10 * 1024 * 1024}
+                description="Поддерживаются: JPG, PNG, WebP, PDF (до 2 стр.)"
                 disabled={isAnalyzing}
               />
             </div>
@@ -389,6 +396,7 @@ export default function TzUploadPage() {
                     setImagePreview(null)
                     setFiles([])
                     setExtractedParams(null)
+                    setLastResponse(null)
                   }}
                 >
                   <X className="h-4 w-4" />
@@ -411,8 +419,43 @@ export default function TzUploadPage() {
               </div>
             )}
 
-            {/* Ошибка извлечения */}
-            {extractionError && !extractedParams && (
+            {/* Ошибка: множественные модули */}
+            {extractionError && lastResponse?.error_type === 'multiple_modules' && (
+              <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-amber-800 dark:text-amber-200">
+                      Обнаружено {lastResponse?.module_count || 'несколько'} модулей
+                    </p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                      Сейчас мы работаем с одним модулем за раз — это позволяет
+                      точнее рассчитать раскрой и подобрать фурнитуру.
+                    </p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                      Пожалуйста, загрузите фото или ТЗ первого модуля с размерами.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => {
+                        setImagePreview(null)
+                        setFiles([])
+                        setExtractionError(null)
+                        setLastResponse(null)
+                      }}
+                    >
+                      Загрузить другой файл
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Ошибка извлечения (общая) */}
+            {extractionError && !extractedParams && lastResponse?.error_type !== 'multiple_modules' && (
               <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
@@ -488,10 +531,10 @@ export default function TzUploadPage() {
               />
             </div>
 
-            {/* Список загруженных файлов (не изображения) */}
-            {files.filter(f => !isImageFile(f)).length > 0 && (
+            {/* Список загруженных файлов (не изображения и не PDF) */}
+            {files.filter(f => !isImageOrPdfFile(f)).length > 0 && (
               <ul className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-auto border rounded p-2">
-                {files.filter(f => !isImageFile(f)).map((f, i) => (
+                {files.filter(f => !isImageOrPdfFile(f)).map((f, i) => (
                   <li key={f.name} className="flex justify-between items-center">
                     <span>{f.name} • {Math.round(f.size / 1024)} KB</span>
                     <Button
