@@ -83,6 +83,21 @@ FURNITURE_EXTRACTION_PROMPT = """Ты — эксперт по мебельном
 Отвечай ТОЛЬКО валидным JSON без дополнительного текста.
 """
 
+MODULE_COUNT_PROMPT = """Проанализируй изображение и определи:
+1. Это эскиз/фото ОДНОГО мебельного модуля или целой кухни/комнаты?
+2. Сколько отдельных мебельных модулей видно? (шкаф, тумба, пенал — каждый считается отдельно)
+
+Отвечай JSON:
+```json
+{
+  "is_single_module": true/false,
+  "module_count": число,
+  "module_types": ["тип1", "тип2", ...],
+  "reason": "краткое объяснение"
+}
+```
+"""
+
 
 async def extract_text_from_image(
     image_bytes: bytes,
@@ -105,6 +120,57 @@ async def extract_text_from_image(
         )
 
     return response.text, response.confidence
+
+
+async def analyze_module_count(
+    image_bytes: bytes,
+    settings: YandexCloudSettings,
+) -> tuple[bool, int, list[str], str]:
+    """
+    Анализирует изображение и определяет количество модулей.
+
+    Returns:
+        (is_single_module, module_count, module_types, reason)
+    """
+    import base64
+
+    image_base64 = base64.b64encode(image_bytes).decode()
+
+    async with create_openai_client(settings) as client:
+        response = await client.chat_completion(
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": MODULE_COUNT_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                        }
+                    ]
+                }
+            ],
+            temperature=0.1,
+            max_tokens=500,
+        )
+
+    try:
+        text = response.text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            json_lines = [l for l in lines if not l.startswith("```")]
+            text = "\n".join(json_lines)
+
+        data = json.loads(text)
+        return (
+            data.get("is_single_module", True),
+            data.get("module_count", 1),
+            data.get("module_types", []),
+            data.get("reason", "")
+        )
+    except json.JSONDecodeError:
+        log.warning("Failed to parse module count response, assuming single module")
+        return (True, 1, [], "Не удалось определить")
 
 
 async def parse_ocr_text_to_params(
@@ -205,7 +271,7 @@ async def parse_ocr_text_to_params(
             raw_text=ocr_text,
             confidence=data.get("confidence", 0.5),
             needs_clarification=data.get("needs_clarification", False),
-            clarification_questions=data.get("clarification_questions", []),
+            clarification_questions=data.get("clarification_questions") or [],
         )
 
     except json.JSONDecodeError as e:
@@ -258,6 +324,25 @@ async def extract_furniture_params_from_image(
     try:
         # Декодируем base64
         image_bytes = base64.b64decode(image_base64)
+
+        # Шаг 0: Проверка количества модулей
+        log.info("[Vision] Checking module count...")
+        is_single, module_count, module_types, reason = await analyze_module_count(
+            image_bytes=image_bytes,
+            settings=settings,
+        )
+
+        if not is_single or module_count > 1:
+            types_str = ", ".join(module_types) if module_types else "различные модули"
+            return ImageExtractResponse(
+                success=False,
+                error=f"Обнаружено {module_count} модулей ({types_str}). Загрузите фото одного модуля.",
+                error_type="multiple_modules",
+                module_count=module_count,
+                fallback_to_dialogue=False,
+                dialogue_prompt=None,
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
 
         # Определяем языки для OCR
         language_codes = ["ru", "en"] if language_hint == "auto" else [language_hint, "en"]
