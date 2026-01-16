@@ -45,6 +45,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Loader2,
+  Check,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { StatCardSkeleton, TableSkeleton } from "@/components/ui/table-skeleton"
@@ -258,6 +260,12 @@ export default function BomPage() {
   const [order, setOrder] = useState<OrderWithProducts | null>(null)
   const [isLoadingOrder, setIsLoadingOrder] = useState(false)
   const [orderError, setOrderError] = useState<string | null>(null)
+
+  // DXF generation state
+  const [isGeneratingDxf, setIsGeneratingDxf] = useState(false)
+  const [dxfJobId, setDxfJobId] = useState<string | null>(null)
+  const [dxfDownloadUrl, setDxfDownloadUrl] = useState<string | null>(null)
+  const [dxfError, setDxfError] = useState<string | null>(null)
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -496,6 +504,110 @@ export default function BomPage() {
     return bomData.reduce((sum, item) => sum + item.totalCost, 0)
   }, [bomData])
 
+  const handleGenerateDxf = async () => {
+    if (!order || !order.products[0]) return
+
+    setIsGeneratingDxf(true)
+    setDxfError(null)
+
+    try {
+      const product = order.products[0]
+      const thickness = product.thickness_mm || 16
+
+      // Формируем панели из параметров изделия
+      const panels = [
+        {
+          name: 'Боковина левая',
+          width_mm: product.depth_mm - thickness,
+          height_mm: product.height_mm,
+          thickness_mm: thickness,
+          material: product.material || 'ЛДСП',
+        },
+        {
+          name: 'Боковина правая',
+          width_mm: product.depth_mm - thickness,
+          height_mm: product.height_mm,
+          thickness_mm: thickness,
+          material: product.material || 'ЛДСП',
+        },
+        {
+          name: 'Верх',
+          width_mm: product.width_mm - thickness * 2,
+          height_mm: product.depth_mm - thickness,
+          thickness_mm: thickness,
+          material: product.material || 'ЛДСП',
+        },
+        {
+          name: 'Низ',
+          width_mm: product.width_mm - thickness * 2,
+          height_mm: product.depth_mm - thickness,
+          thickness_mm: thickness,
+          material: product.material || 'ЛДСП',
+        },
+        {
+          name: 'Задняя стенка',
+          width_mm: product.width_mm - 4,
+          height_mm: product.height_mm - 4,
+          thickness_mm: 4,
+          material: 'ДВП',
+        },
+      ]
+
+      const response = await fetch('/api/v1/cam/dxf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: orderId,
+          panels,
+          sheet_width_mm: 2440,
+          sheet_height_mm: 1220,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.job_id) {
+        setDxfJobId(data.job_id)
+        // Опрашиваем статус
+        pollJobStatus(data.job_id)
+      } else {
+        setDxfError(data.detail || 'Ошибка создания задачи')
+        setIsGeneratingDxf(false)
+      }
+    } catch (error) {
+      setDxfError(error instanceof Error ? error.message : 'Ошибка генерации')
+      setIsGeneratingDxf(false)
+    }
+  }
+
+  const pollJobStatus = async (jobId: string) => {
+    const maxAttempts = 30
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      try {
+        const response = await fetch(`/api/v1/cam/jobs/${jobId}`)
+        const data = await response.json()
+
+        if (data.status === 'completed' && data.download_url) {
+          setDxfDownloadUrl(data.download_url)
+          setIsGeneratingDxf(false)
+          return
+        }
+        if (data.status === 'failed') {
+          setDxfError(data.error || 'Генерация не удалась')
+          setIsGeneratingDxf(false)
+          return
+        }
+      } catch {
+        // Continue polling
+      }
+    }
+
+    setDxfError('Превышено время ожидания')
+    setIsGeneratingDxf(false)
+  }
+
   const handleCreateBom = () => {
     info("Создание BOM", "Функционал создания спецификации будет доступен в ближайшем обновлении")
   }
@@ -612,7 +724,7 @@ export default function BomPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
               <div>
                 <span className="text-muted-foreground">Габариты:</span>
                 <p className="font-medium">
@@ -631,6 +743,45 @@ export default function BomPage() {
                 <span className="text-muted-foreground">ID:</span>
                 <p className="font-medium font-mono text-xs">{order.id.slice(0, 8)}...</p>
               </div>
+            </div>
+
+            {/* DXF Generation buttons */}
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleGenerateDxf}
+                disabled={isGeneratingDxf || !!dxfDownloadUrl}
+                variant={dxfDownloadUrl ? "outline" : "default"}
+              >
+                {isGeneratingDxf ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Генерация DXF...
+                  </>
+                ) : dxfDownloadUrl ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2 text-green-600" />
+                    DXF готов
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Сгенерировать DXF
+                  </>
+                )}
+              </Button>
+
+              {dxfDownloadUrl && (
+                <Button variant="default" asChild>
+                  <a href={dxfDownloadUrl} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-4 w-4 mr-2" />
+                    Скачать DXF
+                  </a>
+                </Button>
+              )}
+
+              {dxfError && (
+                <span className="text-sm text-destructive">{dxfError}</span>
+              )}
             </div>
           </CardContent>
         </Card>
