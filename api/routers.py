@@ -217,7 +217,7 @@ async def extract_from_image(req: ImageExtractRequest) -> ImageExtractResponse:
 
     if use_mock:
         log.warning("[Vision OCR] Mock mode: YC keys not found")
-        return await extract_furniture_params_mock(req.image_base64)
+        return await extract_furniture_params_mock(req.image_base64, req.image_mime_type)
 
     log.info(f"[Vision OCR] Processing image, mime: {req.image_mime_type}, lang: {req.language_hint}")
 

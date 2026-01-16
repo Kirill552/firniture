@@ -442,12 +442,24 @@ async def extract_furniture_params_from_image(
 # Mock функция для тестирования без реальных API
 async def extract_furniture_params_mock(
     image_base64: str,
+    mime_type: str = "image/jpeg",
 ) -> ImageExtractResponse:
     """Mock функция для локального тестирования без Yandex Cloud."""
     import asyncio
+    import random
 
     # Имитируем задержку обработки
     await asyncio.sleep(0.5)
+
+    # 10% шанс вернуть multiple_modules для тестирования UI
+    if random.random() < 0.1:
+        return ImageExtractResponse(
+            success=False,
+            error="Обнаружено 4 модуля (верхний шкаф, тумба, пенал, столешница). Загрузите фото одного модуля.",
+            error_type="multiple_modules",
+            module_count=4,
+            processing_time_ms=500,
+        )
 
     mock_params = ExtractedFurnitureParams(
         furniture_type=FurnitureType(
@@ -483,4 +495,5 @@ async def extract_furniture_params_mock(
         ocr_confidence=0.9,
         fallback_to_dialogue=False,
         processing_time_ms=500,
+        module_count=1,
     )
