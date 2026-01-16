@@ -358,9 +358,26 @@ export default function TzUploadPage() {
         <CardHeader>
           <CardTitle>Загрузка технического задания</CardTitle>
           <CardDescription>
-            Загрузите фото или эскиз изделия — система автоматически извлечёт параметры.
-            <br />
-            Также можно ввести описание текстом.
+            <div className="space-y-2">
+              <p>Загрузите фото или PDF с техническим заданием на один модуль.</p>
+              <div className="text-xs space-y-1">
+                <p className="text-green-600 dark:text-green-400">
+                  ✓ Фото ТЗ с размерами одного модуля
+                </p>
+                <p className="text-green-600 dark:text-green-400">
+                  ✓ Скриншот спецификации
+                </p>
+                <p className="text-green-600 dark:text-green-400">
+                  ✓ PDF чертёж (1-2 страницы)
+                </p>
+                <p className="text-muted-foreground">
+                  ✗ Эскиз целой кухни (пока не поддерживается)
+                </p>
+                <p className="text-muted-foreground">
+                  ✗ 3D визуализация без размеров
+                </p>
+              </div>
+            </div>
           </CardDescription>
         </CardHeader>
         <CardContent>
