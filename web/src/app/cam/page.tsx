@@ -194,13 +194,49 @@ export default function CamPage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [selectedJob, setSelectedJob] = useState<CAMJob | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [jobs, setJobs] = useState<CAMJob[]>(mockCAMJobs)
 
-  // Simulate data loading
+  // Load CAM jobs from API
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 2000)
-    return () => clearTimeout(timer)
+    const loadJobs = async () => {
+      try {
+        const response = await fetch('/api/v1/cam/jobs')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.jobs && data.jobs.length > 0) {
+            // Преобразуем формат API в формат UI
+            const formattedJobs: CAMJob[] = data.jobs.map((job: {
+              job_id: string
+              job_kind: string
+              status: string
+              order_id?: string
+              created_at: string
+              updated_at: string
+            }) => ({
+              id: job.job_id,
+              orderId: job.order_id || '',
+              type: job.job_kind as CAMJobType,
+              name: `${job.job_kind} задача`,
+              status: job.status as CAMJobStatus,
+              createdAt: job.created_at,
+              completedAt: job.status === 'Completed' ? job.updated_at : undefined,
+            }))
+            setJobs(formattedJobs)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load CAM jobs:', error)
+        // Оставляем mock данные при ошибке
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadJobs()
+
+    // Обновляем каждые 5 секунд
+    const interval = setInterval(loadJobs, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   const columns: ColumnDef<CAMJob>[] = useMemo(
@@ -380,7 +416,7 @@ export default function CamPage() {
   )
 
   const table = useReactTable({
-    data: mockCAMJobs,
+    data: jobs,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -397,13 +433,13 @@ export default function CamPage() {
   })
 
   const stats = useMemo(() => {
-    const total = mockCAMJobs.length
-    const completed = mockCAMJobs.filter(job => job.status === 'Completed').length
-    const processing = mockCAMJobs.filter(job => job.status === 'Processing').length
-    const failed = mockCAMJobs.filter(job => job.status === 'Failed').length
-    
+    const total = jobs.length
+    const completed = jobs.filter(job => job.status === 'Completed').length
+    const processing = jobs.filter(job => job.status === 'Processing').length
+    const failed = jobs.filter(job => job.status === 'Failed').length
+
     return { total, completed, processing, failed }
-  }, [])
+  }, [jobs])
 
   const handleCreateDXF = () => {
     toast({

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   useReactTable,
   getCoreRowModel,
@@ -68,6 +68,7 @@ import {
   FileText,
   TrendingUp,
   Repeat,
+  Loader2,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -88,7 +89,7 @@ type HistoryOrder = {
   tags?: string[]
 }
 
-const mockHistoryOrders: HistoryOrder[] = [
+const orders: HistoryOrder[] = [
   {
     id: "1",
     orderNumber: "ORD-2024-001",
@@ -175,6 +176,47 @@ export default function HistoryPage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [globalFilter, setGlobalFilter] = useState("")
   const [selectedOrder, setSelectedOrder] = useState<HistoryOrder | null>(null)
+  const [orders, setOrders] = useState<HistoryOrder[]>(orders)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Загрузка завершённых заказов из API
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const response = await fetch('/api/v1/orders')
+        if (response.ok) {
+          const data = await response.json()
+          if (data && data.length > 0) {
+            // Преобразуем формат API в формат UI
+            const formattedOrders: HistoryOrder[] = data.map((order: {
+              id: string
+              customer_ref?: string
+              notes?: string
+              created_at: string
+            }, index: number) => ({
+              id: order.id,
+              orderNumber: `ORD-${order.id.slice(0, 8).toUpperCase()}`,
+              customerName: order.customer_ref || "Не указан",
+              productName: order.notes || "Не указано",
+              status: "completed" as OrderStatus, // TODO: добавить статус в API
+              createdAt: order.created_at,
+              completedAt: order.created_at, // TODO: добавить completedAt в API
+              totalAmount: 0, // TODO: добавить цену в API
+              itemsCount: 1,
+            }))
+            setOrders(formattedOrders)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load history:', error)
+        // Оставляем mock данные при ошибке
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadHistory()
+  }, [])
 
   const columns: ColumnDef<HistoryOrder>[] = useMemo(
     () => [
@@ -364,7 +406,7 @@ export default function HistoryPage() {
   )
 
   const table = useReactTable({
-    data: mockHistoryOrders,
+    data: orders,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -384,15 +426,15 @@ export default function HistoryPage() {
   })
 
   const stats = useMemo(() => {
-    const total = mockHistoryOrders.length
-    const completed = mockHistoryOrders.filter(order => order.status === 'completed').length
-    const cancelled = mockHistoryOrders.filter(order => order.status === 'cancelled').length
-    const totalRevenue = mockHistoryOrders
+    const total = orders.length
+    const completed = orders.filter(order => order.status === 'completed').length
+    const cancelled = orders.filter(order => order.status === 'cancelled').length
+    const totalRevenue = orders
       .filter(order => order.status === 'completed')
       .reduce((sum, order) => sum + order.totalAmount, 0)
-    
+
     return { total, completed, cancelled, totalRevenue }
-  }, [])
+  }, [orders])
 
   return (
     <div className="p-6 w-full space-y-6">
@@ -543,7 +585,7 @@ export default function HistoryPage() {
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="text-sm text-muted-foreground">
           Показано {table.getFilteredRowModel().rows.length} из{" "}
-          {mockHistoryOrders.length} заказов
+          {orders.length} заказов
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-2">
