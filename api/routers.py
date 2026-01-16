@@ -223,6 +223,7 @@ async def extract_from_image(req: ImageExtractRequest) -> ImageExtractResponse:
 
     result = await extract_furniture_params_from_image(
         image_base64=req.image_base64,
+        mime_type=req.image_mime_type,
         language_hint=req.language_hint,
     )
 
@@ -558,7 +559,13 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
     # OpenAI-совместимый формат: "content" вместо "text"
     # Если есть извлечённый контекст из Vision OCR — добавляем в системный промпт
     if req.extracted_context:
-        system_prompt_text += f"\n\n## Данные из загруженного изображения/эскиза:\n{req.extracted_context}\n\nИспользуй эти данные как отправную точку. Подтверди их с пользователем и уточни недостающие детали."
+        system_prompt_text += f"""\n\n## Данные из загруженного изображения/эскиза:
+{req.extracted_context}
+
+КРИТИЧЕСКИ ВАЖНО: Эти данные уже ПОДТВЕРЖДЕНЫ пользователем — НЕ ПЕРЕСПРАШИВАЙ их!
+- Габариты (ширина, высота, глубина), материалы, толщины — используй как ФАКТЫ
+- Уточняй ТОЛЬКО то, что НЕ указано выше (например: тип петель, цвет кромки, количество полок)
+- Начни с краткого подтверждения что понял параметры, затем спроси про ОДНУ недостающую деталь"""
 
     messages = [{"role": "system", "content": system_prompt_text}]
 
@@ -644,6 +651,16 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
                 raise FileNotFoundError("System prompt not found in spec")
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="AI dialogue spec file not found.")
+
+    # Если есть извлечённый контекст из Vision OCR — добавляем в системный промпт
+    if req.extracted_context:
+        system_prompt_text += f"""\n\n## Данные из загруженного изображения/эскиза:
+{req.extracted_context}
+
+КРИТИЧЕСКИ ВАЖНО: Эти данные уже ПОДТВЕРЖДЕНЫ пользователем — НЕ ПЕРЕСПРАШИВАЙ их!
+- Габариты (ширина, высота, глубина), материалы, толщины — используй как ФАКТЫ
+- Уточняй ТОЛЬКО то, что НЕ указано выше (например: тип петель, цвет кромки, количество полок)
+- Начни с краткого подтверждения что понял параметры, затем спроси про ОДНУ недостающую деталь"""
 
     # Дополняем системный промпт информацией об инструментах
     tools_info = """

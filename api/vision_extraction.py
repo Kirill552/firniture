@@ -22,6 +22,7 @@ from shared.yandex_ai import (
     create_vision_client,
 )
 
+from .pdf_utils import PDFValidationError, MAX_PDF_SIZE_BYTES, pdf_to_images
 from .schemas import (
     ExtractedDimensions,
     ExtractedFurnitureParams,
@@ -286,6 +287,7 @@ async def parse_ocr_text_to_params(
 
 async def extract_furniture_params_from_image(
     image_base64: str,
+    mime_type: str = "image/jpeg",
     settings: YandexCloudSettings | None = None,
     language_hint: str = "ru",
 ) -> ImageExtractResponse:
@@ -323,7 +325,40 @@ async def extract_furniture_params_from_image(
 
     try:
         # Декодируем base64
-        image_bytes = base64.b64decode(image_base64)
+        file_bytes = base64.b64decode(image_base64)
+
+        # Проверка размера
+        if len(file_bytes) > MAX_PDF_SIZE_BYTES:
+            size_mb = len(file_bytes) / (1024 * 1024)
+            return ImageExtractResponse(
+                success=False,
+                error=f"Файл слишком большой: {size_mb:.1f} MB (максимум 10 MB)",
+                error_type="file_too_large",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
+
+        # Если PDF — конвертируем в изображения
+        if mime_type == "application/pdf":
+            try:
+                images = pdf_to_images(file_bytes)
+                if not images:
+                    return ImageExtractResponse(
+                        success=False,
+                        error="PDF не содержит страниц",
+                        error_type="ocr_failed",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
+                # Используем первую страницу для основного анализа
+                image_bytes = images[0]
+            except PDFValidationError as e:
+                return ImageExtractResponse(
+                    success=False,
+                    error=str(e),
+                    error_type="file_too_large" if "большой" in str(e) else "unsupported_format",
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+        else:
+            image_bytes = file_bytes
 
         # Шаг 0: Проверка количества модулей
         log.info("[Vision] Checking module count...")
