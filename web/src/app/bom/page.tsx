@@ -1,5 +1,6 @@
 "use client"
 
+import { useSearchParams } from 'next/navigation'
 import { useState, useMemo, useEffect } from "react"
 import {
   useReactTable,
@@ -16,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Card } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -63,6 +64,117 @@ type BOMItem = {
   status: 'available' | 'ordered' | 'out_of_stock'
   version?: string
   notes?: string
+}
+
+interface ProductConfig {
+  id: string
+  name: string | null
+  width_mm: number
+  height_mm: number
+  depth_mm: number
+  material: string | null
+  thickness_mm: number | null
+  params: {
+    furniture_type?: string
+    body_material?: { type: string; thickness_mm?: number; color?: string }
+    facade_material?: { type: string; thickness_mm?: number; color?: string }
+    hardware?: { type: string; sku?: string; name?: string; qty: number }[]
+    edge_band?: { type: string; thickness_mm?: number }
+    door_count?: number
+    drawer_count?: number
+    shelf_count?: number
+  }
+  notes: string | null
+}
+
+interface OrderWithProducts {
+  id: string
+  customer_ref: string | null
+  notes: string | null
+  created_at: string
+  products: ProductConfig[]
+}
+
+function convertOrderToBOM(order: OrderWithProducts): BOMItem[] {
+  const items: BOMItem[] = []
+  let id = 1
+
+  for (const product of order.products) {
+    const params = product.params
+
+    // Добавляем материал корпуса
+    if (params.body_material) {
+      items.push({
+        id: String(id++),
+        sku: `MAT-${(params.body_material.type || 'UNKNOWN').toUpperCase().replace(/\s+/g, '-')}`,
+        name: `${params.body_material.type || ''} ${params.body_material.color || ''}`.trim() || 'Материал корпуса',
+        category: 'Плитные материалы',
+        material: params.body_material.type || '',
+        thickness: params.body_material.thickness_mm,
+        quantity: 1,
+        unit: 'лист',
+        supplier: '-',
+        cost: 0,
+        totalCost: 0,
+        status: 'available' as const,
+      })
+    }
+
+    // Добавляем материал фасада
+    if (params.facade_material && params.facade_material.type !== params.body_material?.type) {
+      items.push({
+        id: String(id++),
+        sku: `MAT-${(params.facade_material.type || 'UNKNOWN').toUpperCase().replace(/\s+/g, '-')}`,
+        name: `${params.facade_material.type || ''} ${params.facade_material.color || ''}`.trim() || 'Материал фасада',
+        category: 'Плитные материалы',
+        material: params.facade_material.type || '',
+        thickness: params.facade_material.thickness_mm,
+        quantity: 1,
+        unit: 'лист',
+        supplier: '-',
+        cost: 0,
+        totalCost: 0,
+        status: 'available' as const,
+      })
+    }
+
+    // Добавляем фурнитуру
+    for (const hw of params.hardware || []) {
+      items.push({
+        id: String(id++),
+        sku: hw.sku || `HW-${(hw.type || 'UNKNOWN').toUpperCase().replace(/\s+/g, '-')}`,
+        name: hw.name || hw.type || 'Фурнитура',
+        category: 'Фурнитура',
+        material: '-',
+        quantity: hw.qty || 1,
+        unit: 'шт',
+        supplier: '-',
+        cost: 0,
+        totalCost: 0,
+        status: 'available' as const,
+      })
+    }
+
+    // Добавляем кромку
+    if (params.edge_band) {
+      items.push({
+        id: String(id++),
+        sku: `EDGE-${params.edge_band.thickness_mm || 2}`,
+        name: `Кромка ${params.edge_band.type || 'ПВХ'} ${params.edge_band.thickness_mm || 2}мм`,
+        category: 'Кромочные материалы',
+        material: params.edge_band.type || 'ПВХ',
+        thickness: params.edge_band.thickness_mm,
+        quantity: 10,
+        unit: 'п.м',
+        supplier: '-',
+        cost: 0,
+        totalCost: 0,
+        status: 'available' as const,
+      })
+    }
+  }
+
+  return items
 }
 
 const mockBOMData: BOMItem[] = [
@@ -140,11 +252,42 @@ const mockBOMData: BOMItem[] = [
 
 export default function BomPage() {
   const { info } = useToast()
+  const searchParams = useSearchParams()
+  const orderId = searchParams.get('orderId')
+
+  const [order, setOrder] = useState<OrderWithProducts | null>(null)
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false)
+  const [orderError, setOrderError] = useState<string | null>(null)
+
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [globalFilter, setGlobalFilter] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+
+  // Load order data if orderId is present
+  useEffect(() => {
+    if (!orderId) return
+
+    const loadOrder = async () => {
+      setIsLoadingOrder(true)
+      setOrderError(null)
+      try {
+        const response = await fetch(`/api/v1/orders/${orderId}`)
+        if (!response.ok) {
+          throw new Error('Заказ не найден')
+        }
+        const data: OrderWithProducts = await response.json()
+        setOrder(data)
+      } catch (err) {
+        setOrderError(err instanceof Error ? err.message : 'Ошибка загрузки заказа')
+      } finally {
+        setIsLoadingOrder(false)
+      }
+    }
+
+    loadOrder()
+  }, [orderId])
 
   // Simulate data loading
   useEffect(() => {
@@ -326,8 +469,11 @@ export default function BomPage() {
     []
   )
 
+  // Используем данные из API или mock
+  const bomData = order ? convertOrderToBOM(order) : mockBOMData
+
   const table = useReactTable({
-    data: mockBOMData,
+    data: bomData,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -347,8 +493,8 @@ export default function BomPage() {
   })
 
   const totalCost = useMemo(() => {
-    return mockBOMData.reduce((sum, item) => sum + item.totalCost, 0)
-  }, [])
+    return bomData.reduce((sum, item) => sum + item.totalCost, 0)
+  }, [bomData])
 
   const handleCreateBom = () => {
     info("Создание BOM", "Функционал создания спецификации будет доступен в ближайшем обновлении")
@@ -423,7 +569,7 @@ export default function BomPage() {
             <Package className="h-4 w-4 text-muted-foreground" />
             <div className="text-sm font-medium">Всего позиций</div>
           </div>
-          <div className="text-2xl font-bold">{mockBOMData.length}</div>
+          <div className="text-2xl font-bold">{bomData.length}</div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center space-x-2">
@@ -431,7 +577,7 @@ export default function BomPage() {
             <div className="text-sm font-medium">В наличии</div>
           </div>
           <div className="text-2xl font-bold text-green-600">
-            {mockBOMData.filter(item => item.status === 'available').length}
+            {bomData.filter(item => item.status === 'available').length}
           </div>
         </Card>
         <Card className="p-4">
@@ -440,7 +586,7 @@ export default function BomPage() {
             <div className="text-sm font-medium">Заказано</div>
           </div>
           <div className="text-2xl font-bold text-blue-600">
-            {mockBOMData.filter(item => item.status === 'ordered').length}
+            {bomData.filter(item => item.status === 'ordered').length}
           </div>
         </Card>
         <Card className="p-4">
@@ -456,6 +602,56 @@ export default function BomPage() {
           </div>
         </Card>
       </div>
+
+      {/* Order info card */}
+      {order && order.products[0] && (
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">
+              Заказ: {order.products[0].name || 'Новое изделие'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Габариты:</span>
+                <p className="font-medium">
+                  {order.products[0].width_mm} × {order.products[0].height_mm} × {order.products[0].depth_mm} мм
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Материал:</span>
+                <p className="font-medium">{order.products[0].material || '-'}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Толщина:</span>
+                <p className="font-medium">{order.products[0].thickness_mm || '-'} мм</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">ID:</span>
+                <p className="font-medium font-mono text-xs">{order.id.slice(0, 8)}...</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Loading/error states */}
+      {isLoadingOrder && (
+        <Card className="mb-6">
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Загрузка заказа...
+          </CardContent>
+        </Card>
+      )}
+
+      {orderError && (
+        <Card className="mb-6 border-destructive">
+          <CardContent className="py-4 text-center text-destructive">
+            {orderError}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Фильтры и поиск */}
       <div className="flex items-center justify-between">
