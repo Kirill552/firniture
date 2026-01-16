@@ -401,3 +401,52 @@ class DirectGCodeRequest(BaseModel):
 
     # Идемпотентность
     idempotency_key: str | None = Field(None, description="Ключ идемпотентности")
+
+
+# ============================================================================
+# Финализация заказа (Phase 2)
+# ============================================================================
+
+class HardwareSpec(BaseModel):
+    """Спецификация фурнитуры."""
+    type: str = Field(..., description="Тип фурнитуры (петля, ручка, направляющая)")
+    sku: str | None = Field(None, description="Артикул")
+    name: str | None = Field(None, description="Название")
+    qty: int = Field(1, description="Количество")
+
+
+class MaterialSpec(BaseModel):
+    """Спецификация материала."""
+    type: str = Field(..., description="Тип материала (ЛДСП, МДФ)")
+    thickness_mm: float | None = Field(None, description="Толщина в мм")
+    color: str | None = Field(None, description="Цвет")
+    texture: str | None = Field(None, description="Текстура")
+
+
+class DimensionsSpec(BaseModel):
+    """Габариты изделия."""
+    width_mm: float = Field(..., gt=0, description="Ширина в мм")
+    height_mm: float = Field(..., gt=0, description="Высота в мм")
+    depth_mm: float = Field(..., gt=0, description="Глубина в мм")
+
+
+class FinalizeOrderRequest(BaseModel):
+    """Запрос на финализацию заказа после диалога."""
+    furniture_type: str = Field(..., description="Тип мебели")
+    dimensions: DimensionsSpec
+    body_material: MaterialSpec | None = None
+    facade_material: MaterialSpec | None = None
+    hardware: list[HardwareSpec] = Field(default_factory=list)
+    edge_band: dict | None = Field(None, description="Кромка")
+    door_count: int | None = None
+    drawer_count: int | None = None
+    shelf_count: int | None = None
+    notes: str | None = None
+
+
+class FinalizeOrderResponse(BaseModel):
+    """Ответ после финализации."""
+    success: bool
+    order_id: str
+    product_config_id: str
+    message: str

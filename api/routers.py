@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import uuid
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -35,6 +36,8 @@ from .schemas import (
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
+    FinalizeOrderRequest,
+    FinalizeOrderResponse,
     ImageExtractRequest,
     ImageExtractResponse,
     OrderCreate,
@@ -90,6 +93,37 @@ async def list_orders(
         factory_id=current_user.factory_id,
         limit=limit,
         offset=offset
+    )
+
+
+@router.post("/orders/{order_id}/finalize", response_model=FinalizeOrderResponse)
+async def finalize_order_endpoint(
+    order_id: UUID,
+    spec: FinalizeOrderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Финализация заказа после диалога с ИИ-технологом.
+
+    Сохраняет собранные параметры в ProductConfig.
+    После этого можно переходить к генерации DXF/G-code.
+    """
+    # Проверяем что заказ существует
+    order = await crud.get_order_with_history(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Создаём ProductConfig
+    product = await crud.finalize_order(db, order_id, spec)
+    await db.commit()
+
+    log.info(f"[Finalize] Order {order_id} finalized with ProductConfig {product.id}")
+
+    return FinalizeOrderResponse(
+        success=True,
+        order_id=str(order_id),
+        product_config_id=str(product.id),
+        message="Заказ финализирован. Можно переходить к генерации DXF/G-code.",
     )
 
 

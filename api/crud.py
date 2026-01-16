@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from . import models, schemas
+from .models import ProductConfig
 
 
 async def create_order(
@@ -87,3 +88,38 @@ async def get_order_with_products(db: AsyncSession, order_id: UUID) -> models.Or
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def finalize_order(
+    db: AsyncSession,
+    order_id: UUID,
+    spec,
+) -> ProductConfig:
+    """
+    Финализирует заказ: создаёт ProductConfig с собранными параметрами.
+    """
+    # Создаём ProductConfig
+    product = ProductConfig(
+        order_id=order_id,
+        name=spec.furniture_type,
+        width_mm=spec.dimensions.width_mm,
+        height_mm=spec.dimensions.height_mm,
+        depth_mm=spec.dimensions.depth_mm,
+        material=spec.body_material.type if spec.body_material else None,
+        thickness_mm=spec.body_material.thickness_mm if spec.body_material else None,
+        params={
+            "furniture_type": spec.furniture_type,
+            "body_material": spec.body_material.model_dump() if spec.body_material else None,
+            "facade_material": spec.facade_material.model_dump() if spec.facade_material else None,
+            "hardware": [h.model_dump() for h in spec.hardware],
+            "edge_band": spec.edge_band,
+            "door_count": spec.door_count,
+            "drawer_count": spec.drawer_count,
+            "shelf_count": spec.shelf_count,
+        },
+        notes=spec.notes,
+    )
+    db.add(product)
+    await db.flush()
+
+    return product
