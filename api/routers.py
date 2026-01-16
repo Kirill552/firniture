@@ -41,6 +41,8 @@ from .schemas import (
     ImageExtractRequest,
     ImageExtractResponse,
     OrderCreate,
+    OrderWithProductsResponse,
+    ProductConfigResponse,
 )
 from .schemas import Order as OrderSchema
 
@@ -93,6 +95,38 @@ async def list_orders(
         factory_id=current_user.factory_id,
         limit=limit,
         offset=offset
+    )
+
+
+@router.get("/orders/{order_id}", response_model=OrderWithProductsResponse)
+async def get_order_with_products_endpoint(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Получить заказ с продуктами для отображения на BOM странице."""
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    return OrderWithProductsResponse(
+        id=str(order.id),
+        customer_ref=order.customer_ref,
+        notes=order.notes,
+        created_at=order.created_at,
+        products=[
+            ProductConfigResponse(
+                id=str(p.id),
+                name=p.name,
+                width_mm=p.width_mm,
+                height_mm=p.height_mm,
+                depth_mm=p.depth_mm,
+                material=p.material,
+                thickness_mm=p.thickness_mm,
+                params=p.params or {},
+                notes=p.notes,
+            )
+            for p in order.products
+        ],
     )
 
 

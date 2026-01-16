@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class OrderBase(BaseModel):
@@ -450,3 +450,29 @@ class FinalizeOrderResponse(BaseModel):
     order_id: str
     product_config_id: str
     message: str
+
+
+class ProductConfigResponse(BaseModel):
+    """Ответ с конфигурацией продукта."""
+    id: str
+    name: str | None
+    width_mm: float
+    height_mm: float
+    depth_mm: float
+    material: str | None
+    thickness_mm: float | None
+    params: dict
+    notes: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderWithProductsResponse(BaseModel):
+    """Ответ с заказом и продуктами."""
+    id: str
+    customer_ref: str | None
+    notes: str | None
+    created_at: datetime
+    products: list[ProductConfigResponse]
+
+    model_config = ConfigDict(from_attributes=True)
