@@ -212,7 +212,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, []) // Пустой массив — подписка только при mount/unmount
 
   return {
     ...state,

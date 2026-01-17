@@ -73,7 +73,7 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
-    command: ["python", "-m", "api.worker"]
+    command: ["uv", "run", "python", "-m", "api.worker"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432

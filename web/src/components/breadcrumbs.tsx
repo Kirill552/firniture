@@ -14,13 +14,13 @@ type Crumb = {
 // Человеко-читаемые лейблы по маршрутам
 const LABELS: Record<string, string> = {
   "": "Главная",
-  "dashboard": "Дашборд",
+  "dashboard": "Обзор",
   "orders": "Заказы",
   "new": "Новый",
   "tz-upload": "Загрузка ТЗ",
   "dialogue": "Диалог",
   "bom": "Спецификация",
-  "cam": "CAM",
+  "cam": "Файлы для станка",
   "hardware": "Фурнитура",
   "integrations": "Интеграции",
   "settings": "Настройки",
@@ -31,11 +31,15 @@ const LABELS: Record<string, string> = {
 }
 
 function normalizeSegment(segment: string) {
-  // Если сегмент похож на ID — показываем как есть
-  if (/^[-\w%]+$/.test(segment) && (segment.match(/[\d]/) || segment.length > 8)) {
-    return decodeURIComponent(segment)
+  // Сначала проверяем есть ли перевод
+  if (LABELS[segment]) {
+    return LABELS[segment]
   }
-  return LABELS[segment] ?? segment
+  // Если сегмент похож на UUID/ID — показываем сокращённо
+  if (/^[0-9a-f-]{8,}$/i.test(segment)) {
+    return segment.slice(0, 8) + "..."
+  }
+  return decodeURIComponent(segment)
 }
 
 export interface BreadcrumbsProps {

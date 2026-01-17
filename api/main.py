@@ -1,3 +1,16 @@
+import sys
+import io
+
+# Фикс кодировки для Windows консоли (cp1251 -> utf-8)
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+from dotenv import load_dotenv
+
+# Загружаем .env ДО импорта остальных модулей
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

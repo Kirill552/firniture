@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Sparkles, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react'
+import { Lightbulb, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AdvancedFiltersProps {
@@ -93,7 +93,7 @@ export function HardwareAdvancedFilters({
                   className="justify-start gap-2"
                   onClick={onApplySuggestion}
                 >
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  <Lightbulb className="h-4 w-4 text-primary" />
                   Подсказка: {aiSuggestion}
                 </Button>
               )}
@@ -101,7 +101,7 @@ export function HardwareAdvancedFilters({
 
             {/* Уверенность ИИ */}
             <div className="flex flex-col gap-2">
-              <label className="text-xs uppercase text-muted-foreground">Уверенность ИИ (%)</label>
+              <label className="text-xs uppercase text-muted-foreground">Релевантность (%)</label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"

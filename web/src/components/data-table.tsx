@@ -176,21 +176,51 @@ export function DataTable<TData, TValue>({
               Колонки <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="min-w-[180px]">
             <DropdownMenuLabel>Выберите колонки</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {table.getAllColumns().filter((c) => c.id !== "select").map((column) => {
-              return (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(value)}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              )
-            })}
+            {table.getAllColumns()
+              .filter((c) => c.id !== "select" && c.id !== "actions")
+              .map((column) => {
+                // Получаем человеко-читаемое название из header
+                const header = column.columnDef.header
+                let label = column.id
+                if (typeof header === "string") {
+                  label = header
+                } else if (typeof header === "function") {
+                  // Для функций-headers показываем id
+                  label = column.id
+                }
+                // Словарь локализации для общих колонок
+                const labels: Record<string, string> = {
+                  id: "ID",
+                  customer: "Заказчик",
+                  product: "Изделие",
+                  status: "Статус",
+                  price: "Цена",
+                  createdAt: "Создан",
+                  name: "Название",
+                  type: "Тип",
+                  actions: "Действия",
+                  sku: "Артикул",
+                  category: "Категория",
+                  material: "Материал",
+                  quantity: "Кол-во",
+                  supplier: "Поставщик",
+                  cost: "Цена",
+                  totalCost: "Сумма",
+                }
+                const displayLabel = labels[column.id] || label
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    checked={column.getIsVisible()}
+                    onCheckedChange={(value) => column.toggleVisibility(value)}
+                  >
+                    {displayLabel}
+                  </DropdownMenuCheckboxItem>
+                )
+              })}
           </DropdownMenuContent>
         </DropdownMenu>
         <Button

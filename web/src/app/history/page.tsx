@@ -71,6 +71,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { DateRangeFilter, type DateRange } from "@/components/date-range-filter"
 
 type OrderStatus = 'completed' | 'cancelled' | 'processing' | 'failed'
 
@@ -89,85 +90,7 @@ type HistoryOrder = {
   tags?: string[]
 }
 
-const orders: HistoryOrder[] = [
-  {
-    id: "1",
-    orderNumber: "ORD-2024-001",
-    customerName: "ООО 'Мебель Престиж'",
-    productName: "Кухонный гарнитур 'Модерн'",
-    status: "completed",
-    createdAt: "2024-12-10T09:30:00Z",
-    completedAt: "2024-12-12T16:45:00Z",
-    totalAmount: 245890,
-    itemsCount: 15,
-    duration: "2 дня 7ч",
-    notes: "Клиент доволен результатом, рекомендует друзьям",
-    tags: ["VIP", "Кухни"]
-  },
-  {
-    id: "2",
-    orderNumber: "ORD-2024-002",
-    customerName: "ИП Семенов А.В.",
-    productName: "Шкаф-купе трехстворчатый",
-    status: "completed",
-    createdAt: "2024-12-08T14:20:00Z",
-    completedAt: "2024-12-11T11:30:00Z",
-    totalAmount: 89450,
-    itemsCount: 8,
-    duration: "2 дня 21ч",
-    tags: ["Спальни"]
-  },
-  {
-    id: "3",
-    orderNumber: "ORD-2024-003", 
-    customerName: "ООО 'Дом и Офис'",
-    productName: "Письменный стол с тумбами",
-    status: "cancelled",
-    createdAt: "2024-12-07T10:15:00Z",
-    totalAmount: 45600,
-    itemsCount: 5,
-    notes: "Отменен по просьбе клиента - изменились размеры помещения",
-    tags: ["Офис"]
-  },
-  {
-    id: "4",
-    orderNumber: "ORD-2024-004",
-    customerName: "ООО 'Интерьер-Люкс'",
-    productName: "Гостиная стенка модульная",
-    status: "completed",
-    createdAt: "2024-12-05T16:40:00Z",
-    completedAt: "2024-12-09T14:20:00Z",
-    totalAmount: 156780,
-    itemsCount: 12,
-    duration: "3 дня 21ч",
-    tags: ["Гостиная", "VIP"]
-  },
-  {
-    id: "5",
-    orderNumber: "ORD-2024-005",
-    customerName: "ИП Кузнецова О.И.",
-    productName: "Детская комната 'Радуга'",
-    status: "failed",
-    createdAt: "2024-12-03T11:25:00Z",
-    totalAmount: 67890,
-    itemsCount: 9,
-    notes: "Ошибка в расчетах фурнитуры - требуется пересчет",
-    tags: ["Детская"]
-  },
-  {
-    id: "6",
-    orderNumber: "ORD-2024-006",
-    customerName: "ООО 'Современные Решения'",
-    productName: "Прихожая с зеркальными фасадами",
-    status: "completed",
-    createdAt: "2024-12-01T13:10:00Z",
-    completedAt: "2024-12-04T17:35:00Z",
-    totalAmount: 78920,
-    itemsCount: 7,
-    duration: "3 дня 4ч",
-    tags: ["Прихожая"]
-  }
-]
+// Пустые начальные данные (mock убран)
 
 export default function HistoryPage() {
   const { toast } = useToast()
@@ -176,8 +99,9 @@ export default function HistoryPage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [globalFilter, setGlobalFilter] = useState("")
   const [selectedOrder, setSelectedOrder] = useState<HistoryOrder | null>(null)
-  const [orders, setOrders] = useState<HistoryOrder[]>(orders)
+  const [historyOrders, setHistoryOrders] = useState<HistoryOrder[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
 
   // Загрузка завершённых заказов из API
   useEffect(() => {
@@ -204,12 +128,12 @@ export default function HistoryPage() {
               totalAmount: 0, // TODO: добавить цену в API
               itemsCount: 1,
             }))
-            setOrders(formattedOrders)
+            setHistoryOrders(formattedOrders)
           }
         }
       } catch (error) {
         console.error('Failed to load history:', error)
-        // Оставляем mock данные при ошибке
+        // При ошибке оставляем пустой массив
       } finally {
         setIsLoading(false)
       }
@@ -217,6 +141,26 @@ export default function HistoryPage() {
 
     loadHistory()
   }, [])
+
+  // Фильтрация по дате
+  const filteredOrders = useMemo(() => {
+    if (!dateRange?.from) return historyOrders
+
+    return historyOrders.filter(order => {
+      const orderDate = new Date(order.createdAt)
+      const from = dateRange.from
+      const to = dateRange.to || dateRange.from
+
+      // Устанавливаем время на начало и конец дня для корректного сравнения
+      const fromStart = new Date(from)
+      fromStart.setHours(0, 0, 0, 0)
+
+      const toEnd = new Date(to)
+      toEnd.setHours(23, 59, 59, 999)
+
+      return orderDate >= fromStart && orderDate <= toEnd
+    })
+  }, [historyOrders, dateRange])
 
   const columns: ColumnDef<HistoryOrder>[] = useMemo(
     () => [
@@ -406,7 +350,7 @@ export default function HistoryPage() {
   )
 
   const table = useReactTable({
-    data: orders,
+    data: filteredOrders,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -426,15 +370,15 @@ export default function HistoryPage() {
   })
 
   const stats = useMemo(() => {
-    const total = orders.length
-    const completed = orders.filter(order => order.status === 'completed').length
-    const cancelled = orders.filter(order => order.status === 'cancelled').length
-    const totalRevenue = orders
+    const total = filteredOrders.length
+    const completed = filteredOrders.filter(order => order.status === 'completed').length
+    const cancelled = filteredOrders.filter(order => order.status === 'cancelled').length
+    const totalRevenue = filteredOrders
       .filter(order => order.status === 'completed')
       .reduce((sum, order) => sum + order.totalAmount, 0)
 
     return { total, completed, cancelled, totalRevenue }
-  }, [orders])
+  }, [filteredOrders])
 
   return (
     <div className="p-6 w-full space-y-6">
@@ -447,10 +391,11 @@ export default function HistoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Calendar className="h-4 w-4 mr-2" />
-            Период
-          </Button>
+          <DateRangeFilter
+            value={dateRange}
+            onChange={setDateRange}
+            placeholder="Период"
+          />
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Экспорт
@@ -585,7 +530,8 @@ export default function HistoryPage() {
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="text-sm text-muted-foreground">
           Показано {table.getFilteredRowModel().rows.length} из{" "}
-          {orders.length} заказов
+          {filteredOrders.length} заказов
+          {dateRange?.from && ` (всего: ${historyOrders.length})`}
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-2">

@@ -1,41 +1,59 @@
 'use client'
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { Loader2 } from "lucide-react"
 
+/**
+ * Страница создания нового заказа.
+ * Автоматически создаёт заказ через API и редиректит на загрузку ТЗ.
+ */
 export default function NewOrderPage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleCreateOrder = async () => {
-    setIsLoading(true)
-    try {
-      const response = await fetch('/api/orders', { method: 'POST' })
-      const data = await response.json()
-      router.push(`/orders/new/tz-upload?orderId=${data.orderId}`)
-    } catch (error) {
-      console.error("Failed to create order:", error)
-      // TODO: Show an error message to the user
-    } finally {
-      setIsLoading(false)
+  useEffect(() => {
+    const createOrder = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+
+        if (!response.ok) {
+          throw new Error('Не удалось создать заказ')
+        }
+
+        const data = await response.json()
+        router.replace(`/orders/new/tz-upload?orderId=${data.id}`)
+      } catch (err) {
+        console.error("Failed to create order:", err)
+        setError('Не удалось создать заказ. Попробуйте ещё раз.')
+      }
     }
+
+    createOrder()
+  }, [router])
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
+        <div className="text-destructive mb-4">{error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-primary hover:underline"
+        >
+          Повторить
+        </button>
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Новый заказ</CardTitle>
-          <CardDescription>Нажмите кнопку ниже, чтобы начать процесс создания нового заказа.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={handleCreateOrder} className="w-full" disabled={isLoading}>
-            {isLoading ? "Создание..." : "Начать"}
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+      <p className="text-muted-foreground">Создаём заказ...</p>
     </div>
   )
 }

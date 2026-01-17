@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Search, FileText, Package, Wrench, History, Shield, Settings, Users, Hash, User, ArrowRight, Sparkles, Clock } from "lucide-react"
+import { Search, FileText, Package, Wrench, History, Shield, Settings, Users, Hash, User, ArrowRight, Clock } from "lucide-react"
 import { Command as CommandComponent, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -286,18 +286,18 @@ export function GlobalSearch() {
           Поиск по страницам, заказам, материалам и настройкам. Используйте стрелки для навигации, Enter для выбора и Esc для закрытия.
         </DialogDescription>
         <CommandComponent className="p-0" onKeyDown={handleKeyDown}>
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="relative">
             <CommandInput
               placeholder="Поиск заказов, материалов, пользователей..."
               value={value}
               onValueChange={setValue}
-              className="border-0 focus:ring-0"
-              aria-label="Глобальный AI-поиск"
+              className="pr-14"
+              aria-label="Быстрый поиск"
             />
-            <div className="flex items-center gap-1 ml-2">
-              <Sparkles className="h-3 w-3 text-blue-500" />
-              <span className="text-xs text-muted-foreground">AI</span>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                <span className="text-xs">⌘</span>K
+              </kbd>
             </div>
           </div>
           <CommandList className="max-h-[400px]">

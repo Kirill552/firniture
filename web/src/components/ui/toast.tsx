@@ -2,7 +2,6 @@ import * as React from "react"
 import * as ToastPrimitive from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 const ToastProvider = ToastPrimitive.Provider

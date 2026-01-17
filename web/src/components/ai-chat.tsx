@@ -46,10 +46,19 @@ function parseSpecJson(text: string): { cleanText: string; spec: Record<string, 
   }
 
   try {
-    const spec = JSON.parse(specMatch[1].trim());
+    // Очищаем JSON от бэктиков, переносов и лишних пробелов
+    let jsonStr = specMatch[1]
+      .replace(/```json?/gi, '')  // Убираем ```json или ```
+      .replace(/```/g, '')         // Убираем оставшиеся ```
+      .replace(/\n/g, ' ')         // Заменяем переносы на пробелы
+      .replace(/\s+/g, ' ')        // Схлопываем множественные пробелы
+      .trim();
+
+    const spec = JSON.parse(jsonStr);
     const cleanText = text.replace(/\[SPEC_JSON\][\s\S]*?\[\/SPEC_JSON\]/, '').trim();
     return { cleanText, spec };
-  } catch {
+  } catch (e) {
+    console.error('Failed to parse SPEC_JSON:', e, specMatch[1]);
     return { cleanText: text, spec: null };
   }
 }
@@ -62,6 +71,26 @@ function hasCompleteMarker(text: string): boolean {
 // Удаление маркера [COMPLETE] из текста для отображения
 function removeCompleteMarker(text: string): string {
   return text.replace('[COMPLETE]', '').trim();
+}
+
+// Фильтрация внутренних рассуждений ИИ (function_call, JSON tool calls и т.д.)
+function filterInternalReasoning(text: string): string {
+  return text
+    // Удаляем [TOOL_CALL] маркеры
+    .replace(/\[TOOL_CALL\]/gi, '')
+    // Удаляем JSON в бэктиках ``` {"name": "find_hardware", ...} ```
+    .replace(/```\s*\{[\s\S]*?"name"[\s\S]*?"arguments"[\s\S]*?\}\s*```/g, '')
+    // Удаляем JSON без бэктиков {"name": "...", "arguments": ...}
+    .replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}/g, '')
+    // Удаляем "(внутри себя решает...)" и подобные паттерны
+    .replace(/\(внутри себя[^)]*\)\s*/gi, '')
+    // Удаляем `function_call: ...` до конца строки или точки
+    .replace(/`?function_call:\s*[^`\n.]+`?\.?\s*/gi, '')
+    // Удаляем строки начинающиеся с function_call
+    .replace(/^function_call:[^\n]*\n?/gim, '')
+    // Удаляем пустые строки подряд
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 export function AiChat({ orderId, initialMessages = [], extractedContext }: AiChatProps) {
@@ -258,48 +287,62 @@ export function AiChat({ orderId, initialMessages = [], extractedContext }: AiCh
           aria-label="Диалог с ИИ-технологом"
           className="space-y-4"
         >
-          {messages.map((m, i) => (
-            <div key={i} className="space-y-2">
-              <div className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : ''}`}>
-                {m.role !== 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
-                    AI
+          {messages.map((m, i) => {
+            const displayContent = m.role === 'assistant'
+              ? filterInternalReasoning(m.content)
+              : m.content;
+
+            // Пропускаем пустые сообщения ассистента (только function_call)
+            if (m.role === 'assistant' && !displayContent && !m.buttons?.length && !m.toolCalls?.length) {
+              return null;
+            }
+
+            return (
+              <div key={i} className="space-y-2">
+                {/* Показываем текст только если он не пустой */}
+                {displayContent && (
+                  <div className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : ''}`}>
+                    {m.role !== 'user' && (
+                      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
+                        AI
+                      </div>
+                    )}
+                    <div className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                      m.role === 'user'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted'
+                    }`}>
+                      {displayContent}
+                    </div>
                   </div>
                 )}
-                <div className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                  m.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                }`}>
-                  {m.content}
-                </div>
+
+                {/* Кнопки быстрых ответов */}
+                {m.buttons && m.role === 'assistant' && (
+                  <div className="flex flex-wrap gap-2 ml-10">
+                    {m.buttons.map((btn, btnIndex) => (
+                      <Button
+                        key={btnIndex}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleButtonClick(btn)}
+                        disabled={isLoading}
+                      >
+                        {btn}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Показываем использованные инструменты */}
+                {m.toolCalls && m.toolCalls.length > 0 && (
+                  <div className="ml-10 text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                    🔧 Использовано: {m.toolCalls.map(tc => tc.tool).join(', ')}
+                  </div>
+                )}
               </div>
-
-              {/* Кнопки быстрых ответов */}
-              {m.buttons && m.role === 'assistant' && (
-                <div className="flex flex-wrap gap-2 ml-10">
-                  {m.buttons.map((btn, btnIndex) => (
-                    <Button
-                      key={btnIndex}
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleButtonClick(btn)}
-                      disabled={isLoading}
-                    >
-                      {btn}
-                    </Button>
-                  ))}
-                </div>
-              )}
-
-              {/* Показываем использованные инструменты */}
-              {m.toolCalls && m.toolCalls.length > 0 && (
-                <div className="ml-10 text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                  🔧 Использовано: {m.toolCalls.map(tc => tc.tool).join(', ')}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           {/* Индикатор загрузки */}
           {isLoading && (

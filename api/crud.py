@@ -97,7 +97,13 @@ async def finalize_order(
 ) -> ProductConfig:
     """
     Финализирует заказ: создаёт ProductConfig с собранными параметрами.
+    Обновляет статус заказа на 'ready'.
     """
+    # Получаем заказ и обновляем статус
+    order = await db.get(models.Order, order_id)
+    if order:
+        order.status = "ready"
+
     # Создаём ProductConfig
     product = ProductConfig(
         order_id=order_id,
@@ -123,3 +129,38 @@ async def finalize_order(
     await db.flush()
 
     return product
+
+
+async def update_order_status(db: AsyncSession, order_id: UUID, status: str) -> models.Order | None:
+    """Обновить статус заказа."""
+    order = await db.get(models.Order, order_id)
+    if order:
+        order.status = status
+        await db.commit()
+        await db.refresh(order)
+    return order
+
+
+async def get_dashboard_stats(db: AsyncSession, factory_id: UUID | None = None) -> dict:
+    """
+    Получить статистику заказов по статусам для dashboard.
+    Если factory_id указан — только для этой фабрики.
+    """
+    from sqlalchemy import func
+
+    base_query = select(models.Order.status, func.count(models.Order.id))
+
+    if factory_id:
+        base_query = base_query.where(models.Order.factory_id == factory_id)
+
+    base_query = base_query.group_by(models.Order.status)
+
+    result = await db.execute(base_query)
+    stats = dict(result.all())
+
+    return {
+        "draft": stats.get("draft", 0),
+        "ready": stats.get("ready", 0),
+        "completed": stats.get("completed", 0),
+        "total": sum(stats.values()),
+    }

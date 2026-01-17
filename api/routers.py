@@ -1,3 +1,4 @@
+# Settings endpoints added 2026-01-16
 import json
 import logging
 import os
@@ -23,11 +24,12 @@ from shared.yandex_ai import (
 )
 
 from . import crud, models
-from .auth import get_current_user_optional
+from .auth import get_current_user, get_current_user_optional
 from .database import get_db
 from .models import (
     Artifact,
     CAMJob,
+    Factory,
     JobStatusEnum,
     User,
 )
@@ -38,6 +40,9 @@ from .schemas import (
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
+    FactorySettingsResponse,
+    FactorySettingsUpdate,
+    FactorySettingsUpdateResponse,
     FinalizeOrderRequest,
     FinalizeOrderResponse,
     ImageExtractRequest,
@@ -45,10 +50,67 @@ from .schemas import (
     OrderCreate,
     OrderWithProductsResponse,
     ProductConfigResponse,
+    SETTINGS_DEFAULTS,
 )
 from .schemas import Order as OrderSchema
 
 log = logging.getLogger(__name__)
+
+# ============================================================================
+# Системный промпт ИИ-технолога
+# ============================================================================
+
+TECHNOLOGIST_SYSTEM_PROMPT = """Ты — «Технолог-GPT», опытный технолог мебельной фабрики, специализирующийся на кухонной мебели (шкафы, тумбы, столешницы, фасады).
+
+## Твоя задача
+Помочь клиенту создать полную спецификацию мебельного изделия через диалог. Ты уточняешь недостающие параметры и подбираешь оптимальную фурнитуру.
+
+## Доступные инструменты
+- `find_hardware` — поиск фурнитуры в каталоге (петли, направляющие, ручки, подъёмники, опоры)
+- `check_hardware_compatibility` — проверка совместимости фурнитуры с материалом и толщиной
+- `get_hardware_details` — детальная информация о позиции по артикулу
+- `calculate_hardware_qty` — расчёт количества фурнитуры для изделия
+
+## Правила диалога
+1. **Один вопрос за раз** — не задавай несколько вопросов в одном сообщении
+2. **Используй инструменты** — при обсуждении фурнитуры вызывай find_hardware для поиска
+3. **Кнопки ответов** — предлагай варианты в формате: [BUTTONS: "Вариант 1", "Вариант 2", "Вариант 3"]
+4. **Не повторяй известное** — если параметры уже получены (из фото или предыдущих ответов), не переспрашивай
+5. **НИКОГДА не показывай техническое** — вызывай инструменты молча через API. Не пиши JSON, [TOOL_CALL], function_call или другие маркеры. Просто пиши человеческий текст: "Подбираю подходящие петли...", "Ищу в каталоге..."
+
+## Параметры для уточнения
+- Тип изделия (навесной шкаф, напольная тумба, пенал и т.д.)
+- Габариты (ширина × высота × глубина)
+- Материал корпуса и фасада (ЛДСП, МДФ), толщина
+- Кромка (ABS 0.4/2 мм, меламин)
+- Фурнитура: петли (накладные/вкладные, с доводчиком), направляющие, ручки
+- Количество полок, ящиков, дверей
+
+## Завершение диалога
+Когда все параметры собраны, выведи итоговую сводку и добавь маркеры:
+
+[COMPLETE]
+
+[SPEC_JSON]
+{
+  "type": "навесной шкаф",
+  "width": 600,
+  "height": 720,
+  "depth": 300,
+  "material": "ЛДСП 16мм",
+  "facade_material": "МДФ 19мм",
+  "doors": 1,
+  "shelves": 2,
+  "hinges": {"sku": "H401C02", "qty": 2},
+  "handles": {"sku": "RK001", "qty": 1}
+}
+[/SPEC_JSON]
+
+## Стиль общения
+- Дружелюбно, но профессионально
+- Краткие ответы (2-4 предложения)
+- Используй технические термины с пояснениями для новичков
+"""
 
 router = APIRouter(prefix="/api/v1")
 dialogue_router = APIRouter(prefix="/api/v1/dialogue", tags=["Dialogue"])
@@ -163,7 +225,207 @@ async def finalize_order_endpoint(
     )
 
 
-# ... (existing routes are kept the same, so they are omitted for brevity) ...
+# ============================================================================
+# Dashboard Stats
+# ============================================================================
+
+
+@router.get("/dashboard/stats")
+async def get_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional)
+):
+    """
+    Получить статистику заказов для dashboard.
+
+    Возвращает количество заказов по статусам:
+    - draft: Черновик
+    - ready: Готов к производству
+    - completed: Выполнен
+    - total: Всего заказов
+    """
+    factory_id = current_user.factory_id if current_user else None
+    stats = await crud.get_dashboard_stats(db, factory_id)
+    return stats
+
+
+# ============================================================================
+# Settings — настройки фабрики
+# ============================================================================
+
+@router.get("/settings", response_model=FactorySettingsResponse)
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Получить настройки фабрики.
+
+    Возвращает merged настройки (сохранённые + дефолты) и список полей,
+    где использованы дефолтные значения.
+
+    Требует авторизации.
+    """
+    # Получаем фабрику пользователя
+    result = await db.execute(
+        select(Factory).where(Factory.id == current_user.factory_id)
+    )
+    factory = result.scalar_one_or_none()
+    if not factory:
+        raise HTTPException(status_code=404, detail="Factory not found")
+
+    # Получаем owner email
+    owner_result = await db.execute(
+        select(User).where(
+            User.factory_id == factory.id,
+            User.is_owner == True  # noqa: E712
+        )
+    )
+    owner = owner_result.scalar_one_or_none()
+    owner_email = owner.email if owner else current_user.email
+
+    # Merge настроек с дефолтами
+    saved_settings = factory.settings or {}
+    merged_settings = {}
+    defaults_used = []
+
+    for key, default_value in SETTINGS_DEFAULTS.items():
+        if key in saved_settings and saved_settings[key] is not None:
+            merged_settings[key] = saved_settings[key]
+        else:
+            merged_settings[key] = default_value
+            defaults_used.append(key)
+
+    # Добавляем decor (нет дефолта)
+    merged_settings["decor"] = saved_settings.get("decor")
+
+    return FactorySettingsResponse(
+        factory_name=factory.name,
+        owner_email=owner_email,
+        settings=merged_settings,
+        defaults_used=defaults_used,
+    )
+
+
+@router.patch("/settings", response_model=FactorySettingsUpdateResponse)
+async def update_settings(
+    req: FactorySettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Обновить настройки фабрики (частично).
+
+    Передайте только те поля, которые хотите изменить.
+    Чтобы сбросить поле к дефолту, передайте `null`.
+
+    Требует авторизации (только owner может менять factory_name).
+    """
+    # Получаем фабрику
+    result = await db.execute(
+        select(Factory).where(Factory.id == current_user.factory_id)
+    )
+    factory = result.scalar_one_or_none()
+    if not factory:
+        raise HTTPException(status_code=404, detail="Factory not found")
+
+    updated_fields = []
+
+    # Обновление названия фабрики (только owner)
+    if req.factory_name is not None:
+        if not current_user.is_owner:
+            raise HTTPException(
+                status_code=403,
+                detail="Only owner can change factory name"
+            )
+        factory.name = req.factory_name
+        updated_fields.append("factory_name")
+
+    # Обновление настроек (JSON field)
+    current_settings = dict(factory.settings or {})
+
+    # Все поля настроек (кроме factory_name)
+    settings_fields = [
+        "machine_profile", "sheet_width_mm", "sheet_height_mm",
+        "thickness_mm", "edge_thickness_mm", "decor", "gap_mm",
+        "spindle_speed", "feed_rate_cutting", "feed_rate_plunge",
+        "cut_depth", "safe_height", "tool_diameter"
+    ]
+
+    req_dict = req.model_dump(exclude_unset=True)
+
+    for field in settings_fields:
+        if field in req_dict:
+            value = req_dict[field]
+            if value is None:
+                # null = сброс к дефолту (удаляем из settings)
+                current_settings.pop(field, None)
+            else:
+                current_settings[field] = value
+            updated_fields.append(field)
+
+    factory.settings = current_settings
+    await db.commit()
+
+    return FactorySettingsUpdateResponse(
+        success=True,
+        updated_fields=updated_fields,
+    )
+
+
+# ============================================================================
+# Hardware Search — RAG поиск фурнитуры
+# ============================================================================
+
+from .schemas import HardwareSearchItem, HardwareSearchResponse
+from .vector_search import search_hardware_by_text
+
+
+@router.get("/hardware/search", response_model=HardwareSearchResponse)
+async def search_hardware(
+    q: str,
+    limit: int = 10,
+) -> HardwareSearchResponse:
+    """
+    Поиск фурнитуры по текстовому запросу (RAG).
+
+    Использует векторный поиск через FRIDA embeddings + pgvector.
+    Возвращает релевантные позиции из каталога Boyard (1305 позиций).
+
+    ## Примеры запросов:
+    - `q=петля 110 градусов` — петли с углом открывания 110°
+    - `q=направляющие 450` — направляющие длиной 450мм
+    - `q=подъёмник авентос` — подъёмные механизмы Aventos
+    - `q=ручка скоба` — ручки-скобы
+    """
+    results = await search_hardware_by_text(query_text=q, k=limit)
+
+    items = []
+    for i, hw in enumerate(results):
+        # Рассчитываем score как убывающую релевантность
+        score = 1.0 - (i * 0.05) if i < 20 else 0.1
+        items.append(HardwareSearchItem(
+            sku=hw.sku,
+            name=hw.name,
+            description=hw.description,
+            brand=hw.brand,
+            type=hw.type,
+            category=hw.category,
+            price_rub=hw.price_rub,
+            params=hw.params or {},
+            score=round(score, 2),
+        ))
+
+    return HardwareSearchResponse(
+        items=items,
+        total=len(items),
+        query=q,
+    )
+
+
+# ============================================================================
+# Integrations — 1C Export
+# ============================================================================
 
 @router.post("/integrations/1c/export", response_model=Export1CResponse)
 async def export_1c(req: Export1CRequest, db: AsyncSession = Depends(get_db)) -> Export1CResponse:
@@ -320,9 +582,15 @@ from .schemas import (
 
 
 @router.post("/cam/dxf", response_model=DXFJobResponse)
-async def create_dxf_job(req: DXFJobRequest, db: AsyncSession = Depends(get_db)) -> DXFJobResponse:
+async def create_dxf_job(
+    req: DXFJobRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DXFJobResponse:
     """
     Создаёт задачу генерации DXF файла для раскроя панелей.
+
+    Параметры берутся из: запрос > настройки фабрики > дефолты.
 
     ## Пример запроса:
     ```json
@@ -339,9 +607,26 @@ async def create_dxf_job(req: DXFJobRequest, db: AsyncSession = Depends(get_db))
     Задача ставится в очередь и обрабатывается worker'ом.
     Проверяйте статус через GET /cam/jobs/{job_id}.
     """
-    # Определяем размер листа
-    sheet_width = req.sheet_width_mm or 2800
-    sheet_height = req.sheet_height_mm or 2070
+    # Получаем настройки фабрики
+    factory = await db.get(Factory, current_user.factory_id)
+    factory_settings = factory.settings if factory else {}
+
+    # Merge: запрос > настройки фабрики > дефолты
+    sheet_width = (
+        req.sheet_width_mm
+        or factory_settings.get("sheet_width_mm")
+        or SETTINGS_DEFAULTS["sheet_width_mm"]
+    )
+    sheet_height = (
+        req.sheet_height_mm
+        or factory_settings.get("sheet_height_mm")
+        or SETTINGS_DEFAULTS["sheet_height_mm"]
+    )
+    gap_mm = (
+        req.gap_mm
+        if req.gap_mm is not None
+        else factory_settings.get("gap_mm", SETTINGS_DEFAULTS["gap_mm"])
+    )
 
     # Создаём CAM задачу в БД
     job_id = uuid.uuid4()
@@ -350,7 +635,7 @@ async def create_dxf_job(req: DXFJobRequest, db: AsyncSession = Depends(get_db))
         "sheet_width": sheet_width,
         "sheet_height": sheet_height,
         "optimize": req.optimize_layout,
-        "gap_mm": req.gap_mm,
+        "gap_mm": gap_mm,
     }
 
     stmt = insert(CAMJob).values(
@@ -529,9 +814,15 @@ async def list_machine_profiles() -> MachineProfilesList:
 
 
 @router.post("/cam/gcode", response_model=GCodeJobResponse)
-async def create_gcode_job(req: GCodeJobRequest, db: AsyncSession = Depends(get_db)) -> GCodeJobResponse:
+async def create_gcode_job(
+    req: GCodeJobRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> GCodeJobResponse:
     """
     Создаёт задачу генерации G-code из DXF артефакта.
+
+    Параметры берутся из: запрос > настройки фабрики > дефолты профиля станка.
 
     ## Процесс:
     1. Получает DXF файл по artifact_id
@@ -558,28 +849,55 @@ async def create_gcode_job(req: GCodeJobRequest, db: AsyncSession = Depends(get_
     if dxf_artifact.type != "DXF":
         raise HTTPException(status_code=400, detail=f"Artifact is not DXF type: {dxf_artifact.type}")
 
+    # Получаем настройки фабрики
+    factory = await db.get(Factory, current_user.factory_id)
+    factory_settings = factory.settings if factory else {}
+
     # Создаём CAM задачу
     job_id = uuid.uuid4()
 
-    # Собираем контекст с переопределением параметров
+    # Merge: запрос > настройки фабрики > дефолты
+    machine_profile = (
+        req.machine_profile
+        or factory_settings.get("machine_profile")
+        or SETTINGS_DEFAULTS["machine_profile"]
+    )
+
+    # Собираем контекст — все параметры через merge
     context = {
         "dxf_artifact_id": str(req.dxf_artifact_id),
-        "machine_profile": req.machine_profile,
+        "machine_profile": machine_profile,
+        "spindle_speed": (
+            req.spindle_speed
+            if req.spindle_speed is not None
+            else factory_settings.get("spindle_speed", SETTINGS_DEFAULTS["spindle_speed"])
+        ),
+        "feed_rate_cutting": (
+            req.feed_rate_cutting
+            if req.feed_rate_cutting is not None
+            else factory_settings.get("feed_rate_cutting", SETTINGS_DEFAULTS["feed_rate_cutting"])
+        ),
+        "feed_rate_plunge": (
+            req.feed_rate_plunge
+            if req.feed_rate_plunge is not None
+            else factory_settings.get("feed_rate_plunge", SETTINGS_DEFAULTS["feed_rate_plunge"])
+        ),
+        "cut_depth": (
+            req.cut_depth
+            if req.cut_depth is not None
+            else factory_settings.get("cut_depth", SETTINGS_DEFAULTS["cut_depth"])
+        ),
+        "safe_height": (
+            req.safe_height
+            if req.safe_height is not None
+            else factory_settings.get("safe_height", SETTINGS_DEFAULTS["safe_height"])
+        ),
+        "tool_diameter": (
+            req.tool_diameter
+            if req.tool_diameter is not None
+            else factory_settings.get("tool_diameter", SETTINGS_DEFAULTS["tool_diameter"])
+        ),
     }
-
-    # Добавляем переопределения параметров если заданы
-    if req.spindle_speed is not None:
-        context["spindle_speed"] = req.spindle_speed
-    if req.feed_rate_cutting is not None:
-        context["feed_rate_cutting"] = req.feed_rate_cutting
-    if req.feed_rate_plunge is not None:
-        context["feed_rate_plunge"] = req.feed_rate_plunge
-    if req.cut_depth is not None:
-        context["cut_depth"] = req.cut_depth
-    if req.safe_height is not None:
-        context["safe_height"] = req.safe_height
-    if req.tool_diameter is not None:
-        context["tool_diameter"] = req.tool_diameter
 
     stmt = insert(CAMJob).values(
         id=job_id,
@@ -600,12 +918,12 @@ async def create_gcode_job(req: GCodeJobRequest, db: AsyncSession = Depends(get_
         "idempotency_key": req.idempotency_key,
     })
 
-    log.info(f"[CAM] Created GCODE job {job_id} from DXF {req.dxf_artifact_id}, profile={req.machine_profile}")
+    log.info(f"[CAM] Created GCODE job {job_id} from DXF {req.dxf_artifact_id}, profile={machine_profile}")
 
     return GCodeJobResponse(
         job_id=job_id,
         status="created",
-        machine_profile=req.machine_profile,
+        machine_profile=machine_profile,
         dxf_artifact_id=req.dxf_artifact_id,
     )
 
@@ -662,17 +980,7 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
 
     # PRODUCTION РЕЖИМ - используем YandexGPT через OpenAI-совместимый API
     # 1. Собираем историю для YandexGPT
-    try:
-        with open("docs/ai_dialogue_spec.md", encoding="utf-8") as f:
-            # Пропускаем до системного промпта
-            for line in f:
-                if "Ты — «Технолог-GPT»" in line:
-                    system_prompt_text = line + f.read()
-                    break
-            else:
-                raise FileNotFoundError("System prompt not found in spec")
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="AI dialogue spec file not found.")
+    system_prompt_text = TECHNOLOGIST_SYSTEM_PROMPT
 
     # OpenAI-совместимый формат: "content" вместо "text"
     # Если есть извлечённый контекст из Vision OCR — добавляем в системный промпт
@@ -758,17 +1066,8 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
         user_message_text = user_msg.content
         await crud.create_dialogue_message(db, order.id, current_turn, user_msg.role, user_msg.content)
 
-    # Загружаем системный промпт
-    try:
-        with open("docs/ai_dialogue_spec.md", encoding="utf-8") as f:
-            for line in f:
-                if "Ты — «Технолог-GPT»" in line:
-                    system_prompt_text = line + f.read()
-                    break
-            else:
-                raise FileNotFoundError("System prompt not found in spec")
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="AI dialogue spec file not found.")
+    # Системный промпт
+    system_prompt_text = TECHNOLOGIST_SYSTEM_PROMPT
 
     # Если есть извлечённый контекст из Vision OCR — добавляем в системный промпт
     if req.extracted_context:
@@ -827,8 +1126,6 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
                     tool_choice="auto",
                     temperature=0.4,
                 )
-
-                log.info(f"[Function Calling] finish_reason: {response.finish_reason}, tool_calls: {len(response.tool_calls)}")
 
                 # Если модель не вызвала инструменты - это финальный ответ
                 if not response.tool_calls:

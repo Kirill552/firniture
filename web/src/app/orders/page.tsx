@@ -14,30 +14,22 @@ type Order = {
   id: string
   customer: string
   product: string
-  status: "pending" | "processing" | "completed" | "cancelled"
+  status: "draft" | "ready" | "completed"
   price: number
   createdAt: string
 }
 
-// Mock данные как fallback
-const mockOrders: Order[] = [
-  { id: "ORD001", customer: "ООО \"Рога и копыта\"", product: "Шкаф-купе \"Эксклюзив\"", status: "completed", price: 75000, createdAt: "2025-08-15" },
-  { id: "ORD002", customer: "ИП Иванов И.И.", product: "Кухонный гарнитур \"Модерн\"", status: "processing", price: 120000, createdAt: "2025-09-01" },
-  { id: "ORD003", customer: "Частное лицо", product: "Стол письменный", status: "pending", price: 25000, createdAt: "2025-09-08" },
-]
-
+// Статусы заказов (на русском для UI)
 const statusVariant = {
-  pending: "secondary",
-  processing: "default",
+  draft: "secondary",
+  ready: "default",
   completed: "outline",
-  cancelled: "destructive",
 } as const
 
 const statusLabels: Record<string, string> = {
-  pending: "Ожидает",
-  processing: "В работе",
-  completed: "Завершён",
-  cancelled: "Отменён",
+  draft: "Черновик",
+  ready: "Готов к производству",
+  completed: "Выполнен",
 }
 
 // Типизируем колонки с помощью ColumnDef
@@ -122,14 +114,14 @@ const columns: ColumnDef<Order>[] = [
 ]
 
 const OrdersPageInner = () => {
-  const [orders, setOrders] = React.useState<Order[]>(mockOrders)
+  const [orders, setOrders] = React.useState<Order[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>()
 
   React.useEffect(() => {
     const loadOrders = async () => {
       try {
-        const response = await fetch('/api/v1/orders')
+        const response = await fetch('http://localhost:8000/api/v1/orders')
         if (response.ok) {
           const data = await response.json()
           if (data && data.length > 0) {
@@ -138,13 +130,14 @@ const OrdersPageInner = () => {
               id: string
               customer_ref?: string
               notes?: string
+              status?: string
               created_at: string
             }) => ({
               id: order.id,
               customer: order.customer_ref || "Не указан",
               product: order.notes || "Не указано",
-              status: "pending" as const, // TODO: добавить статус в API
-              price: 0, // TODO: добавить цену в API
+              status: (order.status || "draft") as Order["status"],
+              price: 0, // Цена рассчитывается из BOM
               createdAt: new Date(order.created_at).toISOString().split('T')[0],
             }))
             setOrders(formattedOrders)
@@ -152,7 +145,7 @@ const OrdersPageInner = () => {
         }
       } catch (error) {
         console.error('Failed to load orders:', error)
-        // Оставляем mock данные при ошибке
+        // При ошибке оставляем пустой массив
       } finally {
         setIsLoading(false)
       }

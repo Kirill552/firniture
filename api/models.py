@@ -35,6 +35,9 @@ class Factory(Base):
     name: Mapped[str] = mapped_column(String(255))  # "ООО Мебель-Про"
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
+    # Настройки фабрики (станок, материалы, параметры генерации)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
     # Связи
     users: Mapped[list[User]] = relationship(back_populates="factory", cascade="all, delete-orphan")
     orders: Mapped[list[Order]] = relationship(back_populates="factory", cascade="all, delete-orphan")
@@ -83,6 +86,7 @@ class Order(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     customer_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | ready | completed
 
     # Связи
     factory: Mapped[Factory | None] = relationship(back_populates="orders")
@@ -146,8 +150,8 @@ class HardwareItem(Base):
     version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     supplier_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="SET NULL"))
     
-    # Поля для векторного поиска (добавлены для 2025)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(256), nullable=True)
+    # Поля для векторного поиска (FRIDA 1536 dim)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     embedding_version: Mapped[str | None] = mapped_column(String(40), nullable=True)  # Версия модели эмбеддингов
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Хеш контента для проверки актуальности
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Время индексации

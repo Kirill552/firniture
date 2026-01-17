@@ -18,11 +18,11 @@ class OrderCreate(OrderBase):
 
 class Order(OrderBase):
     id: UUID
+    status: str = "draft"  # draft | ready | completed
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SpecExtractRequest(BaseModel):
@@ -135,8 +135,7 @@ class DialogueMessage(DialogueMessageBase):
     turn_number: int
     timestamp: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DialogueTurnRequest(BaseModel):
     order_id: UUID
@@ -369,10 +368,10 @@ class GCodeJobRequest(BaseModel):
     dxf_artifact_id: UUID = Field(..., description="ID DXF артефакта для конвертации")
     order_id: UUID | None = Field(None, description="ID заказа")
 
-    # Профиль станка (российский рынок)
-    machine_profile: Literal["weihong", "syntec", "fanuc", "dsp", "homag"] = Field(
-        "weihong",
-        description="Профиль станка ЧПУ (weihong=NCStudio 30-35%, syntec=KDT/WoodTec 20-25%, fanuc=премиум 15-20%, dsp=бюджетный 8-12%, homag=премиум мебельный)"
+    # Профиль станка (если не задан — берётся из настроек фабрики или дефолт weihong)
+    machine_profile: Literal["weihong", "syntec", "fanuc", "dsp", "homag"] | None = Field(
+        None,
+        description="Профиль станка ЧПУ. Если не задан — используется из настроек фабрики"
     )
 
     # Переопределение параметров профиля
@@ -492,3 +491,120 @@ class OrderWithProductsResponse(BaseModel):
     products: list[ProductConfigResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Поиск фурнитуры (Hardware Search)
+# ============================================================================
+
+class HardwareSearchItem(BaseModel):
+    """Элемент результата поиска фурнитуры."""
+    sku: str
+    name: str | None
+    description: str | None
+    brand: str | None
+    type: str
+    category: str | None
+    price_rub: float | None
+    params: dict[str, Any] = Field(default_factory=dict)
+    score: float = Field(..., description="Релевантность (0-1)")
+
+
+class HardwareSearchResponse(BaseModel):
+    """Ответ на поиск фурнитуры."""
+    items: list[HardwareSearchItem]
+    total: int = Field(..., description="Общее количество найденных позиций")
+    query: str = Field(..., description="Исходный запрос")
+
+
+# ============================================================================
+# Factory Settings (настройки фабрики)
+# ============================================================================
+
+# Дефолтные значения для настроек
+SETTINGS_DEFAULTS: dict[str, Any] = {
+    "machine_profile": "weihong",
+    "sheet_width_mm": 2800,
+    "sheet_height_mm": 2070,
+    "thickness_mm": 16,
+    "edge_thickness_mm": 0.4,
+    "gap_mm": 4,
+    "spindle_speed": 18000,
+    "feed_rate_cutting": 3000,
+    "feed_rate_plunge": 1500,
+    "cut_depth": 8,
+    "safe_height": 5,
+    "tool_diameter": 6,
+}
+
+
+class FactorySettings(BaseModel):
+    """Настройки фабрики — станок, материалы, параметры генерации."""
+
+    # Станок
+    machine_profile: Literal["weihong", "syntec", "fanuc", "dsp", "homag"] | None = None
+
+    # Лист
+    sheet_width_mm: float | None = Field(None, ge=100, le=5000, description="Ширина листа (мм)")
+    sheet_height_mm: float | None = Field(None, ge=100, le=5000, description="Высота листа (мм)")
+
+    # Материалы
+    thickness_mm: float | None = Field(None, gt=0, le=100, description="Толщина ЛДСП (мм)")
+    edge_thickness_mm: float | None = Field(None, ge=0, le=10, description="Толщина кромки (мм)")
+    decor: str | None = Field(None, max_length=100, description="Декор/цвет")
+
+    # DXF
+    gap_mm: float | None = Field(None, ge=0, le=50, description="Зазор на пропил (мм)")
+
+    # G-code
+    spindle_speed: int | None = Field(None, ge=1000, le=30000, description="Скорость шпинделя (об/мин)")
+    feed_rate_cutting: int | None = Field(None, ge=100, le=15000, description="Подача резки (мм/мин)")
+    feed_rate_plunge: int | None = Field(None, ge=100, le=5000, description="Подача врезания (мм/мин)")
+    cut_depth: float | None = Field(None, ge=1, le=50, description="Глубина за проход (мм)")
+    safe_height: float | None = Field(None, ge=1, le=100, description="Безопасная высота (мм)")
+    tool_diameter: float | None = Field(None, ge=1, le=30, description="Диаметр фрезы (мм)")
+
+
+class FactorySettingsUpdate(BaseModel):
+    """Запрос на обновление настроек (PATCH)."""
+
+    factory_name: str | None = Field(None, max_length=255, description="Название фабрики")
+
+    # Станок
+    machine_profile: Literal["weihong", "syntec", "fanuc", "dsp", "homag"] | None = None
+
+    # Лист
+    sheet_width_mm: float | None = Field(None, ge=100, le=5000)
+    sheet_height_mm: float | None = Field(None, ge=100, le=5000)
+
+    # Материалы
+    thickness_mm: float | None = Field(None, gt=0, le=100)
+    edge_thickness_mm: float | None = Field(None, ge=0, le=10)
+    decor: str | None = Field(None, max_length=100)
+
+    # DXF
+    gap_mm: float | None = Field(None, ge=0, le=50)
+
+    # G-code
+    spindle_speed: int | None = Field(None, ge=1000, le=30000)
+    feed_rate_cutting: int | None = Field(None, ge=100, le=15000)
+    feed_rate_plunge: int | None = Field(None, ge=100, le=5000)
+    cut_depth: float | None = Field(None, ge=1, le=50)
+    safe_height: float | None = Field(None, ge=1, le=100)
+    tool_diameter: float | None = Field(None, ge=1, le=30)
+
+
+class FactorySettingsResponse(BaseModel):
+    """Ответ GET /settings — настройки с дефолтами для UI."""
+
+    factory_name: str
+    owner_email: str
+    settings: dict[str, Any] = Field(..., description="Merged настройки (значения + дефолты)")
+    defaults_used: list[str] = Field(..., description="Поля, где использованы дефолты")
+
+
+class FactorySettingsUpdateResponse(BaseModel):
+    """Ответ PATCH /settings."""
+
+    success: bool = True
+    updated_fields: list[str] = Field(..., description="Обновлённые поля")

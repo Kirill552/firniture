@@ -2,14 +2,14 @@
 Yandex Cloud AI клиенты для мебель-ИИ проекта.
 
 Поддерживаемые сервисы:
-- YandexGPT (текстовая генерация) - нативный и OpenAI-совместимый API
+- Alice AI LLM (текстовая генерация) - нативный и OpenAI-совместимый API
 - Yandex Embeddings (векторизация текста)
 - Yandex Vision OCR (распознавание текста с изображений)
 
-OpenAI-совместимый API дает доступ к:
-- Дополнительным параметрам (top_p, frequency_penalty, presence_penalty)
-- Стандартному SSE streaming
-- Будущим моделям (Alice AI LLM)
+Доступные модели через Yandex AI Studio:
+- aliceai-llm (Alice AI LLM) - умнее YandexGPT, контекст 32K
+- yandexgpt, yandexgpt-lite - базовые модели Яндекса
+- qwen3-235b - контекст 262K (!)
 """
 
 from __future__ import annotations
@@ -42,12 +42,12 @@ class YandexCloudSettings(BaseSettings):
     yc_ocr_endpoint: str = "https://ocr.api.cloud.yandex.net"
 
     # Модели (нативный API)
-    yc_gpt_model: str = "gpt://{folder_id}/yandexgpt/latest"
+    yc_gpt_model: str = "gpt://{folder_id}/aliceai-llm/latest"  # Alice AI LLM - умнее YandexGPT
     yc_embedding_doc_model: str = "emb://{folder_id}/text-search-doc/latest"
     yc_embedding_query_model: str = "emb://{folder_id}/text-search-query/latest"
 
     # Модели (OpenAI-совместимый API)
-    yc_openai_model: str = "yandexgpt"  # yandexgpt, yandexgpt-lite, или alice (когда появится)
+    yc_openai_model: str = "aliceai-llm"  # Alice AI LLM (можно: yandexgpt, yandexgpt-lite, qwen3-235b)
 
     # Параметры генерации по умолчанию
     yc_default_temperature: float = 0.3

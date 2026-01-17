@@ -1,74 +1,119 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 @theme {
-  --radius: 0.625rem;
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.145 0 0);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.145 0 0);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.145 0 0);
-  --color-primary: oklch(0.205 0 0);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.97 0 0);
-  --color-secondary-foreground: oklch(0.205 0 0);
-  --color-muted: oklch(0.97 0 0);
-  --color-muted-foreground: oklch(0.556 0 0);
-  --color-accent: oklch(0.97 0 0);
-  --color-accent-foreground: oklch(0.205 0 0);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(0.985 0 0);
-  --color-border: oklch(0.922 0 0);
-  --color-input: oklch(0.922 0 0);
-  --color-ring: oklch(0.708 0 0);
-  --color-chart-1: oklch(0.646 0.222 41.116);
-  --color-chart-2: oklch(0.6 0.118 184.704);
-  --color-chart-3: oklch(0.398 0.07 227.392);
-  --color-chart-4: oklch(0.828 0.189 84.429);
-  --color-chart-5: oklch(0.769 0.188 70.08);
-  --color-sidebar: oklch(0.985 0 0);
-  --color-sidebar-foreground: oklch(0.145 0 0);
-  --color-sidebar-primary: oklch(0.205 0 0);
-  --color-sidebar-primary-foreground: oklch(0.985 0 0);
-  --color-sidebar-accent: oklch(0.97 0 0);
-  --color-sidebar-accent-foreground: oklch(0.205 0 0);
-  --color-sidebar-border: oklch(0.922 0 0);
-  --color-sidebar-ring: oklch(0.708 0 0);
+  /* Типографика — Onest (отличный для кириллицы) */
+  --font-sans: var(--font-onest), ui-sans-serif, system-ui, sans-serif;
+
+  --radius: 0.5rem;
+
+  /* ========================================
+   * SCANDINAVIAN INDUSTRIAL — Светлая тема
+   * Для мебельных технологов: чистота + функциональность
+   * ======================================== */
+
+  /* Основные цвета — тёплые, натуральные */
+  --color-background: oklch(0.985 0.004 75);        /* Тёплый белый (слоновая кость) */
+  --color-foreground: oklch(0.22 0.02 45);          /* Тёмно-коричневый (эспрессо) */
+
+  /* Карточки — чуть теплее фона */
+  --color-card: oklch(0.995 0.002 75);              /* Чистый белый с теплом */
+  --color-card-foreground: oklch(0.22 0.02 45);
+
+  /* Popover/Dropdown */
+  --color-popover: oklch(0.998 0.001 75);
+  --color-popover-foreground: oklch(0.22 0.02 45);
+
+  /* Primary — тёмное дерево (венге) */
+  --color-primary: oklch(0.28 0.04 45);             /* Венге */
+  --color-primary-foreground: oklch(0.97 0.005 75);
+
+  /* Secondary — светлое дерево (дуб) */
+  --color-secondary: oklch(0.94 0.015 75);          /* Светлый дуб */
+  --color-secondary-foreground: oklch(0.28 0.03 45);
+
+  /* Muted — пепельный */
+  --color-muted: oklch(0.95 0.008 75);
+  --color-muted-foreground: oklch(0.45 0.02 45);
+
+  /* Accent — терракота (индустриальный акцент) */
+  --color-accent: oklch(0.65 0.14 35);              /* Терракота */
+  --color-accent-foreground: oklch(0.98 0.005 75);
+
+  /* Destructive — приглушённый красный */
+  --color-destructive: oklch(0.55 0.2 25);
+  --color-destructive-foreground: oklch(0.98 0 0);
+
+  /* Success — натуральный зелёный */
+  --color-success: oklch(0.55 0.15 145);
+  --color-success-foreground: oklch(0.98 0 0);
+
+  /* Warning — янтарь */
+  --color-warning: oklch(0.75 0.15 75);
+  --color-warning-foreground: oklch(0.25 0.02 45);
+
+  /* Borders & Input */
+  --color-border: oklch(0.88 0.01 75);
+  --color-input: oklch(0.92 0.008 75);
+  --color-ring: oklch(0.55 0.08 45);
+
+  /* Charts — натуральная палитра */
+  --color-chart-1: oklch(0.55 0.12 45);   /* Дуб */
+  --color-chart-2: oklch(0.65 0.14 35);   /* Терракота */
+  --color-chart-3: oklch(0.55 0.15 145);  /* Зелёный */
+  --color-chart-4: oklch(0.75 0.15 75);   /* Янтарь */
+  --color-chart-5: oklch(0.5 0.1 250);    /* Синий стальной */
+
+  /* Sidebar — чуть темнее основного фона */
+  --color-sidebar: oklch(0.97 0.006 75);
+  --color-sidebar-foreground: oklch(0.25 0.02 45);
+  --color-sidebar-primary: oklch(0.28 0.04 45);
+  --color-sidebar-primary-foreground: oklch(0.97 0.005 75);
+  --color-sidebar-accent: oklch(0.93 0.01 75);
+  --color-sidebar-accent-foreground: oklch(0.28 0.03 45);
+  --color-sidebar-border: oklch(0.9 0.008 75);
+  --color-sidebar-ring: oklch(0.55 0.08 45);
 }
 
+/* ========================================
+ * ТЁМНАЯ ТЕМА — Тёплый уголь
+ * ======================================== */
 @layer theme {
   .dark {
-    --color-background: oklch(0.145 0 0);
-    --color-foreground: oklch(0.985 0 0);
-    --color-card: oklch(0.205 0 0);
-    --color-card-foreground: oklch(0.985 0 0);
-    --color-popover: oklch(0.205 0 0);
-    --color-popover-foreground: oklch(0.985 0 0);
-    --color-primary: oklch(0.922 0 0);
-    --color-primary-foreground: oklch(0.205 0 0);
-    --color-secondary: oklch(0.269 0 0);
-    --color-secondary-foreground: oklch(0.985 0 0);
-    --color-muted: oklch(0.269 0 0);
-    --color-muted-foreground: oklch(0.708 0 0);
-    --color-accent: oklch(0.269 0 0);
-    --color-accent-foreground: oklch(0.985 0 0);
-    --color-destructive: oklch(0.704 0.191 22.216);
-    --color-border: oklch(1 0 0 / 10%);
-    --color-input: oklch(1 0 0 / 15%);
-    --color-ring: oklch(0.556 0 0);
-    --color-chart-1: oklch(0.488 0.243 264.376);
-    --color-chart-2: oklch(0.696 0.17 162.48);
-    --color-chart-3: oklch(0.769 0.188 70.08);
-    --color-chart-4: oklch(0.627 0.265 303.9);
-    --color-chart-5: oklch(0.645 0.246 16.439);
-    --color-sidebar: oklch(0.205 0 0);
-    --color-sidebar-foreground: oklch(0.985 0 0);
-    --color-sidebar-primary: oklch(0.488 0.243 264.376);
-    --color-sidebar-primary-foreground: oklch(0.985 0 0);
-    --color-sidebar-accent: oklch(0.269 0 0);
-    --color-sidebar-accent-foreground: oklch(0.985 0 0);
-    --color-sidebar-border: oklch(1 0 0 / 10%);
-    --color-sidebar-ring: oklch(0.556 0 0);
+    --color-background: oklch(0.16 0.012 45);       /* Тёплый уголь */
+    --color-foreground: oklch(0.93 0.008 75);
+
+    --color-card: oklch(0.2 0.015 45);
+    --color-card-foreground: oklch(0.93 0.008 75);
+
+    --color-popover: oklch(0.22 0.015 45);
+    --color-popover-foreground: oklch(0.93 0.008 75);
+
+    --color-primary: oklch(0.88 0.02 75);           /* Светлое дерево */
+    --color-primary-foreground: oklch(0.18 0.02 45);
+
+    --color-secondary: oklch(0.28 0.015 45);
+    --color-secondary-foreground: oklch(0.9 0.008 75);
+
+    --color-muted: oklch(0.28 0.012 45);
+    --color-muted-foreground: oklch(0.6 0.015 75);
+
+    --color-accent: oklch(0.65 0.12 35);            /* Терракота */
+    --color-accent-foreground: oklch(0.98 0.005 75);
+
+    --color-destructive: oklch(0.6 0.18 25);
+
+    --color-border: oklch(0.32 0.012 45);
+    --color-input: oklch(0.28 0.01 45);
+    --color-ring: oklch(0.6 0.06 45);
+
+    --color-sidebar: oklch(0.18 0.012 45);
+    --color-sidebar-foreground: oklch(0.93 0.008 75);
+    --color-sidebar-primary: oklch(0.88 0.02 75);
+    --color-sidebar-primary-foreground: oklch(0.18 0.02 45);
+    --color-sidebar-accent: oklch(0.25 0.012 45);
+    --color-sidebar-accent-foreground: oklch(0.9 0.008 75);
+    --color-sidebar-border: oklch(0.28 0.01 45);
+    --color-sidebar-ring: oklch(0.5 0.05 45);
   }
 }
 
@@ -76,11 +121,11 @@
   * {
     @apply border-border outline-ring/50;
   }
-  
+
   body {
     @apply bg-background text-foreground;
   }
-  
+
   html, body {
     width: 100%;
     height: 100%;
@@ -89,11 +134,40 @@
     scroll-behavior: smooth;
   }
 
+  /* Стабилизация scrollbar */
+  html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+  }
+
+  /* Radix scroll-lock fixes */
+  body[data-scroll-locked] {
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    overflow: hidden;
+  }
+
+  body {
+    pointer-events: auto !important;
+  }
+
+  body > * {
+    pointer-events: auto !important;
+  }
+
+  [data-radix-portal] {
+    pointer-events: auto !important;
+  }
+
+  [data-radix-popper-content-wrapper] {
+    pointer-events: auto !important;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     html, body { scroll-behavior: auto; }
   }
 
-  /* Custom scrollbar (WebKit) */
+  /* Custom scrollbar — тёплые тона */
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -102,21 +176,19 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: oklch(0.8 0 0 / 0.6);
+    background: oklch(0.75 0.015 75 / 0.5);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
-  .dark *::-webkit-scrollbar-thumb {
-    background: oklch(0.3 0 0 / 0.6);
-    border: 2px solid transparent;
-    background-clip: padding-box;
-  }
   *::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.7 0 0 / 0.9);
+    background: oklch(0.6 0.02 45 / 0.7);
+  }
+  .dark *::-webkit-scrollbar-thumb {
+    background: oklch(0.35 0.01 45 / 0.5);
   }
   .dark *::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.4 0 0 / 0.9);
+    background: oklch(0.45 0.015 45 / 0.7);
   }
 }
 
@@ -124,9 +196,11 @@
   .focus-visible {
     @apply ring-2 ring-ring ring-offset-2 ring-offset-background rounded-md outline-none;
   }
-  .focus-ring { @apply focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background; }
-  
-  /* Keyboard navigation styles */
+  .focus-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  /* Keyboard navigation */
   button:focus-visible,
   [role="button"]:focus-visible,
   input:focus-visible,
@@ -135,22 +209,30 @@
   a:focus-visible {
     @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
-  
-  /* Skip link for main content */
+
+  /* Skip link */
   .skip-link {
     @apply fixed left-[-9999px] top-4 z-50 bg-primary text-primary-foreground px-4 py-2 rounded-md focus:left-4 transition-all duration-200;
   }
 
-  /* Grid background patterns */
-  .bg-grid-small-black {
-    background-image: linear-gradient(to right, rgb(0 0 0 / 0.1) 1px, transparent 1px),
-                      linear-gradient(to bottom, rgb(0 0 0 / 0.1) 1px, transparent 1px);
-    background-size: 20px 20px;
+  /* Subtle texture для карточек (опционально) */
+  .card-texture {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+    opacity: 0.015;
   }
-  
-  .dark .bg-grid-small-white {
-    background-image: linear-gradient(to right, rgb(255 255 255 / 0.1) 1px, transparent 1px),
-                      linear-gradient(to bottom, rgb(255 255 255 / 0.1) 1px, transparent 1px);
-    background-size: 20px 20px;
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Status colors */
+  .status-draft { @apply bg-muted text-muted-foreground; }
+  .status-ready { @apply bg-warning/15 text-warning-foreground border border-warning/30; }
+  .status-completed { @apply bg-success/15 text-success border border-success/30; }
+  .status-error { @apply bg-destructive/15 text-destructive border border-destructive/30; }
+
+  /* Industrial accents */
+  .accent-border-left {
+    @apply border-l-4 border-accent;
   }
 }

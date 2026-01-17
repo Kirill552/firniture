@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, Suspense } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   useReactTable,
   getCoreRowModel,
@@ -13,8 +13,6 @@ import {
   type VisibilityState,
   type ColumnDef,
 } from "@tanstack/react-table"
-import { Canvas } from "@react-three/fiber"
-import { OrbitControls, Environment, Grid, Center } from "@react-three/drei"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -54,6 +52,7 @@ import {
 } from "lucide-react"
 import { StatCardSkeleton, TableSkeleton, ChartSkeleton } from "@/components/ui/table-skeleton"
 import { useToast } from "@/hooks/use-toast"
+import { SettingsIndicator } from "@/components/settings-indicator"
 
 type CAMJobStatus = 'Created' | 'Processing' | 'Completed' | 'Failed'
 type CAMJobType = 'DXF' | 'GCODE'
@@ -82,105 +81,51 @@ type CAMJob = {
   }
 }
 
-const mockCAMJobs: CAMJob[] = [
-  {
-    id: "dxf-001",
-    orderId: "ORD-2024-001",
-    type: "DXF",
-    name: "Кухонный гарнитур - боковины",
-    description: "DXF чертежи для боковых панелей",
-    status: "Completed",
-    createdAt: "2024-12-14T10:30:00Z",
-    completedAt: "2024-12-14T10:32:15Z",
-    progress: 100,
-    actualTime: "2м 15с",
-    fileSize: 245.5,
-    downloadUrl: "/downloads/dxf-001.zip",
-    parameters: {
-      material: "ЛДСП",
-      thickness: 18
-    }
-  },
-  {
-    id: "gcode-001",
-    orderId: "ORD-2024-001", 
-    type: "GCODE",
-    name: "Кухонный гарнитур - фрезеровка",
-    description: "G-code для фрезерных операций",
-    status: "Processing",
-    createdAt: "2024-12-14T11:00:00Z",
-    progress: 65,
-    estimatedTime: "1м 30с",
-    parameters: {
-      material: "ЛДСП",
-      thickness: 18,
-      toolDiameter: 6,
-      feedRate: 1200,
-      spindleSpeed: 18000
-    }
-  },
-  {
-    id: "dxf-002",
-    orderId: "ORD-2024-002",
-    type: "DXF", 
-    name: "Шкаф-купе - раскрой",
-    description: "DXF раскроя для шкафа-купе",
-    status: "Created",
-    createdAt: "2024-12-14T11:15:00Z",
-    progress: 0,
-    estimatedTime: "3м 45с",
-    parameters: {
-      material: "ЛДСП",
-      thickness: 16
-    }
-  },
-  {
-    id: "gcode-002",
-    orderId: "ORD-2024-003",
-    type: "GCODE",
-    name: "Стол письменный - обработка торцов",
-    status: "Failed",
-    createdAt: "2024-12-14T09:45:00Z",
-    progress: 0,
-    error: "Ошибка при генерации траектории: слишком малый радиус инструмента для данной толщины материала",
-    parameters: {
-      material: "МДФ",
-      thickness: 22,
-      toolDiameter: 3,
-      feedRate: 800,
-      spindleSpeed: 16000
-    }
-  }
-]
-
-function DXFViewer({ url }: { url?: string }) {
+// Empty state component for CAM
+function EmptyCamState() {
   return (
-    <div className="h-[400px] w-full bg-gray-50 border rounded-lg flex items-center justify-center">
+    <div className="flex flex-col items-center justify-center py-16 px-4">
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <FileCode className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-semibold mb-2">Нет CAM задач</h3>
+      <p className="text-muted-foreground text-center max-w-md mb-6">
+        CAM задачи создаются автоматически при генерации DXF или G-code из спецификации
+      </p>
+      <Button variant="outline" asChild>
+        <a href="/bom">Перейти к спецификации</a>
+      </Button>
+    </div>
+  )
+}
+
+function DXFViewer({ url, jobType }: { url?: string; jobType?: CAMJobType }) {
+  return (
+    <div className="h-[300px] w-full bg-muted/20 border rounded-lg flex items-center justify-center">
       {url ? (
-        <Canvas camera={{ position: [10, 10, 10], fov: 50 }}>
-          <Suspense fallback={null}>
-            <ambientLight intensity={0.6} />
-            <directionalLight position={[10, 10, 5]} intensity={0.5} />
-            <Environment preset="studio" />
-            <Grid infiniteGrid cellSize={1} cellThickness={0.5} />
-            <Center>
-              {/* Здесь будет загрузка DXF файла */}
-              <mesh>
-                <boxGeometry args={[2, 0.1, 1]} />
-                <meshStandardMaterial color="#8B4513" />
-              </mesh>
-              <mesh position={[0, 0.15, 0]}>
-                <boxGeometry args={[1.8, 0.1, 0.8]} />
-                <meshStandardMaterial color="#CD853F" />
-              </mesh>
-            </Center>
-            <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
-          </Suspense>
-        </Canvas>
+        <div className="text-center p-6">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle className="h-8 w-8 text-green-600" />
+          </div>
+          <h3 className="font-medium mb-2">
+            {jobType === 'GCODE' ? 'G-code готов' : 'DXF готов'}
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {jobType === 'GCODE'
+              ? 'Программа ЧПУ сгенерирована и готова к загрузке на станок'
+              : 'Чертёж раскроя сгенерирован. Откройте в AutoCAD или LibreCAD для просмотра'
+            }
+          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <FileCode className="h-4 w-4" />
+            <span>{jobType === 'GCODE' ? '.nc / .gcode' : '.dxf'}</span>
+          </div>
+        </div>
       ) : (
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-muted-foreground p-6">
           <FileCode className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Выберите задачу для предпросмотра DXF</p>
+          <p>Выберите задачу для предпросмотра</p>
+          <p className="text-xs mt-2">Кликните по строке в таблице слева</p>
         </div>
       )}
     </div>
@@ -194,7 +139,8 @@ export default function CamPage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [selectedJob, setSelectedJob] = useState<CAMJob | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [jobs, setJobs] = useState<CAMJob[]>(mockCAMJobs)
+  const [jobs, setJobs] = useState<CAMJob[]>([])
+  const [isLoadingDownloadUrl, setIsLoadingDownloadUrl] = useState(false)
 
   // Load CAM jobs from API
   useEffect(() => {
@@ -226,7 +172,7 @@ export default function CamPage() {
         }
       } catch (error) {
         console.error('Failed to load CAM jobs:', error)
-        // Оставляем mock данные при ошибке
+        // При ошибке оставляем пустой массив
       } finally {
         setIsLoading(false)
       }
@@ -238,6 +184,34 @@ export default function CamPage() {
     const interval = setInterval(loadJobs, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  // Load download URL when job is selected
+  useEffect(() => {
+    if (!selectedJob || selectedJob.status !== 'Completed' || selectedJob.downloadUrl) return
+
+    const loadDownloadUrl = async () => {
+      setIsLoadingDownloadUrl(true)
+      try {
+        const response = await fetch(`/api/v1/cam/jobs/${selectedJob.id}/download`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.download_url) {
+            setSelectedJob(prev => prev ? { ...prev, downloadUrl: data.download_url } : null)
+            // Также обновляем в списке jobs
+            setJobs(prevJobs => prevJobs.map(job =>
+              job.id === selectedJob.id ? { ...job, downloadUrl: data.download_url } : job
+            ))
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load download URL:', error)
+      } finally {
+        setIsLoadingDownloadUrl(false)
+      }
+    }
+
+    loadDownloadUrl()
+  }, [selectedJob?.id, selectedJob?.status])
 
   const columns: ColumnDef<CAMJob>[] = useMemo(
     () => [
@@ -461,9 +435,9 @@ export default function CamPage() {
         {/* Заголовок */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">CAM (DXF/G-code)</h1>
+            <h1 className="text-2xl font-bold">Файлы для станка</h1>
             <p className="text-muted-foreground">
-              Управление задачами генерации DXF-чертежей и G-code для станков с ЧПУ
+              Чертежи раскроя (DXF) и программы ЧПУ (G-code)
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -495,27 +469,42 @@ export default function CamPage() {
     )
   }
 
+  // Показываем empty state если нет задач
+  if (jobs.length === 0) {
+    return (
+      <div className="p-6 w-full space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Файлы для станка</h1>
+            <p className="text-muted-foreground">
+              Чертежи раскроя (DXF) и программы ЧПУ (G-code)
+            </p>
+          </div>
+        </div>
+        <Card>
+          <EmptyCamState />
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 w-full space-y-6">
       {/* Заголовок */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">CAM (DXF/G-code)</h1>
+          <h1 className="text-2xl font-bold">Файлы для станка</h1>
           <p className="text-muted-foreground">
-            Управление задачами генерации DXF-чертежей и G-code для станков с ЧПУ
+            Чертежи раскроя (DXF) и программы ЧПУ (G-code)
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleCreateDXF} variant="outline">
-            <Upload className="h-4 w-4 mr-2" />
-            Создать DXF
-          </Button>
-          <Button onClick={handleCreateGCode}>
-            <Zap className="h-4 w-4 mr-2" />
-            Создать G-code
-          </Button>
-        </div>
       </div>
+
+      {/* Индикатор настроек */}
+      <SettingsIndicator
+        fields={['machine_profile', 'sheet_width_mm', 'sheet_height_mm', 'gap_mm', 'spindle_speed', 'feed_rate_cutting', 'tool_diameter']}
+        targetTab="generation"
+      />
 
       {/* Статистика */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -591,7 +580,8 @@ export default function CamPage() {
                       <TableRow
                         key={row.id}
                         data-state={row.getIsSelected() && "selected"}
-                        className={selectedJob?.id === row.original.id ? "bg-muted/50" : ""}
+                        className={`cursor-pointer transition-colors hover:bg-muted/30 ${selectedJob?.id === row.original.id ? "bg-muted/50" : ""}`}
+                        onClick={() => setSelectedJob(row.original)}
                       >
                         {row.getVisibleCells().map((cell) => (
                           <TableCell key={cell.id}>
@@ -632,8 +622,32 @@ export default function CamPage() {
                     <TabsTrigger value="preview">Предпросмотр</TabsTrigger>
                     <TabsTrigger value="details">Детали</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="preview" className="mt-4">
-                    <DXFViewer url={selectedJob.downloadUrl} />
+                  <TabsContent value="preview" className="mt-4 space-y-4">
+                    {/* Информация о выбранной задаче */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={selectedJob.type === "DXF" ? "default" : "secondary"}>
+                          {selectedJob.type}
+                        </Badge>
+                        <span className="text-sm font-medium">{selectedJob.name}</span>
+                      </div>
+                      {selectedJob.status === 'Completed' && (
+                        isLoadingDownloadUrl ? (
+                          <Button size="sm" disabled>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Загрузка...
+                          </Button>
+                        ) : selectedJob.downloadUrl ? (
+                          <Button size="sm" asChild>
+                            <a href={selectedJob.downloadUrl} target="_blank" rel="noopener noreferrer">
+                              <Download className="h-4 w-4 mr-2" />
+                              Скачать
+                            </a>
+                          </Button>
+                        ) : null
+                      )}
+                    </div>
+                    <DXFViewer url={selectedJob.downloadUrl} jobType={selectedJob.type} />
                   </TabsContent>
                   <TabsContent value="details" className="mt-4">
                     <div className="space-y-3">
@@ -649,7 +663,9 @@ export default function CamPage() {
                       )}
                       <div>
                         <label className="text-sm font-medium">Статус:</label>
-                        <p className="text-sm text-muted-foreground">{selectedJob.status}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedJob.status === 'Created' ? 'Создана' : selectedJob.status === 'Processing' ? 'Выполняется' : selectedJob.status === 'Completed' ? 'Готова' : 'Ошибка'}
+                        </p>
                       </div>
                       {selectedJob.error && (
                         <div>

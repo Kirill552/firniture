@@ -51,7 +51,11 @@ import {
   Check,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { getAuthHeader } from "@/lib/auth"
 import { StatCardSkeleton, TableSkeleton } from "@/components/ui/table-skeleton"
+import { SettingsIndicator } from "@/components/settings-indicator"
+import { ProductionStepper } from "@/components/production-stepper"
+import { MachineProfileModal, hasSelectedMachineProfile } from "@/components/machine-profile-modal"
 
 type BOMItem = {
   id: string
@@ -181,78 +185,28 @@ function convertOrderToBOM(order: OrderWithProducts): BOMItem[] {
   return items
 }
 
-const mockBOMData: BOMItem[] = [
-  {
-    id: "1",
-    sku: "PLT-18-2440-1220",
-    name: "ЛДСП белая 18мм",
-    category: "Плитные материалы",
-    material: "ЛДСП",
-    thickness: 18,
-    quantity: 2,
-    unit: "лист",
-    supplier: "Кроношпан",
-    cost: 2850.00,
-    totalCost: 5700.00,
-    status: "available",
-    version: "v1.2",
-    notes: "Основной материал корпуса"
-  },
-  {
-    id: "2", 
-    sku: "EDG-18-WHT",
-    name: "Кромка ПВХ белая 18мм",
-    category: "Кромочные материалы",
-    material: "ПВХ",
-    thickness: 0.4,
-    quantity: 15,
-    unit: "п.м",
-    supplier: "Рехау",
-    cost: 45.50,
-    totalCost: 682.50,
-    status: "available"
-  },
-  {
-    id: "3",
-    sku: "HNG-35-CLIP",
-    name: "Петля накладная с доводчиком",
-    category: "Фурнитура",
-    material: "Сталь",
-    quantity: 6,
-    unit: "шт",
-    supplier: "Blum",
-    cost: 320.00,
-    totalCost: 1920.00,
-    status: "ordered",
-    notes: "Для навесных модулей"
-  },
-  {
-    id: "4",
-    sku: "GUI-45-SOFT",
-    name: "Направляющие полного выдвижения",
-    category: "Фурнитура", 
-    material: "Сталь",
-    quantity: 4,
-    unit: "пара",
-    supplier: "Hettich",
-    cost: 680.00,
-    totalCost: 2720.00,
-    status: "available"
-  },
-  {
-    id: "5",
-    sku: "HND-128-CHR",
-    name: "Ручка-скоба хром 128мм",
-    category: "Фурнитура",
-    material: "Алюминий",
-    quantity: 8,
-    unit: "шт",
-    supplier: "GTV",
-    cost: 125.00,
-    totalCost: 1000.00,
-    status: "out_of_stock"
-  },
-]
+// Empty state component
+function EmptyBomState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4">
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <Package className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-semibold mb-2">Нет данных спецификации</h3>
+      <p className="text-muted-foreground text-center max-w-md mb-6">
+        Выберите заказ из списка или создайте новый через диалог с ИИ-технологом
+      </p>
+      <div className="flex gap-3">
+        <Button variant="outline" asChild>
+          <a href="/orders">Список заказов</a>
+        </Button>
+        <Button asChild>
+          <a href="/orders/new">Создать заказ</a>
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export default function BomPage() {
   const { info } = useToast()
@@ -269,43 +223,109 @@ export default function BomPage() {
   const [dxfDownloadUrl, setDxfDownloadUrl] = useState<string | null>(null)
   const [dxfError, setDxfError] = useState<string | null>(null)
 
+  // G-code generation state
+  const [isGeneratingGcode, setIsGeneratingGcode] = useState(false)
+  const [gcodeJobId, setGcodeJobId] = useState<string | null>(null)
+  const [gcodeDownloadUrl, setGcodeDownloadUrl] = useState<string | null>(null)
+  const [gcodeError, setGcodeError] = useState<string | null>(null)
+
+  // Machine profile state
+  const [machineProfile, setMachineProfile] = useState<string | null>(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [isFirstTimeProfile, setIsFirstTimeProfile] = useState(false)
+
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [globalFilter, setGlobalFilter] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // ВРЕМЕННО false для отладки
+
+  // Ключ для localStorage
+  const LAST_ORDER_KEY = 'lastBomOrderId'
+
+  // Восстановление последнего заказа из localStorage
+  const [restoredFromStorage, setRestoredFromStorage] = useState(false)
+  const [effectiveOrderId, setEffectiveOrderId] = useState<string | null>(orderId)
+
+  useEffect(() => {
+    if (orderId) {
+      // Если есть orderId в URL — сохраняем в localStorage
+      localStorage.setItem(LAST_ORDER_KEY, orderId)
+      setEffectiveOrderId(orderId)
+    } else {
+      // Если нет orderId — пробуем восстановить из localStorage
+      const savedOrderId = localStorage.getItem(LAST_ORDER_KEY)
+      if (savedOrderId) {
+        setEffectiveOrderId(savedOrderId)
+        setRestoredFromStorage(true)
+      }
+    }
+  }, [orderId])
 
   // Load order data if orderId is present
   useEffect(() => {
-    if (!orderId) return
+    if (!effectiveOrderId) return
 
     const loadOrder = async () => {
       setIsLoadingOrder(true)
       setOrderError(null)
       try {
-        const response = await fetch(`/api/v1/orders/${orderId}`)
+        const response = await fetch(`/api/v1/orders/${effectiveOrderId}`)
         if (!response.ok) {
+          // Если заказ не найден — очищаем localStorage
+          localStorage.removeItem(LAST_ORDER_KEY)
           throw new Error('Заказ не найден')
         }
         const data: OrderWithProducts = await response.json()
         setOrder(data)
       } catch (err) {
         setOrderError(err instanceof Error ? err.message : 'Ошибка загрузки заказа')
+        setRestoredFromStorage(false)
       } finally {
         setIsLoadingOrder(false)
       }
     }
 
     loadOrder()
-  }, [orderId])
+  }, [effectiveOrderId])
 
-  // Simulate data loading
+  // Load machine profile from settings
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1500)
-    return () => clearTimeout(timer)
+    const loadSettings = async () => {
+      try {
+        const response = await fetch("/api/v1/settings", {
+          headers: getAuthHeader(),
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.settings?.machine_profile) {
+            setMachineProfile(data.settings.machine_profile)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load settings:", error)
+      }
+    }
+
+    loadSettings()
   }, [])
+
+  // ВРЕМЕННО ОТКЛЮЧЕНО для отладки блокировки
+  // useEffect(() => {
+  //   if (restoredFromStorage && order) {
+  //     const created = new Date(order.created_at)
+  //     info("Восстановлен черновик", `Заказ от ${created.toLocaleString('ru-RU')}`)
+  //     setRestoredFromStorage(false)
+  //   }
+  // }, [restoredFromStorage, order])
+
+  // ВРЕМЕННО ОТКЛЮЧЕНО для отладки
+  // useEffect(() => {
+  //   const timer = setTimeout(() => {
+  //     setIsLoading(false)
+  //   }, 1500)
+  //   return () => clearTimeout(timer)
+  // }, [])
 
   const columns: ColumnDef<BOMItem>[] = useMemo(
     () => [
@@ -479,9 +499,19 @@ export default function BomPage() {
     []
   )
 
-  // Используем данные из API или mock
-  const bomData = order ? convertOrderToBOM(order) : mockBOMData
+  // Данные BOM через useState (НЕ в рендере — это блокировало страницу!)
+  const [bomData, setBomData] = useState<BOMItem[]>([])
 
+  // Пересчитываем BOM только при изменении order
+  useEffect(() => {
+    if (order) {
+      setBomData(convertOrderToBOM(order))
+    } else {
+      setBomData([])
+    }
+  }, [order])
+
+  // ВАЖНО: Все хуки должны быть ДО любых условных return
   const table = useReactTable({
     data: bomData,
     columns,
@@ -557,9 +587,12 @@ export default function BomPage() {
 
       const response = await fetch('/api/v1/cam/dxf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
         body: JSON.stringify({
-          order_id: orderId,
+          order_id: effectiveOrderId,
           panels,
           sheet_width_mm: 2440,
           sheet_height_mm: 1220,
@@ -588,15 +621,24 @@ export default function BomPage() {
       await new Promise(resolve => setTimeout(resolve, 1000))
 
       try {
-        const response = await fetch(`/api/v1/cam/jobs/${jobId}`)
+        const response = await fetch(`/api/v1/cam/jobs/${jobId}`, {
+          headers: getAuthHeader()
+        })
         const data = await response.json()
 
-        if (data.status === 'completed' && data.download_url) {
-          setDxfDownloadUrl(data.download_url)
+        if (data.status === 'Completed' && data.artifact_id) {
+          // Получаем URL для скачивания
+          const downloadResponse = await fetch(`/api/v1/cam/jobs/${jobId}/download`, {
+            headers: getAuthHeader()
+          })
+          if (downloadResponse.ok) {
+            const downloadData = await downloadResponse.json()
+            setDxfDownloadUrl(downloadData.download_url)
+          }
           setIsGeneratingDxf(false)
           return
         }
-        if (data.status === 'failed') {
+        if (data.status === 'Failed') {
           setDxfError(data.error || 'Генерация не удалась')
           setIsGeneratingDxf(false)
           return
@@ -610,12 +652,141 @@ export default function BomPage() {
     setIsGeneratingDxf(false)
   }
 
+  const handleGenerateGcode = async () => {
+    // Проверяем, выбран ли профиль станка
+    if (!hasSelectedMachineProfile() || !machineProfile) {
+      setIsFirstTimeProfile(true)
+      setShowProfileModal(true)
+      return
+    }
+
+    // Если DXF ещё не сгенерирован — генерируем сначала DXF
+    if (!dxfDownloadUrl && !isGeneratingDxf) {
+      await handleGenerateDxf()
+    }
+
+    // Ждём пока DXF будет готов (если генерируется)
+    if (isGeneratingDxf) {
+      setTimeout(() => handleGenerateGcode(), 2000)
+      return
+    }
+
+    if (!dxfJobId) {
+      setGcodeError("Сначала сгенерируйте DXF")
+      return
+    }
+
+    setIsGeneratingGcode(true)
+    setGcodeError(null)
+
+    try {
+      // Получаем artifact_id из DXF job
+      const jobResponse = await fetch(`/api/v1/cam/jobs/${dxfJobId}`, {
+        headers: getAuthHeader(),
+      })
+      const jobData = await jobResponse.json()
+
+      if (!jobData.artifact_id) {
+        throw new Error("DXF артефакт не найден")
+      }
+
+      const response = await fetch("/api/v1/cam/gcode", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          dxf_artifact_id: jobData.artifact_id,
+          machine_profile: machineProfile,
+          cut_depth: 18.0,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.job_id) {
+        setGcodeJobId(data.job_id)
+        pollGcodeJobStatus(data.job_id)
+      } else {
+        setGcodeError(data.detail || "Ошибка создания задачи G-code")
+        setIsGeneratingGcode(false)
+      }
+    } catch (error) {
+      setGcodeError(error instanceof Error ? error.message : "Ошибка генерации G-code")
+      setIsGeneratingGcode(false)
+    }
+  }
+
+  const pollGcodeJobStatus = async (jobId: string) => {
+    const maxAttempts = 30
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      try {
+        const response = await fetch(`/api/v1/cam/jobs/${jobId}`, {
+          headers: getAuthHeader(),
+        })
+        const data = await response.json()
+
+        if (data.status === "Completed" && data.artifact_id) {
+          const downloadResponse = await fetch(`/api/v1/cam/jobs/${jobId}/download`, {
+            headers: getAuthHeader(),
+          })
+          if (downloadResponse.ok) {
+            const downloadData = await downloadResponse.json()
+            setGcodeDownloadUrl(downloadData.download_url)
+          }
+          setIsGeneratingGcode(false)
+          return
+        }
+        if (data.status === "Failed") {
+          setGcodeError(data.error || "Генерация G-code не удалась")
+          setIsGeneratingGcode(false)
+          return
+        }
+      } catch {
+        // Continue polling
+      }
+    }
+
+    setGcodeError("Превышено время ожидания")
+    setIsGeneratingGcode(false)
+  }
+
+  const handleProfileSelected = (profileId: string) => {
+    setMachineProfile(profileId)
+    // После выбора профиля — запускаем генерацию G-code
+    setTimeout(() => {
+      handleGenerateGcode()
+    }, 100)
+  }
+
   const handleCreateBom = () => {
     info("Создание BOM", "Функционал создания спецификации будет доступен в ближайшем обновлении")
   }
 
   const handleExport = () => {
     info("Экспорт BOM", "Функционал экспорта будет доступен в ближайшем обновлении")
+  }
+
+  // Показываем empty state если нет orderId и нет сохранённого (после всех хуков!)
+  if (!isLoading && !effectiveOrderId) {
+    return (
+      <div className="p-6 w-full space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Спецификация (BOM)</h1>
+            <p className="text-muted-foreground">
+              Детальная спецификация материалов и компонентов для производства
+            </p>
+          </div>
+        </div>
+        <Card>
+          <EmptyBomState />
+        </Card>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -676,6 +847,12 @@ export default function BomPage() {
         </div>
       </div>
 
+      {/* Индикатор настроек - временно отключен для отладки */}
+      {/* <SettingsIndicator
+        fields={['thickness_mm', 'edge_thickness_mm', 'sheet_width_mm', 'sheet_height_mm']}
+        targetTab="materials"
+      /> */}
+
       {/* Статистика */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
@@ -735,59 +912,70 @@ export default function BomPage() {
               </div>
               <div>
                 <span className="text-muted-foreground">Материал:</span>
-                <p className="font-medium">{order.products[0].material || '-'}</p>
+                <p className="font-medium">{order.products[0].material || 'Не указан'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Толщина:</span>
-                <p className="font-medium">{order.products[0].thickness_mm || '-'} мм</p>
+                <p className="font-medium">
+                  {order.products[0].thickness_mm
+                    ? `${order.products[0].thickness_mm} мм`
+                    : 'Не указана'}
+                </p>
               </div>
               <div>
                 <span className="text-muted-foreground">ID:</span>
                 <p className="font-medium font-mono text-xs">{order.id.slice(0, 8)}...</p>
               </div>
             </div>
-
-            {/* DXF Generation buttons */}
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={handleGenerateDxf}
-                disabled={isGeneratingDxf || !!dxfDownloadUrl}
-                variant={dxfDownloadUrl ? "outline" : "default"}
-              >
-                {isGeneratingDxf ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Генерация DXF...
-                  </>
-                ) : dxfDownloadUrl ? (
-                  <>
-                    <Check className="h-4 w-4 mr-2 text-green-600" />
-                    DXF готов
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Сгенерировать DXF
-                  </>
-                )}
-              </Button>
-
-              {dxfDownloadUrl && (
-                <Button variant="default" asChild>
-                  <a href={dxfDownloadUrl} target="_blank" rel="noopener noreferrer">
-                    <Download className="h-4 w-4 mr-2" />
-                    Скачать DXF
-                  </a>
-                </Button>
-              )}
-
-              {dxfError && (
-                <span className="text-sm text-destructive">{dxfError}</span>
-              )}
-            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Production Stepper */}
+      {order && (
+        <ProductionStepper
+          orderId={effectiveOrderId || ""}
+          hasOrder={!!order}
+          dxfStatus={
+            isGeneratingDxf
+              ? "loading"
+              : dxfError
+                ? "error"
+                : dxfDownloadUrl
+                  ? "completed"
+                  : "pending"
+          }
+          dxfDownloadUrl={dxfDownloadUrl}
+          dxfError={dxfError}
+          onGenerateDxf={handleGenerateDxf}
+          gcodeStatus={
+            isGeneratingGcode
+              ? "loading"
+              : gcodeError
+                ? "error"
+                : gcodeDownloadUrl
+                  ? "completed"
+                  : "pending"
+          }
+          gcodeDownloadUrl={gcodeDownloadUrl}
+          gcodeError={gcodeError}
+          onGenerateGcode={handleGenerateGcode}
+          machineProfile={machineProfile}
+          onOpenProfileModal={() => {
+            setIsFirstTimeProfile(false)
+            setShowProfileModal(true)
+          }}
+        />
+      )}
+
+      {/* Machine Profile Modal */}
+      <MachineProfileModal
+        open={showProfileModal}
+        onOpenChange={setShowProfileModal}
+        currentProfile={machineProfile}
+        onSelectProfile={handleProfileSelected}
+        isFirstTime={isFirstTimeProfile}
+      />
 
       {/* Loading/error states */}
       {isLoadingOrder && (
@@ -818,7 +1006,8 @@ export default function BomPage() {
               className="pl-8 w-[300px]"
             />
           </div>
-          <DropdownMenu>
+{/* ВРЕМЕННО ОТКЛЮЧЕНО для отладки блокировки */}
+          {/* <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
                 <Settings2 className="h-4 w-4 mr-2" />
@@ -856,7 +1045,7 @@ export default function BomPage() {
                   )
                 })}
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu> */}
         </div>
       </div>
 
