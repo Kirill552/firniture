@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
@@ -608,3 +609,115 @@ class FactorySettingsUpdateResponse(BaseModel):
 
     success: bool = True
     updated_fields: list[str] = Field(..., description="Обновлённые поля")
+
+
+# ============================================================================
+# Калькулятор панелей (Panel Calculator)
+# ============================================================================
+
+class CabinetType(str, Enum):
+    """Типы корпусной мебели."""
+    WALL = "wall"           # Навесной шкаф
+    BASE = "base"           # Напольная тумба
+    BASE_SINK = "base_sink" # Тумба под мойку
+    DRAWER = "drawer"       # Тумба с ящиками
+    TALL = "tall"           # Пенал
+    CORNER = "corner"       # Угловой шкаф
+
+
+class CalculatedPanel(BaseModel):
+    """Рассчитанная панель."""
+    name: str = Field(..., description="Название панели (Боковина левая, Дно и т.д.)")
+    width_mm: float = Field(..., gt=0, description="Ширина в мм")
+    height_mm: float = Field(..., gt=0, description="Высота в мм")
+    thickness_mm: float = Field(16.0, gt=0, description="Толщина в мм")
+    quantity: int = Field(1, ge=1, description="Количество")
+
+    # Кромка
+    edge_front: bool = Field(False, description="Кромка спереди")
+    edge_back: bool = Field(False, description="Кромка сзади")
+    edge_top: bool = Field(False, description="Кромка сверху")
+    edge_bottom: bool = Field(False, description="Кромка снизу")
+    edge_thickness_mm: float = Field(0.4, ge=0, description="Толщина кромки")
+
+    # Опции
+    has_slot_for_back: bool = Field(False, description="Паз под заднюю стенку")
+    notes: str = Field("", description="Примечания")
+
+
+class CalculatePanelsRequest(BaseModel):
+    """Запрос на расчёт панелей."""
+    cabinet_type: CabinetType
+    width_mm: int = Field(..., gt=0, le=3000, description="Ширина корпуса")
+    height_mm: int = Field(..., gt=0, le=3000, description="Высота корпуса")
+    depth_mm: int = Field(..., gt=0, le=1000, description="Глубина корпуса")
+
+    # Опции
+    material: str = Field("ЛДСП 16мм", description="Материал")
+    shelf_count: int = Field(1, ge=0, le=10, description="Количество полок")
+    door_count: int = Field(1, ge=0, le=4, description="Количество дверей")
+    drawer_count: int = Field(0, ge=0, le=10, description="Количество ящиков")
+
+    # Настройки (если не указаны — берутся из фабрики)
+    thickness_mm: float | None = Field(None, description="Толщина материала")
+    edge_thickness_mm: float | None = Field(None, description="Толщина кромки")
+
+
+class CalculatePanelsResponse(BaseModel):
+    """Ответ с рассчитанными панелями."""
+    success: bool = True
+    cabinet_type: str
+    dimensions: dict[str, int] = Field(..., description="Габариты {width, height, depth}")
+
+    panels: list[CalculatedPanel]
+
+    # Сводка
+    total_panels: int
+    total_area_m2: float = Field(..., description="Общая площадь панелей (м²)")
+    edge_length_m: float = Field(..., description="Длина кромки (м)")
+
+    # Предупреждения
+    warnings: list[str] = Field(default_factory=list)
+
+
+class HardwareRecommendation(BaseModel):
+    """Рекомендация по фурнитуре."""
+    type: str = Field(..., description="Тип фурнитуры")
+    sku: str | None = Field(None, description="Артикул из каталога")
+    name: str = Field(..., description="Название")
+    quantity: int = Field(..., ge=1, description="Количество")
+    unit: str = Field("шт", description="Единица измерения")
+    source: str = Field("calculated", description="Источник: calculated | rag")
+
+
+class GenerateBOMRequest(BaseModel):
+    """Запрос на генерацию полного BOM."""
+    order_id: UUID | None = None
+    cabinet_type: CabinetType
+    width_mm: int = Field(..., gt=0, le=3000)
+    height_mm: int = Field(..., gt=0, le=3000)
+    depth_mm: int = Field(..., gt=0, le=1000)
+    material: str = Field("ЛДСП 16мм")
+    shelf_count: int = Field(1, ge=0)
+    door_count: int = Field(1, ge=0)
+    drawer_count: int = Field(0, ge=0)
+
+
+class GenerateBOMResponse(BaseModel):
+    """Полный BOM с панелями и фурнитурой."""
+    success: bool = True
+    order_id: UUID | None = None
+
+    cabinet_type: str
+    dimensions: dict[str, int]
+
+    panels: list[CalculatedPanel]
+    hardware: list[HardwareRecommendation]
+
+    # Сводка
+    total_panels: int
+    total_area_m2: float
+    edge_length_m: float
+    total_hardware_items: int
+
+    warnings: list[str] = Field(default_factory=list)

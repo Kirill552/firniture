@@ -37,6 +37,9 @@ from .queues import DXF_QUEUE, GCODE_QUEUE, enqueue
 from .schemas import (
     CAMJobListItem,
     CAMJobsListResponse,
+    CalculatePanelsRequest,
+    CalculatePanelsResponse,
+    CalculatedPanel,
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
@@ -371,6 +374,93 @@ async def update_settings(
         success=True,
         updated_fields=updated_fields,
     )
+
+
+# ============================================================================
+# Panel Calculator — расчёт панелей
+# ============================================================================
+
+@router.post("/panels/calculate", response_model=CalculatePanelsResponse)
+async def calculate_panels_endpoint(
+    req: CalculatePanelsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> CalculatePanelsResponse:
+    """
+    Рассчитать панели для корпусной мебели.
+
+    Типы: wall, base, base_sink, drawer, tall
+    Параметры берутся из: запрос > настройки фабрики > дефолты.
+    """
+    from api.panel_calculator import calculate_panels
+
+    # Получаем настройки фабрики если авторизован
+    factory_settings = {}
+    if current_user:
+        factory = await db.get(Factory, current_user.factory_id)
+        if factory:
+            factory_settings = factory.settings or {}
+
+    # Merge параметров: запрос > настройки > дефолты
+    thickness = (
+        req.thickness_mm
+        or factory_settings.get("thickness_mm")
+        or SETTINGS_DEFAULTS["thickness_mm"]
+    )
+    edge_thickness = (
+        req.edge_thickness_mm
+        or factory_settings.get("edge_thickness_mm")
+        or SETTINGS_DEFAULTS["edge_thickness_mm"]
+    )
+
+    try:
+        result = calculate_panels(
+            cabinet_type=req.cabinet_type.value,
+            width_mm=req.width_mm,
+            height_mm=req.height_mm,
+            depth_mm=req.depth_mm,
+            thickness_mm=thickness,
+            edge_thickness_mm=edge_thickness,
+            shelf_count=req.shelf_count,
+            door_count=req.door_count,
+            drawer_count=req.drawer_count,
+        )
+
+        panels = [
+            CalculatedPanel(
+                name=p.name,
+                width_mm=p.width_mm,
+                height_mm=p.height_mm,
+                thickness_mm=p.thickness_mm,
+                quantity=p.quantity,
+                edge_front=p.edge_front,
+                edge_back=p.edge_back,
+                edge_top=p.edge_top,
+                edge_bottom=p.edge_bottom,
+                edge_thickness_mm=p.edge_thickness_mm,
+                has_slot_for_back=p.has_slot_for_back,
+                notes=p.notes,
+            )
+            for p in result.panels
+        ]
+
+        return CalculatePanelsResponse(
+            success=True,
+            cabinet_type=result.cabinet_type,
+            dimensions={
+                "width": result.width_mm,
+                "height": result.height_mm,
+                "depth": result.depth_mm,
+            },
+            panels=panels,
+            total_panels=result.total_panels,
+            total_area_m2=round(result.total_area_m2, 2),
+            edge_length_m=round(result.edge_length_m, 1),
+            warnings=result.warnings,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ============================================================================
