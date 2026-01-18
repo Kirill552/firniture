@@ -32,6 +32,42 @@ HARDWARE_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "calculate_panels",
+            "description": (
+                "Рассчитывает панели для корпусной мебели по габаритам. "
+                "Возвращает список панелей с размерами, кромкой и предупреждениями. "
+                "ВСЕГДА вызывай этот инструмент когда пользователь указывает размеры шкафа или тумбы."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cabinet_type": {
+                        "type": "string",
+                        "enum": ["wall", "base", "base_sink", "drawer", "tall"],
+                        "description": (
+                            "Тип корпуса: "
+                            "wall — навесной шкаф, "
+                            "base — напольная тумба, "
+                            "base_sink — тумба под мойку, "
+                            "drawer — тумба с ящиками, "
+                            "tall — пенал"
+                        )
+                    },
+                    "width_mm": {"type": "integer", "description": "Ширина корпуса в мм"},
+                    "height_mm": {"type": "integer", "description": "Высота корпуса в мм"},
+                    "depth_mm": {"type": "integer", "description": "Глубина корпуса в мм"},
+                    "material": {"type": "string", "default": "ЛДСП 16мм", "description": "Материал корпуса"},
+                    "shelf_count": {"type": "integer", "default": 1, "description": "Количество полок"},
+                    "door_count": {"type": "integer", "default": 1, "description": "Количество дверей"},
+                    "drawer_count": {"type": "integer", "default": 0, "description": "Количество ящиков"}
+                },
+                "required": ["cabinet_type", "width_mm", "height_mm", "depth_mm"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "find_hardware",
             "description": (
                 "Поиск фурнитуры в каталоге по текстовому описанию. "
@@ -156,6 +192,62 @@ HARDWARE_TOOLS: list[dict[str, Any]] = [
 # ============================================================================
 # Обработчики инструментов
 # ============================================================================
+
+async def handle_calculate_panels(
+    cabinet_type: str,
+    width_mm: int,
+    height_mm: int,
+    depth_mm: int,
+    material: str = "ЛДСП 16мм",
+    shelf_count: int = 1,
+    door_count: int = 1,
+    drawer_count: int = 0,
+) -> dict[str, Any]:
+    """Рассчитать панели для корпусной мебели."""
+    from api.panel_calculator import calculate_panels
+
+    log.info(f"[AI Tool] calculate_panels: {cabinet_type} {width_mm}×{height_mm}×{depth_mm}")
+
+    try:
+        thickness_mm = 18.0 if "18" in material else 16.0
+
+        result = calculate_panels(
+            cabinet_type=cabinet_type,
+            width_mm=width_mm,
+            height_mm=height_mm,
+            depth_mm=depth_mm,
+            thickness_mm=thickness_mm,
+            shelf_count=shelf_count,
+            door_count=door_count,
+            drawer_count=drawer_count,
+        )
+
+        panels_data = [p.to_dict() for p in result.panels]
+
+        return {
+            "success": True,
+            "cabinet_type": result.cabinet_type,
+            "dimensions": {
+                "width_mm": result.width_mm,
+                "height_mm": result.height_mm,
+                "depth_mm": result.depth_mm,
+            },
+            "panels": panels_data,
+            "summary": {
+                "total_panels": result.total_panels,
+                "total_area_m2": round(result.total_area_m2, 2),
+                "edge_length_m": round(result.edge_length_m, 1),
+            },
+            "warnings": result.warnings,
+        }
+
+    except ValueError as e:
+        log.error(f"[AI Tool] calculate_panels error: {e}")
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        log.error(f"[AI Tool] calculate_panels unexpected error: {e}")
+        return {"success": False, "error": f"Ошибка расчёта: {e}"}
+
 
 async def handle_find_hardware(
     query: str,
@@ -524,6 +616,7 @@ async def handle_calculate_hardware_qty(
 # ============================================================================
 
 TOOL_HANDLERS = {
+    "calculate_panels": handle_calculate_panels,
     "find_hardware": handle_find_hardware,
     "check_hardware_compatibility": handle_check_hardware_compatibility,
     "get_hardware_details": handle_get_hardware_details,

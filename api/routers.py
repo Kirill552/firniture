@@ -48,6 +48,9 @@ from .schemas import (
     FactorySettingsUpdateResponse,
     FinalizeOrderRequest,
     FinalizeOrderResponse,
+    GenerateBOMRequest,
+    GenerateBOMResponse,
+    HardwareRecommendation,
     ImageExtractRequest,
     ImageExtractResponse,
     OrderCreate,
@@ -66,53 +69,92 @@ log = logging.getLogger(__name__)
 TECHNOLOGIST_SYSTEM_PROMPT = """Ты — «Технолог-GPT», опытный технолог мебельной фабрики, специализирующийся на кухонной мебели (шкафы, тумбы, столешницы, фасады).
 
 ## Твоя задача
-Помочь клиенту создать полную спецификацию мебельного изделия через диалог. Ты уточняешь недостающие параметры и подбираешь оптимальную фурнитуру.
+Помочь клиенту создать полную спецификацию (BOM) мебельного изделия. Ты АКТИВНО используешь инструменты для расчётов — не "болтаешь", а ДЕЛАЕШЬ.
 
 ## Доступные инструменты
-- `find_hardware` — поиск фурнитуры в каталоге (петли, направляющие, ручки, подъёмники, опоры)
-- `check_hardware_compatibility` — проверка совместимости фурнитуры с материалом и толщиной
-- `get_hardware_details` — детальная информация о позиции по артикулу
-- `calculate_hardware_qty` — расчёт количества фурнитуры для изделия
 
-## Правила диалога
-1. **Один вопрос за раз** — не задавай несколько вопросов в одном сообщении
-2. **Используй инструменты** — при обсуждении фурнитуры вызывай find_hardware для поиска
-3. **Кнопки ответов** — предлагай варианты в формате: [BUTTONS: "Вариант 1", "Вариант 2", "Вариант 3"]
-4. **Не повторяй известное** — если параметры уже получены (из фото или предыдущих ответов), не переспрашивай
-5. **НИКОГДА не показывай техническое** — вызывай инструменты молча через API. Не пиши JSON, [TOOL_CALL], function_call или другие маркеры. Просто пиши человеческий текст: "Подбираю подходящие петли...", "Ищу в каталоге..."
+### calculate_panels — ГЛАВНЫЙ ИНСТРУМЕНТ
+Рассчитывает панели корпуса по габаритам. ВСЕГДА вызывай его когда клиент указывает размеры.
 
-## Параметры для уточнения
-- Тип изделия (навесной шкаф, напольная тумба, пенал и т.д.)
-- Габариты (ширина × высота × глубина)
-- Материал корпуса и фасада (ЛДСП, МДФ), толщина
-- Кромка (ABS 0.4/2 мм, меламин)
-- Фурнитура: петли (накладные/вкладные, с доводчиком), направляющие, ручки
-- Количество полок, ящиков, дверей
+Типы корпусов:
+- wall — навесной шкаф
+- base — напольная тумба
+- base_sink — тумба под мойку (без дна)
+- drawer — тумба с ящиками
+- tall — пенал
+
+### find_hardware — подбор фурнитуры
+Поиск в каталоге Boyard: петли, направляющие, ручки, подъёмники, опоры.
+
+### calculate_hardware_qty — расчёт количества
+Сколько петель на дверь, направляющих на ящик и т.д.
+
+### get_hardware_details — информация по артикулу
+
+## Алгоритм работы
+
+1. **Клиент дал размеры** → СРАЗУ вызывай `calculate_panels`
+2. **Панели рассчитаны** → вызывай `find_hardware` для фурнитуры
+3. **Фурнитура подобрана** → вызывай `calculate_hardware_qty`
+4. **Всё готово** → выведи сводку и маркеры [COMPLETE]
+
+## Правила
+
+1. **НЕ спрашивай лишнего** — если клиент указал размеры, сразу считай
+2. **Используй дефолты** — полка 1шт, дверь 1шт, если не уточнено
+3. **Один вопрос за раз** — если нужно уточнить, спрашивай ОДНО
+4. **Кнопки ответов** — предлагай варианты: [BUTTONS: "Вариант 1", "Вариант 2"]
+5. **Не показывай JSON** — никаких [TOOL_CALL], function_call и т.д.
+
+## Пример идеального диалога
+
+Клиент: "Напольный шкаф 600×720×560, белый ЛДСП, 2 двери"
+
+Ты:
+1. Вызываешь calculate_panels(cabinet_type="base", width=600, height=720, depth=560, door_count=2)
+2. Вызываешь find_hardware для петель
+3. Вызываешь calculate_hardware_qty(hardware_type="hinge", door_count=2)
+4. Выводишь результат:
+
+"Рассчитал напольный шкаф 600×720×560:
+
+**Панели (5 шт, 1.2 м²):**
+• Боковина левая — 550×720 мм
+• Боковина правая — 550×720 мм
+• Дно — 568×550 мм
+• Царга передняя — 568×100 мм
+• Царга задняя — 568×100 мм
+
+**Фурнитура:**
+• Петля Boyard H404A21 накладная — 4 шт
+• Конфирмат 5×40 — 12 шт
+
+Всё верно? Могу изменить или сгенерировать DXF."
 
 ## Завершение диалога
-Когда все параметры собраны, выведи итоговую сводку и добавь маркеры:
+
+Когда клиент подтвердил:
 
 [COMPLETE]
 
 [SPEC_JSON]
 {
-  "type": "навесной шкаф",
+  "type": "напольная тумба",
   "width": 600,
   "height": 720,
-  "depth": 300,
+  "depth": 560,
   "material": "ЛДСП 16мм",
-  "facade_material": "МДФ 19мм",
-  "doors": 1,
-  "shelves": 2,
-  "hinges": {"sku": "H401C02", "qty": 2},
-  "handles": {"sku": "RK001", "qty": 1}
+  "doors": 2,
+  "shelves": 1,
+  "panels": [...],
+  "hardware": [...]
 }
 [/SPEC_JSON]
 
-## Стиль общения
-- Дружелюбно, но профессионально
+## Стиль
 - Краткие ответы (2-4 предложения)
-- Используй технические термины с пояснениями для новичков
+- Технические термины с пояснениями
+- Дружелюбно, но профессионально
 """
 
 router = APIRouter(prefix="/api/v1")
@@ -461,6 +503,188 @@ async def calculate_panels_endpoint(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============================================================================
+# BOM Generator — генерация полного BOM (панели + фурнитура)
+# ============================================================================
+
+@router.post("/bom/generate", response_model=GenerateBOMResponse)
+async def generate_bom_endpoint(
+    req: GenerateBOMRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> GenerateBOMResponse:
+    """
+    Сгенерировать полный BOM (панели + фурнитура) для изделия.
+
+    Объединяет:
+    1. Расчёт панелей через калькулятор
+    2. Подбор фурнитуры через RAG
+    3. Расчёт количества фурнитуры
+
+    Это endpoint для прямого вызова, без диалога с AI.
+    """
+    from api.panel_calculator import calculate_panels
+    from api.ai_tools import (
+        handle_find_hardware,
+        handle_calculate_hardware_qty,
+    )
+
+    # Получаем настройки фабрики
+    factory_settings = {}
+    if current_user:
+        factory = await db.get(Factory, current_user.factory_id)
+        if factory:
+            factory_settings = factory.settings or {}
+
+    thickness = factory_settings.get("thickness_mm", SETTINGS_DEFAULTS["thickness_mm"])
+
+    # 1. Расчёт панелей
+    try:
+        panel_result = calculate_panels(
+            cabinet_type=req.cabinet_type.value,
+            width_mm=req.width_mm,
+            height_mm=req.height_mm,
+            depth_mm=req.depth_mm,
+            thickness_mm=thickness,
+            shelf_count=req.shelf_count,
+            door_count=req.door_count,
+            drawer_count=req.drawer_count,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # 2. Подбор фурнитуры
+    hardware_list: list[HardwareRecommendation] = []
+
+    # Петли (если есть двери)
+    if req.door_count > 0:
+        hinges = await handle_find_hardware(
+            query="петля накладная с доводчиком",
+            hardware_type="hinge",
+            limit=1,
+        )
+
+        qty_result = await handle_calculate_hardware_qty(
+            hardware_type="hinge",
+            door_count=req.door_count,
+            door_height_mm=float(req.height_mm),
+        )
+
+        if hinges.get("success") and hinges.get("items"):
+            item = hinges["items"][0]
+            hardware_list.append(HardwareRecommendation(
+                type="hinge",
+                sku=item.get("sku"),
+                name=item.get("name", "Петля накладная"),
+                quantity=qty_result.get("quantity", req.door_count * 2),
+                unit="шт",
+                source="rag",
+            ))
+        else:
+            hardware_list.append(HardwareRecommendation(
+                type="hinge",
+                sku=None,
+                name="Петля накладная с доводчиком",
+                quantity=qty_result.get("quantity", req.door_count * 2),
+                unit="шт",
+                source="calculated",
+            ))
+
+    # Направляющие (если есть ящики)
+    if req.drawer_count > 0:
+        slides = await handle_find_hardware(
+            query="направляющие полного выдвижения",
+            hardware_type="slide",
+            limit=1,
+        )
+
+        qty_result = await handle_calculate_hardware_qty(
+            hardware_type="slide",
+            drawer_count=req.drawer_count,
+        )
+
+        if slides.get("success") and slides.get("items"):
+            item = slides["items"][0]
+            hardware_list.append(HardwareRecommendation(
+                type="slide",
+                sku=item.get("sku"),
+                name=item.get("name", "Направляющие"),
+                quantity=qty_result.get("quantity", req.drawer_count),
+                unit="пар",
+                source="rag",
+            ))
+        else:
+            hardware_list.append(HardwareRecommendation(
+                type="slide",
+                sku=None,
+                name="Направляющие полного выдвижения",
+                quantity=req.drawer_count,
+                unit="пар",
+                source="calculated",
+            ))
+
+    # Конфирматы (всегда)
+    fixed_panels = sum(1 for p in panel_result.panels if "полка" not in p.name.lower())
+    confirmat_qty = fixed_panels * 4
+
+    hardware_list.append(HardwareRecommendation(
+        type="connector",
+        sku=None,
+        name="Конфирмат 5×40",
+        quantity=confirmat_qty,
+        unit="шт",
+        source="calculated",
+    ))
+
+    # Полкодержатели (если есть полки)
+    if req.shelf_count > 0:
+        hardware_list.append(HardwareRecommendation(
+            type="other",
+            sku=None,
+            name="Полкодержатель 5мм",
+            quantity=req.shelf_count * 4,
+            unit="шт",
+            source="calculated",
+        ))
+
+    # Формируем ответ
+    panels = [
+        CalculatedPanel(
+            name=p.name,
+            width_mm=p.width_mm,
+            height_mm=p.height_mm,
+            thickness_mm=p.thickness_mm,
+            quantity=p.quantity,
+            edge_front=p.edge_front,
+            edge_back=p.edge_back,
+            edge_top=p.edge_top,
+            edge_bottom=p.edge_bottom,
+            edge_thickness_mm=p.edge_thickness_mm,
+            has_slot_for_back=p.has_slot_for_back,
+            notes=p.notes,
+        )
+        for p in panel_result.panels
+    ]
+
+    return GenerateBOMResponse(
+        success=True,
+        order_id=req.order_id,
+        cabinet_type=panel_result.cabinet_type,
+        dimensions={
+            "width": panel_result.width_mm,
+            "height": panel_result.height_mm,
+            "depth": panel_result.depth_mm,
+        },
+        panels=panels,
+        hardware=hardware_list,
+        total_panels=panel_result.total_panels,
+        total_area_m2=round(panel_result.total_area_m2, 2),
+        edge_length_m=round(panel_result.edge_length_m, 1),
+        total_hardware_items=sum(h.quantity for h in hardware_list),
+        warnings=panel_result.warnings,
+    )
 
 
 # ============================================================================
