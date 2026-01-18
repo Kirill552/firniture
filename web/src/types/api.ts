@@ -715,3 +715,113 @@ export interface ImageExtractResponse {
   /** Количество модулей (если обнаружено несколько) */
   module_count?: number
 }
+
+// ============================================================================
+// BOM (Bill of Materials) — полная спецификация изделия
+// ============================================================================
+
+/** Панель в BOM */
+export interface BOMPanel {
+  id: string
+  name: string
+  width_mm: number
+  height_mm: number
+  thickness_mm: number
+  material: string
+  /** Кромка спереди */
+  edge_front?: boolean
+  /** Кромка сзади */
+  edge_back?: boolean
+}
+
+/** Фурнитура в BOM */
+export interface BOMHardware {
+  id?: string
+  sku: string
+  name: string
+  category?: string
+  quantity: number
+  unit_price?: number
+  qty?: number  // alias for quantity (backend compatibility)
+}
+
+/** Крепёж в BOM */
+export interface BOMFastener {
+  id: string
+  name: string
+  size: string
+  quantity: number
+  purpose: string
+  unit_price?: number
+}
+
+/** Кромка в BOM */
+export interface BOMEdgeBand {
+  id: string
+  type: string
+  color: string
+  length_m: number
+  purpose: string
+  unit_price?: number
+}
+
+/** Габариты изделия */
+export interface BOMDimensions {
+  width_mm: number
+  height_mm: number
+  depth_mm: number
+}
+
+/** Материал корпуса */
+export interface BOMBodyMaterial {
+  type: string
+  thickness_mm: number
+  color: string
+}
+
+/** Сводка BOM */
+export interface BOMSummary {
+  total_area_m2?: number
+  sheet_area_m2?: number
+  utilization_percent?: number
+  panels_count?: number
+  hardware_count?: number
+  total_cost?: number
+}
+
+/** Полная спецификация (BOM) */
+export interface FullBOM {
+  order_id: string
+  product_config_id?: string
+  furniture_type: string
+  dimensions: BOMDimensions
+  body_material: BOMBodyMaterial
+  panels: BOMPanel[]
+  hardware: BOMHardware[]
+  fasteners: BOMFastener[]
+  edge_bands: BOMEdgeBand[]
+  summary: BOMSummary
+  door_count?: number
+  drawer_count?: number
+  shelf_count?: number
+}
+
+/** Запрос на обновление BOM */
+export interface BOMUpdateRequest {
+  dimensions?: Partial<BOMDimensions>
+  furniture_type?: string
+  body_material?: Partial<BOMBodyMaterial>
+  panels?: Partial<BOMPanel>[]
+  hardware?: Partial<BOMHardware>[]
+  fasteners?: Partial<BOMFastener>[]
+  edge_bands?: Partial<BOMEdgeBand>[]
+}
+
+/** Запрос на добавление панели */
+export interface AddPanelRequest {
+  name: string
+  width_mm: number
+  height_mm: number
+  thickness_mm?: number
+  material?: string
+}

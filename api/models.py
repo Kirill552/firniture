@@ -122,6 +122,8 @@ class Panel(Base):
     thickness_mm: Mapped[float] = mapped_column(Float)
     material: Mapped[str | None] = mapped_column(String(80), nullable=True)
     edge_band_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    edge_front: Mapped[bool] = mapped_column(Boolean, default=False)
+    edge_back: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     product: Mapped[ProductConfig] = relationship(back_populates="panels")

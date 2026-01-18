@@ -1,189 +1,17 @@
 "use client"
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useMemo, useEffect } from "react"
-import {
-  useReactTable,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  flexRender,
-  type SortingState,
-  type ColumnFiltersState,
-  type VisibilityState,
-  type ColumnDef,
-} from "@tanstack/react-table"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  ArrowUpDown,
-  Download,
-  Filter,
-  Plus,
-  Search,
-  Settings2,
-  FileText,
-  Package,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Loader2,
-  Check,
-} from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Download, Plus, Package, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getAuthHeader } from "@/lib/auth"
-import { StatCardSkeleton, TableSkeleton } from "@/components/ui/table-skeleton"
-import { SettingsIndicator } from "@/components/settings-indicator"
+import { StatCardSkeleton } from "@/components/ui/table-skeleton"
 import { ProductionStepper } from "@/components/production-stepper"
 import { MachineProfileModal, hasSelectedMachineProfile } from "@/components/machine-profile-modal"
-
-type BOMItem = {
-  id: string
-  sku: string
-  name: string
-  category: string
-  material: string
-  thickness?: number
-  quantity: number
-  unit: string
-  supplier: string
-  cost: number
-  totalCost: number
-  status: 'available' | 'ordered' | 'out_of_stock'
-  version?: string
-  notes?: string
-}
-
-interface ProductConfig {
-  id: string
-  name: string | null
-  width_mm: number
-  height_mm: number
-  depth_mm: number
-  material: string | null
-  thickness_mm: number | null
-  params: {
-    furniture_type?: string
-    body_material?: { type: string; thickness_mm?: number; color?: string }
-    facade_material?: { type: string; thickness_mm?: number; color?: string }
-    hardware?: { type: string; sku?: string; name?: string; qty: number }[]
-    edge_band?: { type: string; thickness_mm?: number }
-    door_count?: number
-    drawer_count?: number
-    shelf_count?: number
-  }
-  notes: string | null
-}
-
-interface OrderWithProducts {
-  id: string
-  customer_ref: string | null
-  notes: string | null
-  created_at: string
-  products: ProductConfig[]
-}
-
-function convertOrderToBOM(order: OrderWithProducts): BOMItem[] {
-  const items: BOMItem[] = []
-  let id = 1
-
-  for (const product of order.products) {
-    const params = product.params
-
-    // Добавляем материал корпуса
-    if (params.body_material) {
-      items.push({
-        id: String(id++),
-        sku: `MAT-${(params.body_material.type || 'UNKNOWN').toUpperCase().replace(/\s+/g, '-')}`,
-        name: `${params.body_material.type || ''} ${params.body_material.color || ''}`.trim() || 'Материал корпуса',
-        category: 'Плитные материалы',
-        material: params.body_material.type || '',
-        thickness: params.body_material.thickness_mm,
-        quantity: 1,
-        unit: 'лист',
-        supplier: '-',
-        cost: 0,
-        totalCost: 0,
-        status: 'available' as const,
-      })
-    }
-
-    // Добавляем материал фасада
-    if (params.facade_material && params.facade_material.type !== params.body_material?.type) {
-      items.push({
-        id: String(id++),
-        sku: `MAT-${(params.facade_material.type || 'UNKNOWN').toUpperCase().replace(/\s+/g, '-')}`,
-        name: `${params.facade_material.type || ''} ${params.facade_material.color || ''}`.trim() || 'Материал фасада',
-        category: 'Плитные материалы',
-        material: params.facade_material.type || '',
-        thickness: params.facade_material.thickness_mm,
-        quantity: 1,
-        unit: 'лист',
-        supplier: '-',
-        cost: 0,
-        totalCost: 0,
-        status: 'available' as const,
-      })
-    }
-
-    // Добавляем фурнитуру
-    for (const hw of params.hardware || []) {
-      items.push({
-        id: String(id++),
-        sku: hw.sku || `HW-${(hw.type || 'UNKNOWN').toUpperCase().replace(/\s+/g, '-')}`,
-        name: hw.name || hw.type || 'Фурнитура',
-        category: 'Фурнитура',
-        material: '-',
-        quantity: hw.qty || 1,
-        unit: 'шт',
-        supplier: '-',
-        cost: 0,
-        totalCost: 0,
-        status: 'available' as const,
-      })
-    }
-
-    // Добавляем кромку
-    if (params.edge_band) {
-      items.push({
-        id: String(id++),
-        sku: `EDGE-${params.edge_band.thickness_mm || 2}`,
-        name: `Кромка ${params.edge_band.type || 'ПВХ'} ${params.edge_band.thickness_mm || 2}мм`,
-        category: 'Кромочные материалы',
-        material: params.edge_band.type || 'ПВХ',
-        thickness: params.edge_band.thickness_mm,
-        quantity: 10,
-        unit: 'п.м',
-        supplier: '-',
-        cost: 0,
-        totalCost: 0,
-        status: 'available' as const,
-      })
-    }
-  }
-
-  return items
-}
+import { BOMHeader, PanelsTable, HardwareTable, EdgeBandTable, SheetLayoutPreview } from "@/components/bom"
+import type { FullBOM, BOMPanel, BOMHardware, BOMFastener, BOMEdgeBand } from "@/types/api"
 
 // Empty state component
 function EmptyBomState() {
@@ -209,13 +37,16 @@ function EmptyBomState() {
 }
 
 export default function BomPage() {
-  const { info } = useToast()
+  const { toast } = useToast()
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')
 
-  const [order, setOrder] = useState<OrderWithProducts | null>(null)
-  const [isLoadingOrder, setIsLoadingOrder] = useState(false)
-  const [orderError, setOrderError] = useState<string | null>(null)
+  // BOM data state
+  const [bom, setBom] = useState<FullBOM | null>(null)
+  const [isLoadingBom, setIsLoadingBom] = useState(false)
+  const [bomError, setBomError] = useState<string | null>(null)
+  const [hasChanges, setHasChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // DXF generation state
   const [isGeneratingDxf, setIsGeneratingDxf] = useState(false)
@@ -234,59 +65,53 @@ export default function BomPage() {
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [isFirstTimeProfile, setIsFirstTimeProfile] = useState(false)
 
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [globalFilter, setGlobalFilter] = useState("")
-  const [isLoading, setIsLoading] = useState(false) // ВРЕМЕННО false для отладки
-
   // Ключ для localStorage
   const LAST_ORDER_KEY = 'lastBomOrderId'
 
-  // Восстановление последнего заказа из localStorage
-  const [restoredFromStorage, setRestoredFromStorage] = useState(false)
+  // Эффективный orderId (из URL или localStorage)
   const [effectiveOrderId, setEffectiveOrderId] = useState<string | null>(orderId)
 
   useEffect(() => {
     if (orderId) {
-      // Если есть orderId в URL — сохраняем в localStorage
       localStorage.setItem(LAST_ORDER_KEY, orderId)
       setEffectiveOrderId(orderId)
     } else {
-      // Если нет orderId — пробуем восстановить из localStorage
       const savedOrderId = localStorage.getItem(LAST_ORDER_KEY)
       if (savedOrderId) {
         setEffectiveOrderId(savedOrderId)
-        setRestoredFromStorage(true)
       }
     }
   }, [orderId])
 
-  // Load order data if orderId is present
+  // Load BOM data
   useEffect(() => {
     if (!effectiveOrderId) return
 
-    const loadOrder = async () => {
-      setIsLoadingOrder(true)
-      setOrderError(null)
+    const loadBom = async () => {
+      setIsLoadingBom(true)
+      setBomError(null)
       try {
-        const response = await fetch(`/api/v1/orders/${effectiveOrderId}`)
+        const response = await fetch(`/api/v1/orders/${effectiveOrderId}/bom`, {
+          headers: getAuthHeader(),
+        })
         if (!response.ok) {
-          // Если заказ не найден — очищаем localStorage
-          localStorage.removeItem(LAST_ORDER_KEY)
-          throw new Error('Заказ не найден')
+          if (response.status === 404) {
+            localStorage.removeItem(LAST_ORDER_KEY)
+            throw new Error('Заказ не найден или спецификация ещё не создана')
+          }
+          throw new Error('Ошибка загрузки спецификации')
         }
-        const data: OrderWithProducts = await response.json()
-        setOrder(data)
+        const data: FullBOM = await response.json()
+        setBom(data)
+        setHasChanges(false)
       } catch (err) {
-        setOrderError(err instanceof Error ? err.message : 'Ошибка загрузки заказа')
-        setRestoredFromStorage(false)
+        setBomError(err instanceof Error ? err.message : 'Ошибка загрузки')
       } finally {
-        setIsLoadingOrder(false)
+        setIsLoadingBom(false)
       }
     }
 
-    loadOrder()
+    loadBom()
   }, [effectiveOrderId])
 
   // Load machine profile from settings
@@ -306,282 +131,199 @@ export default function BomPage() {
         console.error("Failed to load settings:", error)
       }
     }
-
     loadSettings()
   }, [])
 
-  // ВРЕМЕННО ОТКЛЮЧЕНО для отладки блокировки
-  // useEffect(() => {
-  //   if (restoredFromStorage && order) {
-  //     const created = new Date(order.created_at)
-  //     info("Восстановлен черновик", `Заказ от ${created.toLocaleString('ru-RU')}`)
-  //     setRestoredFromStorage(false)
-  //   }
-  // }, [restoredFromStorage, order])
+  // Update BOM data (local state)
+  const handleBomUpdate = useCallback((updates: Partial<FullBOM>) => {
+    if (!bom) return
+    setBom({ ...bom, ...updates })
+    setHasChanges(true)
+  }, [bom])
 
-  // ВРЕМЕННО ОТКЛЮЧЕНО для отладки
-  // useEffect(() => {
-  //   const timer = setTimeout(() => {
-  //     setIsLoading(false)
-  //   }, 1500)
-  //   return () => clearTimeout(timer)
-  // }, [])
+  // Save BOM to server
+  const handleSave = async () => {
+    if (!effectiveOrderId || !bom) return
 
-  const columns: ColumnDef<BOMItem>[] = useMemo(
-    () => [
-      {
-        accessorKey: "sku",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="h-8 px-2"
-            >
-              Артикул
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
+    setIsSaving(true)
+    try {
+      const response = await fetch(`/api/v1/orders/${effectiveOrderId}/bom`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
         },
-        cell: ({ row }) => (
-          <div className="font-medium">{row.getValue("sku")}</div>
-        ),
-      },
-      {
-        accessorKey: "name",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="h-8 px-2"
-            >
-              Наименование
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
-        cell: ({ row }) => {
-          const name = row.getValue("name") as string
-          const notes = row.original.notes
-          return (
-            <div>
-              <div className="font-medium">{name}</div>
-              {notes && <div className="text-sm text-muted-foreground">{notes}</div>}
-            </div>
-          )
-        },
-      },
-      {
-        accessorKey: "category",
-        header: "Категория",
-        cell: ({ row }) => (
-          <Badge variant="secondary" className="text-xs">
-            {row.getValue("category")}
-          </Badge>
-        ),
-      },
-      {
-        accessorKey: "material",
-        header: "Материал",
-        cell: ({ row }) => {
-          const material = row.getValue("material") as string
-          const thickness = row.original.thickness
-          return (
-            <div>
-              <div>{material}</div>
-              {thickness && <div className="text-sm text-muted-foreground">{thickness}мм</div>}
-            </div>
-          )
-        },
-      },
-      {
-        accessorKey: "quantity",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="h-8 px-2"
-            >
-              Количество
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
-        cell: ({ row }) => {
-          const quantity = row.getValue("quantity") as number
-          const unit = row.original.unit
-          return (
-            <div className="text-right font-medium">
-              {quantity} {unit}
-            </div>
-          )
-        },
-      },
-      {
-        accessorKey: "supplier",
-        header: "Поставщик",
-        cell: ({ row }) => (
-          <div className="text-sm">{row.getValue("supplier")}</div>
-        ),
-      },
-      {
-        accessorKey: "cost",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="h-8 px-2"
-            >
-              Цена за ед.
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
-        cell: ({ row }) => {
-          const cost = row.getValue("cost") as number
-          const formatted = new Intl.NumberFormat("ru-RU", {
-            style: "currency",
-            currency: "RUB",
-          }).format(cost)
-          return <div className="text-right font-medium">{formatted}</div>
-        },
-      },
-      {
-        accessorKey: "totalCost",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="h-8 px-2"
-            >
-              Общая стоимость
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
-        cell: ({ row }) => {
-          const totalCost = row.getValue("totalCost") as number
-          const formatted = new Intl.NumberFormat("ru-RU", {
-            style: "currency",
-            currency: "RUB",
-          }).format(totalCost)
-          return <div className="text-right font-semibold">{formatted}</div>
-        },
-      },
-      {
-        accessorKey: "status",
-        header: "Статус",
-        cell: ({ row }) => {
-          const status = row.getValue("status") as string
-          const statusLabels = {
-            available: "В наличии",
-            ordered: "Заказано", 
-            out_of_stock: "Нет в наличии"
-          }
-          const statusColors = {
-            available: "default",
-            ordered: "secondary",
-            out_of_stock: "destructive"
-          } as const
-          
-          return (
-            <Badge variant={statusColors[status as keyof typeof statusColors]}>
-              {statusLabels[status as keyof typeof statusLabels]}
-            </Badge>
-          )
-        },
-      },
-    ],
-    []
-  )
+        body: JSON.stringify({
+          dimensions: bom.dimensions,
+          furniture_type: bom.furniture_type,
+          body_material: bom.body_material,
+          panels: bom.panels,
+          hardware: bom.hardware,
+          fasteners: bom.fasteners,
+          edge_bands: bom.edge_bands,
+        }),
+      })
 
-  // Данные BOM через useState (НЕ в рендере — это блокировало страницу!)
-  const [bomData, setBomData] = useState<BOMItem[]>([])
+      if (!response.ok) {
+        throw new Error('Ошибка сохранения')
+      }
 
-  // Пересчитываем BOM только при изменении order
-  useEffect(() => {
-    if (order) {
-      setBomData(convertOrderToBOM(order))
-    } else {
-      setBomData([])
+      const updatedBom = await response.json()
+      setBom(updatedBom)
+      setHasChanges(false)
+      toast({
+        title: "Сохранено",
+        description: "Спецификация успешно обновлена",
+      })
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось сохранить",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
     }
-  }, [order])
+  }
 
-  // ВАЖНО: Все хуки должны быть ДО любых условных return
-  const table = useReactTable({
-    data: bomData,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: "includesString",
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      globalFilter,
-    },
-  })
+  // Panel handlers
+  const handlePanelUpdate = (panelId: string, updates: Partial<BOMPanel>) => {
+    if (!bom) return
+    const updatedPanels = bom.panels.map(p =>
+      p.id === panelId ? { ...p, ...updates } : p
+    )
+    handleBomUpdate({ panels: updatedPanels })
+  }
 
-  const totalCost = useMemo(() => {
-    return bomData.reduce((sum, item) => sum + item.totalCost, 0)
-  }, [bomData])
+  const handlePanelDelete = async (panelId: string) => {
+    if (!effectiveOrderId || !bom) return
 
+    try {
+      const response = await fetch(
+        `/api/v1/orders/${effectiveOrderId}/bom/panel/${panelId}`,
+        {
+          method: 'DELETE',
+          headers: getAuthHeader(),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Ошибка удаления панели')
+      }
+
+      const updatedPanels = bom.panels.filter(p => p.id !== panelId)
+      handleBomUpdate({ panels: updatedPanels })
+      toast({
+        title: "Удалено",
+        description: "Панель удалена из спецификации",
+      })
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось удалить",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handlePanelAdd = async (panel: Omit<BOMPanel, "id">) => {
+    if (!effectiveOrderId || !bom) return
+
+    try {
+      const response = await fetch(
+        `/api/v1/orders/${effectiveOrderId}/bom/add-panel`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify(panel),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Ошибка добавления панели')
+      }
+
+      const result = await response.json()
+      if (result.panel) {
+        handleBomUpdate({ panels: [...bom.panels, result.panel] })
+        toast({
+          title: "Добавлено",
+          description: "Панель добавлена в спецификацию",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось добавить",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Hardware/Fastener handlers
+  const handleHardwareUpdate = (sku: string, updates: Partial<BOMHardware>) => {
+    if (!bom) return
+    const updatedHardware = bom.hardware.map(h =>
+      h.sku === sku ? { ...h, ...updates } : h
+    )
+    handleBomUpdate({ hardware: updatedHardware })
+  }
+
+  const handleFastenerUpdate = (id: string, updates: Partial<BOMFastener>) => {
+    if (!bom) return
+    const updatedFasteners = bom.fasteners.map(f =>
+      f.id === id ? { ...f, ...updates } : f
+    )
+    handleBomUpdate({ fasteners: updatedFasteners })
+  }
+
+  const handleEdgeBandUpdate = (id: string, updates: Partial<BOMEdgeBand>) => {
+    if (!bom) return
+    const updatedEdgeBands = bom.edge_bands.map(eb =>
+      eb.id === id ? { ...eb, ...updates } : eb
+    )
+    handleBomUpdate({ edge_bands: updatedEdgeBands })
+  }
+
+  // DXF generation
   const handleGenerateDxf = async () => {
-    if (!order || !order.products[0]) return
+    if (!bom || !effectiveOrderId) return
 
     setIsGeneratingDxf(true)
     setDxfError(null)
 
     try {
-      const product = order.products[0]
-      const thickness = product.thickness_mm || 16
-
-      // Формируем панели из параметров изделия
-      const panels = [
+      const panels = bom.panels.length > 0 ? bom.panels : [
         {
           name: 'Боковина левая',
-          width_mm: product.depth_mm - thickness,
-          height_mm: product.height_mm,
-          thickness_mm: thickness,
-          material: product.material || 'ЛДСП',
+          width_mm: bom.dimensions.depth_mm - bom.body_material.thickness_mm,
+          height_mm: bom.dimensions.height_mm,
+          thickness_mm: bom.body_material.thickness_mm,
+          material: bom.body_material.type,
         },
         {
           name: 'Боковина правая',
-          width_mm: product.depth_mm - thickness,
-          height_mm: product.height_mm,
-          thickness_mm: thickness,
-          material: product.material || 'ЛДСП',
+          width_mm: bom.dimensions.depth_mm - bom.body_material.thickness_mm,
+          height_mm: bom.dimensions.height_mm,
+          thickness_mm: bom.body_material.thickness_mm,
+          material: bom.body_material.type,
         },
         {
           name: 'Верх',
-          width_mm: product.width_mm - thickness * 2,
-          height_mm: product.depth_mm - thickness,
-          thickness_mm: thickness,
-          material: product.material || 'ЛДСП',
+          width_mm: bom.dimensions.width_mm - bom.body_material.thickness_mm * 2,
+          height_mm: bom.dimensions.depth_mm - bom.body_material.thickness_mm,
+          thickness_mm: bom.body_material.thickness_mm,
+          material: bom.body_material.type,
         },
         {
           name: 'Низ',
-          width_mm: product.width_mm - thickness * 2,
-          height_mm: product.depth_mm - thickness,
-          thickness_mm: thickness,
-          material: product.material || 'ЛДСП',
-        },
-        {
-          name: 'Задняя стенка',
-          width_mm: product.width_mm - 4,
-          height_mm: product.height_mm - 4,
-          thickness_mm: 4,
-          material: 'ДВП',
+          width_mm: bom.dimensions.width_mm - bom.body_material.thickness_mm * 2,
+          height_mm: bom.dimensions.depth_mm - bom.body_material.thickness_mm,
+          thickness_mm: bom.body_material.thickness_mm,
+          material: bom.body_material.type,
         },
       ]
 
@@ -603,7 +345,6 @@ export default function BomPage() {
 
       if (data.job_id) {
         setDxfJobId(data.job_id)
-        // Опрашиваем статус
         pollJobStatus(data.job_id)
       } else {
         setDxfError(data.detail || 'Ошибка создания задачи')
@@ -627,7 +368,6 @@ export default function BomPage() {
         const data = await response.json()
 
         if (data.status === 'Completed' && data.artifact_id) {
-          // Получаем URL для скачивания
           const downloadResponse = await fetch(`/api/v1/cam/jobs/${jobId}/download`, {
             headers: getAuthHeader()
           })
@@ -653,19 +393,16 @@ export default function BomPage() {
   }
 
   const handleGenerateGcode = async () => {
-    // Проверяем, выбран ли профиль станка
     if (!hasSelectedMachineProfile() || !machineProfile) {
       setIsFirstTimeProfile(true)
       setShowProfileModal(true)
       return
     }
 
-    // Если DXF ещё не сгенерирован — генерируем сначала DXF
     if (!dxfDownloadUrl && !isGeneratingDxf) {
       await handleGenerateDxf()
     }
 
-    // Ждём пока DXF будет готов (если генерируется)
     if (isGeneratingDxf) {
       setTimeout(() => handleGenerateGcode(), 2000)
       return
@@ -680,7 +417,6 @@ export default function BomPage() {
     setGcodeError(null)
 
     try {
-      // Получаем artifact_id из DXF job
       const jobResponse = await fetch(`/api/v1/cam/jobs/${dxfJobId}`, {
         headers: getAuthHeader(),
       })
@@ -699,7 +435,7 @@ export default function BomPage() {
         body: JSON.stringify({
           dxf_artifact_id: jobData.artifact_id,
           machine_profile: machineProfile,
-          cut_depth: 18.0,
+          cut_depth: bom?.body_material.thickness_mm || 18.0,
         }),
       })
 
@@ -756,22 +492,20 @@ export default function BomPage() {
 
   const handleProfileSelected = (profileId: string) => {
     setMachineProfile(profileId)
-    // После выбора профиля — запускаем генерацию G-code
     setTimeout(() => {
       handleGenerateGcode()
     }, 100)
   }
 
-  const handleCreateBom = () => {
-    info("Создание BOM", "Функционал создания спецификации будет доступен в ближайшем обновлении")
-  }
-
   const handleExport = () => {
-    info("Экспорт BOM", "Функционал экспорта будет доступен в ближайшем обновлении")
+    toast({
+      title: "Экспорт BOM",
+      description: "Функционал экспорта будет доступен в ближайшем обновлении",
+    })
   }
 
-  // Показываем empty state если нет orderId и нет сохранённого (после всех хуков!)
-  if (!isLoading && !effectiveOrderId) {
+  // Empty state
+  if (!effectiveOrderId) {
     return (
       <div className="p-6 w-full space-y-6">
         <div className="flex items-center justify-between">
@@ -789,37 +523,49 @@ export default function BomPage() {
     )
   }
 
-  if (isLoading) {
+  // Loading state
+  if (isLoadingBom) {
     return (
       <div className="p-6 w-full space-y-6">
-        {/* Заголовок и действия */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Спецификация (BOM)</h1>
-            <p className="text-muted-foreground">
-              Детальная спецификация материалов и компонентов для производства
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button disabled variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Экспорт
-            </Button>
-            <Button disabled>
-              <Plus className="h-4 w-4 mr-2" />
-              Создать BOM
-            </Button>
+            <p className="text-muted-foreground">Загрузка...</p>
           </div>
         </div>
-
-        {/* Статистика (скелетон) */}
         <StatCardSkeleton count={4} />
+      </div>
+    )
+  }
 
-        {/* Таблица (скелетон) */}
-        <Card>
-          <div className="p-4">
-            <TableSkeleton rows={8} columns={8} />
+  // Error state
+  if (bomError) {
+    return (
+      <div className="p-6 w-full space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Спецификация (BOM)</h1>
+            <p className="text-muted-foreground">Ошибка загрузки</p>
           </div>
+        </div>
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-destructive mb-4">{bomError}</p>
+            <Button variant="outline" asChild>
+              <a href="/orders">К списку заказов</a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // No BOM data
+  if (!bom) {
+    return (
+      <div className="p-6 w-full space-y-6">
+        <Card>
+          <EmptyBomState />
         </Card>
       </div>
     )
@@ -827,7 +573,7 @@ export default function BomPage() {
 
   return (
     <div className="p-6 w-full space-y-6">
-      {/* Заголовок и действия */}
+      {/* Заголовок */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Спецификация (BOM)</h1>
@@ -840,133 +586,64 @@ export default function BomPage() {
             <Download className="h-4 w-4 mr-2" />
             Экспорт
           </Button>
-          <Button onClick={handleCreateBom}>
-            <Plus className="h-4 w-4 mr-2" />
-            Создать BOM
-          </Button>
         </div>
       </div>
 
-      {/* Индикатор настроек - временно отключен для отладки */}
-      {/* <SettingsIndicator
-        fields={['thickness_mm', 'edge_thickness_mm', 'sheet_width_mm', 'sheet_height_mm']}
-        targetTab="materials"
-      /> */}
-
-      {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center space-x-2">
-            <Package className="h-4 w-4 text-muted-foreground" />
-            <div className="text-sm font-medium">Всего позиций</div>
-          </div>
-          <div className="text-2xl font-bold">{bomData.length}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center space-x-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            <div className="text-sm font-medium">В наличии</div>
-          </div>
-          <div className="text-2xl font-bold text-green-600">
-            {bomData.filter(item => item.status === 'available').length}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center space-x-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            <div className="text-sm font-medium">Заказано</div>
-          </div>
-          <div className="text-2xl font-bold text-blue-600">
-            {bomData.filter(item => item.status === 'ordered').length}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center space-x-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            <div className="text-sm font-medium">Общая стоимость</div>
-          </div>
-          <div className="text-2xl font-bold">
-            {new Intl.NumberFormat("ru-RU", {
-              style: "currency",
-              currency: "RUB",
-            }).format(totalCost)}
-          </div>
-        </Card>
-      </div>
-
-      {/* Order info card */}
-      {order && order.products[0] && (
-        <Card className="mb-6">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">
-              Заказ: {order.products[0].name || 'Новое изделие'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-              <div>
-                <span className="text-muted-foreground">Габариты:</span>
-                <p className="font-medium">
-                  {order.products[0].width_mm} × {order.products[0].height_mm} × {order.products[0].depth_mm} мм
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Материал:</span>
-                <p className="font-medium">{order.products[0].material || 'Не указан'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Толщина:</span>
-                <p className="font-medium">
-                  {order.products[0].thickness_mm
-                    ? `${order.products[0].thickness_mm} мм`
-                    : 'Не указана'}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">ID:</span>
-                <p className="font-medium font-mono text-xs">{order.id.slice(0, 8)}...</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Шапка заказа (редактируемая) */}
+      <BOMHeader
+        furnitureType={bom.furniture_type}
+        dimensions={bom.dimensions}
+        bodyMaterial={bom.body_material}
+        onUpdate={(updates) => {
+          if (updates.dimensions) {
+            handleBomUpdate({ dimensions: { ...bom.dimensions, ...updates.dimensions } })
+          }
+          if (updates.body_material) {
+            handleBomUpdate({ body_material: { ...bom.body_material, ...updates.body_material } })
+          }
+          if (updates.furniture_type) {
+            handleBomUpdate({ furniture_type: updates.furniture_type })
+          }
+        }}
+        onSave={handleSave}
+        hasChanges={hasChanges}
+        isLoading={isSaving}
+      />
 
       {/* Production Stepper */}
-      {order && (
-        <ProductionStepper
-          orderId={effectiveOrderId || ""}
-          hasOrder={!!order}
-          dxfStatus={
-            isGeneratingDxf
-              ? "loading"
-              : dxfError
-                ? "error"
-                : dxfDownloadUrl
-                  ? "completed"
-                  : "pending"
-          }
-          dxfDownloadUrl={dxfDownloadUrl}
-          dxfError={dxfError}
-          onGenerateDxf={handleGenerateDxf}
-          gcodeStatus={
-            isGeneratingGcode
-              ? "loading"
-              : gcodeError
-                ? "error"
-                : gcodeDownloadUrl
-                  ? "completed"
-                  : "pending"
-          }
-          gcodeDownloadUrl={gcodeDownloadUrl}
-          gcodeError={gcodeError}
-          onGenerateGcode={handleGenerateGcode}
-          machineProfile={machineProfile}
-          onOpenProfileModal={() => {
-            setIsFirstTimeProfile(false)
-            setShowProfileModal(true)
-          }}
-        />
-      )}
+      <ProductionStepper
+        orderId={effectiveOrderId}
+        hasOrder={true}
+        dxfStatus={
+          isGeneratingDxf
+            ? "loading"
+            : dxfError
+              ? "error"
+              : dxfDownloadUrl
+                ? "completed"
+                : "pending"
+        }
+        dxfDownloadUrl={dxfDownloadUrl}
+        dxfError={dxfError}
+        onGenerateDxf={handleGenerateDxf}
+        gcodeStatus={
+          isGeneratingGcode
+            ? "loading"
+            : gcodeError
+              ? "error"
+              : gcodeDownloadUrl
+                ? "completed"
+                : "pending"
+        }
+        gcodeDownloadUrl={gcodeDownloadUrl}
+        gcodeError={gcodeError}
+        onGenerateGcode={handleGenerateGcode}
+        machineProfile={machineProfile}
+        onOpenProfileModal={() => {
+          setIsFirstTimeProfile(false)
+          setShowProfileModal(true)
+        }}
+      />
 
       {/* Machine Profile Modal */}
       <MachineProfileModal
@@ -977,190 +654,51 @@ export default function BomPage() {
         isFirstTime={isFirstTimeProfile}
       />
 
-      {/* Loading/error states */}
-      {isLoadingOrder && (
-        <Card className="mb-6">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Загрузка заказа...
-          </CardContent>
-        </Card>
+      {/* Визуализация раскладки на листе */}
+      <SheetLayoutPreview
+        panels={bom.panels}
+        sheetWidth={2800}
+        sheetHeight={2070}
+        showCombineSuggestion={true}
+      />
+
+      {/* Таблица панелей */}
+      <PanelsTable
+        panels={bom.panels}
+        onPanelUpdate={handlePanelUpdate}
+        onPanelDelete={handlePanelDelete}
+        onPanelAdd={handlePanelAdd}
+        sheetArea={5.8}
+      />
+
+      {/* Таблица фурнитуры и крепежа */}
+      <HardwareTable
+        hardware={bom.hardware}
+        fasteners={bom.fasteners}
+        onHardwareUpdate={handleHardwareUpdate}
+        onFastenerUpdate={handleFastenerUpdate}
+      />
+
+      {/* Таблица кромки */}
+      <EdgeBandTable
+        edgeBands={bom.edge_bands}
+        onEdgeBandUpdate={handleEdgeBandUpdate}
+      />
+
+      {/* Индикатор несохранённых изменений */}
+      {hasChanges && (
+        <div className="fixed bottom-6 right-6 bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3">
+          <span className="text-amber-800 dark:text-amber-200 text-sm">
+            Есть несохранённые изменения
+          </span>
+          <Button size="sm" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+            ) : null}
+            Сохранить
+          </Button>
+        </div>
       )}
-
-      {orderError && (
-        <Card className="mb-6 border-destructive">
-          <CardContent className="py-4 text-center text-destructive">
-            {orderError}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Фильтры и поиск */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Поиск по всем полям..."
-              value={globalFilter ?? ""}
-              onChange={(event) => setGlobalFilter(String(event.target.value))}
-              className="pl-8 w-[300px]"
-            />
-          </div>
-{/* ВРЕМЕННО ОТКЛЮЧЕНО для отладки блокировки */}
-          {/* <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Settings2 className="h-4 w-4 mr-2" />
-                Колонки
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Видимость колонок</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => {
-                  const labels: Record<string, string> = {
-                    sku: 'Артикул',
-                    name: 'Название',
-                    category: 'Категория',
-                    material: 'Материал',
-                    thickness: 'Толщина',
-                    quantity: 'Кол-во',
-                    unit: 'Ед.изм.',
-                    supplier: 'Поставщик',
-                    cost: 'Цена',
-                    totalCost: 'Сумма',
-                    status: 'Статус',
-                  }
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                    >
-                      {labels[column.id] || column.id}
-                    </DropdownMenuCheckboxItem>
-                  )
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu> */}
-        </div>
-      </div>
-
-      {/* Таблица */}
-      <Card>
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  Нет результатов
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Пагинация */}
-      <div className="flex items-center justify-between space-x-2 py-4">
-        <div className="text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} из{" "}
-          {table.getFilteredRowModel().rows.length} строк выбрано
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-2">
-            <p className="text-sm font-medium">Строк на странице</p>
-            <select
-              value={table.getState().pagination.pageSize}
-              onChange={(e) => {
-                table.setPageSize(Number(e.target.value))
-              }}
-              className="h-8 w-[70px] rounded border border-input bg-background px-2 text-sm"
-            >
-              {[10, 20, 30, 40, 50].map((pageSize) => (
-                <option key={pageSize} value={pageSize}>
-                  {pageSize}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-            Страница {table.getState().pagination.pageIndex + 1} из{" "}
-            {table.getPageCount()}
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-            >
-              <ChevronsRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

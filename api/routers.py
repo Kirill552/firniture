@@ -5,7 +5,7 @@ import os
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,8 @@ from .models import (
     CAMJob,
     Factory,
     JobStatusEnum,
+    Panel,
+    ProductConfig,
     User,
 )
 from .queues import DXF_QUEUE, GCODE_QUEUE, enqueue
@@ -133,21 +135,42 @@ TECHNOLOGIST_SYSTEM_PROMPT = """Ты — «Технолог-GPT», опытны�
 
 ## Завершение диалога
 
-Когда клиент подтвердил:
+ВАЖНО: Когда клиент говорит "да", "верно", "генерируй", "генерируй DXF", "всё ок", "подтверждаю" — это ПОДТВЕРЖДЕНИЕ.
+Ты НЕ генерируешь DXF сам — ты выдаёшь маркеры завершения, и система сама направит пользователя к генерации.
+
+При подтверждении ОБЯЗАТЕЛЬНО включи в SPEC_JSON:
+- `panels` — массив всех панелей из calculate_panels (name, width_mm, height_mm)
+- `hardware` — массив фурнитуры (sku, name, qty)
+
+При подтверждении выводи:
 
 [COMPLETE]
 
 [SPEC_JSON]
 {
-  "type": "напольная тумба",
-  "width": 600,
-  "height": 720,
-  "depth": 560,
-  "material": "ЛДСП 16мм",
-  "doors": 2,
-  "shelves": 1,
-  "panels": [...],
-  "hardware": [...]
+  "furniture_type": "напольная тумба",
+  "dimensions": {
+    "width_mm": 600,
+    "height_mm": 720,
+    "depth_mm": 560
+  },
+  "body_material": {
+    "type": "ЛДСП",
+    "thickness_mm": 16,
+    "color": "белый"
+  },
+  "door_count": 2,
+  "shelf_count": 1,
+  "panels": [
+    {"name": "Боковина левая", "width_mm": 550, "height_mm": 720},
+    {"name": "Боковина правая", "width_mm": 550, "height_mm": 720},
+    {"name": "Дно", "width_mm": 568, "height_mm": 550},
+    {"name": "Царга передняя", "width_mm": 568, "height_mm": 100},
+    {"name": "Царга задняя", "width_mm": 568, "height_mm": 100}
+  ],
+  "hardware": [
+    {"sku": "H404A21", "name": "Петля накладная", "qty": 4}
+  ]
 }
 [/SPEC_JSON]
 
@@ -239,35 +262,540 @@ async def get_order_with_products_endpoint(
     )
 
 
+def _calculate_fasteners(panels_count: int, door_count: int, drawer_count: int, shelf_count: int) -> list[dict]:
+    """Расчёт крепежа на основе количества панелей и элементов."""
+    fasteners = []
+
+    # Конфирматы для сборки корпуса (2 на соединение, ~4 соединения на панель)
+    confirmats_count = panels_count * 4
+    if confirmats_count > 0:
+        fasteners.append({
+            "id": str(uuid.uuid4()),
+            "name": "Конфирмат",
+            "size": "7×50",
+            "quantity": confirmats_count,
+            "purpose": "сборка корпуса",
+            "unit_price": 2.0,
+        })
+        # Заглушки под конфирматы
+        fasteners.append({
+            "id": str(uuid.uuid4()),
+            "name": "Заглушка",
+            "size": "15мм",
+            "quantity": confirmats_count,
+            "purpose": "закрытие конфирматов",
+            "unit_price": 1.0,
+        })
+
+    # Полкодержатели (4 на полку)
+    if shelf_count > 0:
+        fasteners.append({
+            "id": str(uuid.uuid4()),
+            "name": "Полкодержатель",
+            "size": "5мм",
+            "quantity": shelf_count * 4,
+            "purpose": "крепление полок",
+            "unit_price": 3.0,
+        })
+
+    return fasteners
+
+
+def _calculate_edge_bands(panels: list, material_color: str = "белый") -> list[dict]:
+    """Расчёт кромки на основе панелей."""
+    # Считаем периметр всех панелей
+    total_visible_edges_mm = 0  # Видимые торцы (ПВХ 2мм)
+    total_hidden_edges_mm = 0   # Скрытые торцы (меламин 0.4мм)
+
+    for panel in panels:
+        width = panel.get("width_mm", 0) or 0
+        height = panel.get("height_mm", 0) or 0
+        name_lower = panel.get("name", "").lower()
+
+        # Видимые торцы — передние кромки боковин и фасадов
+        if "боковина" in name_lower or "фасад" in name_lower:
+            total_visible_edges_mm += height  # Передняя кромка
+            total_hidden_edges_mm += height + width * 2  # Остальные
+        else:
+            # Для остальных панелей — все скрытые
+            total_hidden_edges_mm += (width + height) * 2
+
+    edge_bands = []
+
+    if total_visible_edges_mm > 0:
+        edge_bands.append({
+            "id": str(uuid.uuid4()),
+            "type": "ПВХ 2мм",
+            "color": material_color,
+            "length_m": round(total_visible_edges_mm / 1000, 2),
+            "purpose": "видимые торцы",
+            "unit_price": 25.0,  # за погонный метр
+        })
+
+    if total_hidden_edges_mm > 0:
+        edge_bands.append({
+            "id": str(uuid.uuid4()),
+            "type": "Меламин 0.4мм",
+            "color": material_color,
+            "length_m": round(total_hidden_edges_mm / 1000, 2),
+            "purpose": "скрытые торцы",
+            "unit_price": 8.0,
+        })
+
+    return edge_bands
+
+
 @router.post("/orders/{order_id}/finalize", response_model=FinalizeOrderResponse)
 async def finalize_order_endpoint(
     order_id: UUID,
-    spec: FinalizeOrderRequest,
+    spec: dict = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Финализация заказа после диалога с ИИ-технологом.
 
-    Сохраняет собранные параметры в ProductConfig.
-    После этого можно переходить к генерации DXF/G-code.
+    Принимает JSON спецификацию от AI в гибком формате и сохраняет в ProductConfig.
+    Автоматически рассчитывает крепёж и кромку.
     """
-    # Проверяем что заказ существует
+    import re
+
+    # DEBUG: логируем что пришло в файл
+    with open("C:/Users/whirp/Desktop/bots/мебель ИИ/debug_finalize.log", "a", encoding="utf-8") as f:
+        f.write(f"\n=== FINALIZE SPEC RECEIVED ===\n")
+        f.write(f"spec keys: {spec.keys()}\n")
+        f.write(f"panels in spec: {spec.get('panels', 'NOT FOUND')}\n")
+
+    # Проверяем существование заказа
     order = await crud.get_order_with_history(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Создаём ProductConfig
-    product = await crud.finalize_order(db, order_id, spec)
-    await db.commit()
+    # Извлекаем размеры из разных форматов
+    if "dimensions" in spec:
+        dims = spec["dimensions"]
+        width_mm = dims.get("width_mm") or dims.get("width", 0)
+        height_mm = dims.get("height_mm") or dims.get("height", 0)
+        depth_mm = dims.get("depth_mm") or dims.get("depth", 0)
+    else:
+        width_mm = spec.get("width_mm") or spec.get("width", 0)
+        height_mm = spec.get("height_mm") or spec.get("height", 0)
+        depth_mm = spec.get("depth_mm") or spec.get("depth", 0)
 
-    log.info(f"[Finalize] Order {order_id} finalized with ProductConfig {product.id}")
+    # Извлекаем материал
+    material = None
+    thickness_mm = None
+    material_color = "белый"
+    if "body_material" in spec:
+        mat = spec["body_material"]
+        material = mat.get("type")
+        thickness_mm = mat.get("thickness_mm")
+        material_color = mat.get("color", "белый")
+    else:
+        material = spec.get("material")
+        thickness_mm = spec.get("thickness_mm") or spec.get("thickness")
+
+    # Название изделия
+    name = spec.get("furniture_type") or spec.get("type") or spec.get("name") or "Изделие"
+
+    # Извлекаем количества
+    door_count = spec.get("door_count") or spec.get("doors", 0)
+    drawer_count = spec.get("drawer_count") or spec.get("drawers", 0)
+    shelf_count = spec.get("shelf_count") or spec.get("shelves", 0)
+
+    # Парсим панели из spec или рассчитываем автоматически
+    panels_data = spec.get("panels", [])
+    parsed_panels = []
+
+    if panels_data:
+        # Панели пришли от AI — добавляем кромку по названию
+        for panel_data in panels_data:
+            panel_name = panel_data.get("name", "Панель")
+            size_str = panel_data.get("size", "")
+
+            panel_width = panel_data.get("width_mm", 0)
+            panel_height = panel_data.get("height_mm", 0)
+            if size_str and not (panel_width and panel_height):
+                match = re.search(r"(\d+)[×x](\d+)", size_str)
+                if match:
+                    panel_width = float(match.group(1))
+                    panel_height = float(match.group(2))
+
+            # Определяем кромку по названию панели
+            name_lower = panel_name.lower()
+            edge_front = False
+            edge_back = False
+
+            if "бокови" in name_lower:  # Боковина левая/правая
+                edge_front = True
+            elif "верх" in name_lower or "низ" in name_lower or "дно" in name_lower:
+                edge_front = True
+            elif "фасад" in name_lower or "дверь" in name_lower or "дверц" in name_lower:
+                edge_front = True
+                edge_back = True  # Фасады кромятся с двух сторон
+            elif "полк" in name_lower:
+                edge_front = True
+            # Задняя панель — без кромки (остаётся False/False)
+
+            parsed_panels.append({
+                "name": panel_name,
+                "width_mm": panel_width,
+                "height_mm": panel_height,
+                "edge_front": panel_data.get("edge_front", edge_front),
+                "edge_back": panel_data.get("edge_back", edge_back),
+            })
+    else:
+        # Панели НЕ пришли — рассчитываем сами по габаритам
+        from api.panel_calculator import calculate_panels
+
+        # Определяем тип корпуса по названию
+        furniture_lower = name.lower()
+        if "навесн" in furniture_lower or "настенн" in furniture_lower:
+            cabinet_type = "wall"
+        elif "мойк" in furniture_lower:
+            cabinet_type = "base_sink"
+        elif "ящик" in furniture_lower:
+            cabinet_type = "drawer"
+        elif "пенал" in furniture_lower or "колонн" in furniture_lower:
+            cabinet_type = "tall"
+        else:
+            cabinet_type = "base"  # По умолчанию напольная тумба
+
+        try:
+            calc_result = calculate_panels(
+                cabinet_type=cabinet_type,
+                width_mm=int(width_mm) if width_mm else 600,
+                height_mm=int(height_mm) if height_mm else 720,
+                depth_mm=int(depth_mm) if depth_mm else 560,
+                thickness_mm=int(thickness_mm) if thickness_mm else 16,
+                door_count=door_count,
+                shelf_count=shelf_count,
+                drawer_count=drawer_count,
+            )
+
+            for p in calc_result.panels:
+                parsed_panels.append({
+                    "name": p.name,
+                    "width_mm": p.width_mm,
+                    "height_mm": p.height_mm,
+                    "edge_front": p.edge_front,
+                    "edge_back": p.edge_back,
+                })
+        except Exception as e:
+            log.warning(f"Failed to calculate panels: {e}")
+            # Логируем ошибку в файл тоже
+            with open("C:/Users/whirp/Desktop/bots/мебель ИИ/debug_finalize.log", "a", encoding="utf-8") as f:
+                f.write(f"=== CALCULATE PANELS ERROR ===\n")
+                f.write(f"Error: {e}\n")
+                f.write(f"cabinet_type={cabinet_type}, w={width_mm}, h={height_mm}, d={depth_mm}\n")
+
+    # DEBUG: логируем распарсенные панели
+    with open("C:/Users/whirp/Desktop/bots/мебель ИИ/debug_finalize.log", "a", encoding="utf-8") as f:
+        f.write(f"=== DIMENSIONS ===\n")
+        f.write(f"width_mm={width_mm}, height_mm={height_mm}, depth_mm={depth_mm}\n")
+        f.write(f"name={name}, cabinet_type will be detected from name\n")
+        f.write(f"=== PARSED PANELS ({len(parsed_panels)}) ===\n")
+        f.write(f"parsed_panels: {parsed_panels}\n")
+
+    # Рассчитываем крепёж
+    fasteners = _calculate_fasteners(
+        panels_count=len(parsed_panels),
+        door_count=door_count,
+        drawer_count=drawer_count,
+        shelf_count=shelf_count,
+    )
+
+    # Рассчитываем кромку
+    edge_bands = _calculate_edge_bands(parsed_panels, material_color)
+
+    # Рассчитываем площадь панелей
+    total_area_m2 = sum(
+        (p["width_mm"] * p["height_mm"]) / 1_000_000
+        for p in parsed_panels
+    )
+    sheet_area_m2 = 5.796  # Стандартный лист 2800×2070
+
+    # Собираем полные params
+    full_params = {
+        **spec,
+        "fasteners": fasteners,
+        "edge_bands": edge_bands,
+        "summary": {
+            "total_area_m2": round(total_area_m2, 3),
+            "sheet_area_m2": sheet_area_m2,
+            "utilization_percent": round((total_area_m2 / sheet_area_m2) * 100, 1) if total_area_m2 > 0 else 0,
+            "panels_count": len(parsed_panels),
+            "hardware_count": len(spec.get("hardware", [])),
+            "fasteners_count": sum(f["quantity"] for f in fasteners),
+        },
+    }
+
+    # Создаём ProductConfig
+    product_config = ProductConfig(
+        order_id=order_id,
+        name=name,
+        width_mm=float(width_mm) if width_mm else 0,
+        height_mm=float(height_mm) if height_mm else 0,
+        depth_mm=float(depth_mm) if depth_mm else 0,
+        material=material,
+        thickness_mm=float(thickness_mm) if thickness_mm else None,
+        params=full_params,
+    )
+    db.add(product_config)
+    await db.flush()  # Получаем сгенерированный product_config.id
+
+    # Сохраняем панели в таблицу
+    for panel_data in parsed_panels:
+        panel = Panel(
+            product_id=product_config.id,
+            name=panel_data["name"],
+            width_mm=panel_data["width_mm"],
+            height_mm=panel_data["height_mm"],
+            thickness_mm=thickness_mm or 16.0,
+            material=material,
+            edge_front=panel_data.get("edge_front", False),
+            edge_back=panel_data.get("edge_back", False),
+        )
+        db.add(panel)
+
+    # Обновляем статус заказа
+    order.status = "ready"
+    await db.commit()
 
     return FinalizeOrderResponse(
         success=True,
         order_id=str(order_id),
-        product_config_id=str(product.id),
+        product_config_id=str(product_config.id),
         message="Заказ финализирован. Можно переходить к генерации DXF/G-code.",
     )
+
+
+# ============================================================================
+# BOM — полная спецификация заказа
+# ============================================================================
+
+
+@router.get("/orders/{order_id}/bom")
+async def get_order_bom(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Получить полную спецификацию (BOM) заказа.
+
+    Включает:
+    - Основные параметры (габариты, материал)
+    - Панели с размерами
+    - Фурнитуру
+    - Крепёж (конфирматы, заглушки)
+    - Кромку
+    - Сводку (площадь, % использования листа)
+    """
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not order.products:
+        raise HTTPException(status_code=404, detail="No product config found for this order")
+
+    # Берём первый ProductConfig (обычно один на заказ)
+    product = order.products[0]
+
+    # Получаем панели из БД
+    from sqlalchemy import select
+    panels_result = await db.execute(
+        select(Panel).where(Panel.product_id == product.id)
+    )
+    panels = panels_result.scalars().all()
+
+    # Формируем ответ
+    params = product.params or {}
+
+    return {
+        "order_id": str(order_id),
+        "product_config_id": str(product.id),
+        "furniture_type": product.name,
+        "dimensions": {
+            "width_mm": product.width_mm,
+            "height_mm": product.height_mm,
+            "depth_mm": product.depth_mm,
+        },
+        "body_material": {
+            "type": product.material,
+            "thickness_mm": product.thickness_mm,
+            "color": params.get("body_material", {}).get("color", "белый") if isinstance(params.get("body_material"), dict) else "белый",
+        },
+        "panels": [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "width_mm": p.width_mm,
+                "height_mm": p.height_mm,
+                "thickness_mm": p.thickness_mm,
+                "material": p.material,
+                "edge_front": p.edge_front,
+                "edge_back": p.edge_back,
+            }
+            for p in panels
+        ],
+        "hardware": params.get("hardware", []),
+        "fasteners": params.get("fasteners", []),
+        "edge_bands": params.get("edge_bands", []),
+        "summary": params.get("summary", {}),
+        "door_count": params.get("door_count") or params.get("doors", 0),
+        "drawer_count": params.get("drawer_count") or params.get("drawers", 0),
+        "shelf_count": params.get("shelf_count") or params.get("shelves", 0),
+    }
+
+
+@router.patch("/orders/{order_id}/bom")
+async def update_order_bom(
+    order_id: UUID,
+    updates: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Обновить спецификацию (BOM) заказа.
+
+    Позволяет редактировать:
+    - dimensions: габариты изделия
+    - panels: массив панелей (id + обновления)
+    - hardware: массив фурнитуры
+    - fasteners: массив крепежа
+    - edge_bands: массив кромки
+    """
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not order.products:
+        raise HTTPException(status_code=404, detail="No product config found")
+
+    product = order.products[0]
+
+    # Обновляем габариты
+    if "dimensions" in updates:
+        dims = updates["dimensions"]
+        if "width_mm" in dims:
+            product.width_mm = float(dims["width_mm"])
+        if "height_mm" in dims:
+            product.height_mm = float(dims["height_mm"])
+        if "depth_mm" in dims:
+            product.depth_mm = float(dims["depth_mm"])
+
+    # Обновляем название
+    if "furniture_type" in updates:
+        product.name = updates["furniture_type"]
+
+    # Обновляем материал
+    if "body_material" in updates:
+        mat = updates["body_material"]
+        if "type" in mat:
+            product.material = mat["type"]
+        if "thickness_mm" in mat:
+            product.thickness_mm = float(mat["thickness_mm"])
+
+    # Обновляем панели
+    if "panels" in updates:
+        from sqlalchemy import select
+        for panel_update in updates["panels"]:
+            panel_id = panel_update.get("id")
+            if panel_id:
+                result = await db.execute(
+                    select(Panel).where(Panel.id == UUID(panel_id))
+                )
+                panel = result.scalars().first()
+                if panel:
+                    if "name" in panel_update:
+                        panel.name = panel_update["name"]
+                    if "width_mm" in panel_update:
+                        panel.width_mm = float(panel_update["width_mm"])
+                    if "height_mm" in panel_update:
+                        panel.height_mm = float(panel_update["height_mm"])
+
+    # Обновляем params (hardware, fasteners, edge_bands)
+    params = product.params or {}
+    for key in ["hardware", "fasteners", "edge_bands", "door_count", "drawer_count", "shelf_count"]:
+        if key in updates:
+            params[key] = updates[key]
+
+    # Пересчитываем сводку если изменились панели
+    if "panels" in updates:
+        from sqlalchemy import select
+        panels_result = await db.execute(
+            select(Panel).where(Panel.product_id == product.id)
+        )
+        panels = panels_result.scalars().all()
+        total_area = sum((p.width_mm * p.height_mm) / 1_000_000 for p in panels)
+        sheet_area = 5.796
+        params["summary"] = {
+            "total_area_m2": round(total_area, 3),
+            "sheet_area_m2": sheet_area,
+            "utilization_percent": round((total_area / sheet_area) * 100, 1) if total_area > 0 else 0,
+            "panels_count": len(panels),
+            "hardware_count": len(params.get("hardware", [])),
+            "fasteners_count": sum(f.get("quantity", 0) for f in params.get("fasteners", [])),
+        }
+
+    product.params = params
+    await db.commit()
+
+    return {"success": True, "message": "BOM обновлён"}
+
+
+@router.post("/orders/{order_id}/bom/add-panel")
+async def add_panel_to_bom(
+    order_id: UUID,
+    panel_data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Добавить панель в BOM."""
+    order = await crud.get_order_with_products(db, order_id)
+    if not order or not order.products:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    product = order.products[0]
+
+    panel = Panel(
+        product_id=product.id,
+        name=panel_data.get("name", "Новая панель"),
+        width_mm=float(panel_data.get("width_mm", 0)),
+        height_mm=float(panel_data.get("height_mm", 0)),
+        thickness_mm=float(panel_data.get("thickness_mm", product.thickness_mm or 16)),
+        material=panel_data.get("material", product.material),
+    )
+    db.add(panel)
+    await db.commit()
+
+    return {"success": True, "panel_id": str(panel.id)}
+
+
+@router.delete("/orders/{order_id}/bom/panel/{panel_id}")
+async def delete_panel_from_bom(
+    order_id: UUID,
+    panel_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить панель из BOM."""
+    from sqlalchemy import select, delete
+
+    # Проверяем что панель принадлежит заказу
+    order = await crud.get_order_with_products(db, order_id)
+    if not order or not order.products:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    product = order.products[0]
+
+    result = await db.execute(
+        select(Panel).where(Panel.id == panel_id, Panel.product_id == product.id)
+    )
+    panel = result.scalars().first()
+    if not panel:
+        raise HTTPException(status_code=404, detail="Panel not found")
+
+    await db.delete(panel)
+    await db.commit()
+
+    return {"success": True}
 
 
 # ============================================================================

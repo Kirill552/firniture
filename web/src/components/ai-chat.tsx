@@ -47,7 +47,7 @@ function parseSpecJson(text: string): { cleanText: string; spec: Record<string, 
 
   try {
     // Очищаем JSON от бэктиков, переносов и лишних пробелов
-    let jsonStr = specMatch[1]
+    const jsonStr = specMatch[1]
       .replace(/```json?/gi, '')  // Убираем ```json или ```
       .replace(/```/g, '')         // Убираем оставшиеся ```
       .replace(/\n/g, ' ')         // Заменяем переносы на пробелы
@@ -58,7 +58,7 @@ function parseSpecJson(text: string): { cleanText: string; spec: Record<string, 
     const cleanText = text.replace(/\[SPEC_JSON\][\s\S]*?\[\/SPEC_JSON\]/, '').trim();
     return { cleanText, spec };
   } catch (e) {
-    console.error('Failed to parse SPEC_JSON:', e, specMatch[1]);
+    console.error('Failed to parse SPEC_JSON:', e);
     return { cleanText: text, spec: null };
   }
 }

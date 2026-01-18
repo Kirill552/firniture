@@ -47,7 +47,7 @@ class YandexCloudSettings(BaseSettings):
     yc_embedding_query_model: str = "emb://{folder_id}/text-search-query/latest"
 
     # Модели (OpenAI-совместимый API)
-    yc_openai_model: str = "aliceai-llm"  # Alice AI LLM (можно: yandexgpt, yandexgpt-lite, qwen3-235b)
+    yc_openai_model: str = "yandexgpt/rc"  # Для Function Calling нужен yandexgpt/rc (aliceai-llm не поддерживает tools)
 
     # Параметры генерации по умолчанию
     yc_default_temperature: float = 0.3
@@ -338,11 +338,14 @@ class YandexOpenAIClient(YandexCloudClient):
 
     def _get_model_uri(self) -> str:
         """Получить полный URI модели для OpenAI API."""
-        # OpenAI-совместимый API требует полный URI: gpt://<folder_id>/<model>
+        # OpenAI-совместимый API требует полный URI: gpt://<folder_id>/<model>/<version>
         model = self.settings.yc_openai_model
-        if not model.startswith("gpt://"):
-            model = f"gpt://{self.settings.yc_folder_id}/{model}/latest"
-        return model
+        if model.startswith("gpt://"):
+            return model
+        # Если модель уже содержит версию (например yandexgpt/rc), не добавляем /latest
+        if "/" in model:
+            return f"gpt://{self.settings.yc_folder_id}/{model}"
+        return f"gpt://{self.settings.yc_folder_id}/{model}/latest"
 
     async def chat_completion_with_tools(
         self,

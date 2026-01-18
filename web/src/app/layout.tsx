@@ -8,7 +8,6 @@ import AuthLayout from "@/components/auth-layout";
 import { AnimatedLayout } from "@/components/animated-layout";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
-import { DebugOverlay } from "@/components/debug-overlay";
 
 const onest = Onest({
   subsets: ["latin", "cyrillic"],
@@ -47,7 +46,6 @@ export default function RootLayout({
             </ErrorBoundary>
             <ReactQueryDevtools initialIsOpen={false} />
             <Toaster />
-            <DebugOverlay />
           </QueryProvider>
         </ThemeProvider>
       </body>

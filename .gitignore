@@ -47,3 +47,5 @@ tmpclau*
 screens/
 furnitura_catalogi/
 CLAUDE.md
+web/src/app/bom/page.tsx.backup
+debug_finalize.log
