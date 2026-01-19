@@ -58,7 +58,7 @@ services:
   worker:
     image: ghcr.io/kirill552/firniture/api:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    command: ["uv", "run", "python", "-m", "api.worker"]
+    command: [".venv/bin/python", "-m", "api.worker"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
