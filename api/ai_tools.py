@@ -647,11 +647,13 @@ async def execute_tool_call(
             "error": f"Неизвестный инструмент: {tool_name}"
         }
 
-    log.info(f"[AI Tool] Executing {tool_name} with args: {arguments}")
+    log.info(f"[TOOL_CALL] Executing {tool_name} with args: {arguments}")
 
     try:
         result = await handler(**arguments)
-        log.info(f"[AI Tool] {tool_name} completed successfully")
+        # Логируем результат (сокращённо)
+        result_preview = str(result)[:300]
+        log.info(f"[TOOL_RESULT] {tool_name} success={result.get('success', True)}, preview: {result_preview}")
         return result
     except TypeError as e:
         log.error(f"[AI Tool] {tool_name} argument error: {e}")

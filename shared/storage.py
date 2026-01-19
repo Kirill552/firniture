@@ -21,11 +21,15 @@ class ObjectStorage:
 
     def presign_get(self, key: str, ttl_seconds: int | None = None) -> str:
         expires_in = ttl_seconds or settings.S3_PRESIGNED_TTL_SECONDS
-        return self._s3.generate_presigned_url(
+        url = self._s3.generate_presigned_url(
             ClientMethod="get_object",
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=expires_in,
         )
+        # Заменяем внутренний endpoint на публичный для браузера
+        if settings.S3_PUBLIC_ENDPOINT_URL and settings.S3_ENDPOINT_URL:
+            url = url.replace(settings.S3_ENDPOINT_URL, settings.S3_PUBLIC_ENDPOINT_URL)
+        return url
 
     def presign_put(self, key: str, ttl_seconds: int | None = None) -> str:
         expires_in = ttl_seconds or settings.S3_PRESIGNED_TTL_SECONDS

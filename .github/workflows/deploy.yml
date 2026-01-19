@@ -133,8 +133,8 @@ jobs:
             # Скачиваем новые образы
             docker compose pull
 
-            # Перезапускаем сервисы
-            docker compose up -d
+            # Перезапускаем сервисы (--force-recreate чтобы применить новые образы)
+            docker compose up -d --force-recreate api worker web
 
             # Миграции БД (если есть)
             docker compose exec -T api alembic upgrade head 2>/dev/null || echo "Migrations skipped"

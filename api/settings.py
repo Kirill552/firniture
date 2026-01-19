@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # S3 / Object Storage (локально — MinIO)
     S3_ENDPOINT_URL: str | None = "http://localhost:9002"
+    S3_PUBLIC_ENDPOINT_URL: str | None = None  # Публичный URL для presigned (если отличается)
     S3_REGION: str = "us-east-1"
     S3_ACCESS_KEY: str = "minio"
     S3_SECRET_KEY: str = "minio123"

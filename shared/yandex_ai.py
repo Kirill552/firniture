@@ -387,17 +387,35 @@ class YandexOpenAIClient(YandexCloudClient):
             payload["tool_choice"] = tool_choice
 
         url = f"{self.settings.yc_openai_endpoint}/chat/completions"
-        log.info(f"OpenAI API request with tools: model={payload['model']}, tools_count={len(tools or [])}")
+
+        # Детальное логирование запроса к Yandex
+        log.info(f"[YANDEX_REQUEST] model={payload['model']}, tools_count={len(tools or [])}, messages_count={len(messages)}")
+        log.info(f"[YANDEX_REQUEST] last_message: role={messages[-1].get('role')}, content_preview={str(messages[-1].get('content', ''))[:200]}")
+        if tools:
+            tool_names = [t.get('function', {}).get('name', 'unknown') for t in tools]
+            log.info(f"[YANDEX_REQUEST] available_tools: {tool_names}")
 
         async with self.session.post(url, json=payload, headers=self._get_openai_headers()) as resp:
-            if resp.status != 200:
-                error_text = await resp.text()
-                log.error(f"YandexGPT OpenAI API with tools failed: {resp.status}: {error_text}")
-                raise aiohttp.ClientError(f"HTTP {resp.status}: {error_text}")
+            response_text = await resp.text()
 
-            data = await resp.json()
+            if resp.status != 200:
+                log.error(f"[YANDEX_ERROR] status={resp.status}, response={response_text[:500]}")
+                raise aiohttp.ClientError(f"HTTP {resp.status}: {response_text}")
+
+            data = json.loads(response_text)
             choice = data["choices"][0]
             message = choice["message"]
+
+            # Логирование ответа от Yandex
+            finish_reason = choice.get("finish_reason", "unknown")
+            content_preview = str(message.get("content", ""))[:200]
+            tool_calls_raw = message.get("tool_calls", [])
+            log.info(f"[YANDEX_RESPONSE] finish_reason={finish_reason}, has_content={bool(message.get('content'))}, tool_calls_count={len(tool_calls_raw)}")
+            log.info(f"[YANDEX_RESPONSE] content_preview: {content_preview}")
+            if tool_calls_raw:
+                for tc in tool_calls_raw:
+                    log.info(f"[YANDEX_RESPONSE] tool_call: {tc.get('function', {}).get('name')} args={tc.get('function', {}).get('arguments', '')[:200]}")
+            log.info(f"[YANDEX_RESPONSE] usage: {data.get('usage', {})}")
 
             # Парсим tool_calls если есть
             tool_calls = []

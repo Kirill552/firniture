@@ -25,6 +25,24 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minio123}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     image: ghcr.io/kirill552/firniture/api:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -52,6 +70,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     ports:
       - "8000:8000"
 
@@ -77,6 +97,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
 
   web:
     image: ghcr.io/kirill552/firniture/web:${IMAGE_TAG:-latest}
@@ -88,3 +110,4 @@ services:
 
 volumes:
   pgdata:
+  miniodata:
