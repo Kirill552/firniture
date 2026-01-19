@@ -798,6 +798,161 @@ async def delete_panel_from_bom(
     return {"success": True}
 
 
+@router.post("/orders/{order_id}/bom/recalculate")
+async def recalculate_bom(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Пересчитать BOM на основе текущих габаритов и параметров.
+
+    Вызывает калькуляторы:
+    - calculate_panels — панели по габаритам и типу корпуса
+    - _calculate_fasteners — крепёж
+    - _calculate_edge_bands — кромка
+
+    Сохраняет результат в БД и возвращает обновлённый BOM.
+    """
+    from sqlalchemy import select, delete as sql_delete
+    from api.panel_calculator import calculate_panels, CABINET_TEMPLATES
+
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not order.products:
+        raise HTTPException(status_code=404, detail="No product config found")
+
+    product = order.products[0]
+    params = product.params or {}
+
+    # Определяем тип корпуса из названия
+    furniture_name = (product.name or "").lower()
+    cabinet_type = "wall"  # По умолчанию навесной
+
+    if "напольн" in furniture_name or "тумб" in furniture_name or "нижн" in furniture_name:
+        if "мойк" in furniture_name:
+            cabinet_type = "base_sink"
+        elif "ящик" in furniture_name:
+            cabinet_type = "drawer"
+        else:
+            cabinet_type = "base"
+    elif "пенал" in furniture_name or "высок" in furniture_name or "колонн" in furniture_name:
+        cabinet_type = "tall"
+    elif "ящик" in furniture_name:
+        cabinet_type = "drawer"
+
+    # Параметры для калькулятора
+    width_mm = int(product.width_mm or 600)
+    height_mm = int(product.height_mm or 720)
+    depth_mm = int(product.depth_mm or 300)
+    thickness_mm = float(product.thickness_mm or 16)
+    shelf_count = params.get("shelf_count", 1)
+    door_count = params.get("door_count", 1)
+    drawer_count = params.get("drawer_count", 0)
+
+    # Вызываем калькулятор панелей
+    calc_result = calculate_panels(
+        cabinet_type=cabinet_type,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        depth_mm=depth_mm,
+        thickness_mm=thickness_mm,
+        shelf_count=shelf_count,
+        door_count=door_count,
+        drawer_count=drawer_count,
+    )
+
+    # Удаляем старые панели
+    await db.execute(
+        sql_delete(Panel).where(Panel.product_id == product.id)
+    )
+
+    # Создаём новые панели
+    new_panels = []
+    for panel_spec in calc_result.panels:
+        panel = Panel(
+            product_id=product.id,
+            name=panel_spec.name,
+            width_mm=panel_spec.width_mm,
+            height_mm=panel_spec.height_mm,
+            thickness_mm=panel_spec.thickness_mm,
+            material=product.material,
+            edge_front=panel_spec.edge_front,
+            edge_back=panel_spec.edge_back,
+        )
+        db.add(panel)
+        new_panels.append(panel)
+
+    await db.flush()  # Получаем ID для новых панелей
+
+    # Рассчитываем крепёж
+    fasteners = _calculate_fasteners(
+        panels_count=calc_result.total_panels,
+        door_count=door_count,
+        drawer_count=drawer_count,
+        shelf_count=shelf_count,
+    )
+
+    # Рассчитываем кромку
+    material_color = params.get("body_material", {}).get("color", "белый") if isinstance(params.get("body_material"), dict) else "белый"
+    parsed_panels = [p.to_dict() for p in calc_result.panels]
+    edge_bands = _calculate_edge_bands(parsed_panels, material_color)
+
+    # Обновляем params
+    params["fasteners"] = fasteners
+    params["edge_bands"] = edge_bands
+    params["cabinet_type"] = cabinet_type
+    params["summary"] = {
+        "total_panels": calc_result.total_panels,
+        "total_area_m2": round(calc_result.total_area_m2, 2),
+        "edge_length_m": round(calc_result.edge_length_m, 2),
+        "fasteners_count": sum(f["quantity"] for f in fasteners),
+        "warnings": calc_result.warnings,
+    }
+
+    product.params = params
+    await db.commit()
+
+    # Возвращаем обновлённый BOM
+    return {
+        "order_id": str(order_id),
+        "product_config_id": str(product.id),
+        "furniture_type": product.name,
+        "cabinet_type": cabinet_type,
+        "dimensions": {
+            "width_mm": product.width_mm,
+            "height_mm": product.height_mm,
+            "depth_mm": product.depth_mm,
+        },
+        "body_material": {
+            "type": product.material,
+            "thickness_mm": product.thickness_mm,
+            "color": material_color,
+        },
+        "panels": [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "width_mm": p.width_mm,
+                "height_mm": p.height_mm,
+                "thickness_mm": p.thickness_mm,
+                "material": p.material,
+                "edge_front": p.edge_front,
+                "edge_back": p.edge_back,
+            }
+            for p in new_panels
+        ],
+        "hardware": params.get("hardware", []),
+        "fasteners": fasteners,
+        "edge_bands": edge_bands,
+        "summary": params["summary"],
+        "door_count": door_count,
+        "drawer_count": drawer_count,
+        "shelf_count": shelf_count,
+    }
+
+
 # ============================================================================
 # Dashboard Stats
 # ============================================================================

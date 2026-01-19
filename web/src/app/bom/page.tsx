@@ -1,10 +1,10 @@
 "use client"
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Download, Plus, Package, Loader2 } from "lucide-react"
+import { Download, Package, Loader2, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getAuthHeader } from "@/lib/auth"
 import { StatCardSkeleton } from "@/components/ui/table-skeleton"
@@ -12,6 +12,9 @@ import { ProductionStepper } from "@/components/production-stepper"
 import { MachineProfileModal, hasSelectedMachineProfile } from "@/components/machine-profile-modal"
 import { BOMHeader, PanelsTable, HardwareTable, EdgeBandTable, SheetLayoutPreview } from "@/components/bom"
 import type { FullBOM, BOMPanel, BOMHardware, BOMFastener, BOMEdgeBand } from "@/types/api"
+
+// Тип статуса сохранения
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 // Empty state component
 function EmptyBomState() {
@@ -46,7 +49,14 @@ export default function BomPage() {
   const [isLoadingBom, setIsLoadingBom] = useState(false)
   const [bomError, setBomError] = useState<string | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  const [needsRecalculation, setNeedsRecalculation] = useState(false)
+  const [isRecalculating, setIsRecalculating] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+
+  // Refs для debounce и исходного BOM
+  const originalBomRef = useRef<FullBOM | null>(null)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const savedIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // DXF generation state
   const [isGeneratingDxf, setIsGeneratingDxf] = useState(false)
@@ -103,7 +113,10 @@ export default function BomPage() {
         }
         const data: FullBOM = await response.json()
         setBom(data)
+        originalBomRef.current = JSON.parse(JSON.stringify(data)) // Deep copy
         setHasChanges(false)
+        setNeedsRecalculation(false)
+        setSaveStatus('idle')
       } catch (err) {
         setBomError(err instanceof Error ? err.message : 'Ошибка загрузки')
       } finally {
@@ -134,20 +147,114 @@ export default function BomPage() {
     loadSettings()
   }, [])
 
-  // Update BOM data (local state)
-  const handleBomUpdate = useCallback((updates: Partial<FullBOM>) => {
-    if (!bom) return
-    setBom({ ...bom, ...updates })
-    setHasChanges(true)
-  }, [bom])
+  // Проверка нужен ли полный пересчёт (изменились габариты/материал/тип)
+  const checkNeedsRecalculation = useCallback((newBom: FullBOM) => {
+    const original = originalBomRef.current
+    if (!original) return false
 
-  // Save BOM to server
-  const handleSave = async () => {
-    if (!effectiveOrderId || !bom) return
+    // Проверяем габариты
+    if (
+      newBom.dimensions.width_mm !== original.dimensions.width_mm ||
+      newBom.dimensions.height_mm !== original.dimensions.height_mm ||
+      newBom.dimensions.depth_mm !== original.dimensions.depth_mm
+    ) {
+      return true
+    }
 
-    setIsSaving(true)
+    // Проверяем материал и толщину
+    if (
+      newBom.body_material.type !== original.body_material.type ||
+      newBom.body_material.thickness_mm !== original.body_material.thickness_mm
+    ) {
+      return true
+    }
+
+    // Проверяем тип мебели
+    if (newBom.furniture_type !== original.furniture_type) {
+      return true
+    }
+
+    return false
+  }, [])
+
+  // Автосохранение (debounced)
+  const debouncedSave = useCallback(async (bomToSave: FullBOM) => {
+    if (!effectiveOrderId) return
+
+    setSaveStatus('saving')
     try {
       const response = await fetch(`/api/v1/orders/${effectiveOrderId}/bom`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          dimensions: bomToSave.dimensions,
+          furniture_type: bomToSave.furniture_type,
+          body_material: bomToSave.body_material,
+          panels: bomToSave.panels,
+          hardware: bomToSave.hardware,
+          fasteners: bomToSave.fasteners,
+          edge_bands: bomToSave.edge_bands,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Ошибка сохранения')
+      }
+
+      setSaveStatus('saved')
+      setHasChanges(false)
+
+      // Убираем индикатор "Сохранено" через 2 сек
+      if (savedIndicatorTimeoutRef.current) {
+        clearTimeout(savedIndicatorTimeoutRef.current)
+      }
+      savedIndicatorTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle')
+      }, 2000)
+    } catch {
+      setSaveStatus('error')
+      toast({
+        title: "Ошибка автосохранения",
+        description: "Не удалось сохранить изменения",
+        variant: "destructive",
+      })
+    }
+  }, [effectiveOrderId, toast])
+
+  // Update BOM data (local state) с определением типа изменения
+  const handleBomUpdate = useCallback((updates: Partial<FullBOM>, skipAutosave = false) => {
+    if (!bom) return
+
+    const newBom = { ...bom, ...updates }
+    setBom(newBom)
+    setHasChanges(true)
+
+    const needsRecalc = checkNeedsRecalculation(newBom)
+    setNeedsRecalculation(needsRecalc)
+
+    // Если нужен пересчёт — не автосохраняем, ждём кнопку "Пересчитать"
+    // Если мелкие изменения — автосохраняем с debounce
+    if (!needsRecalc && !skipAutosave) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        debouncedSave(newBom)
+      }, 1500)
+    }
+  }, [bom, checkNeedsRecalculation, debouncedSave])
+
+  // Пересчёт BOM через калькуляторы
+  const handleRecalculate = async () => {
+    if (!effectiveOrderId || !bom) return
+
+    setIsRecalculating(true)
+    try {
+      // Сначала сохраняем текущие габариты
+      await fetch(`/api/v1/orders/${effectiveOrderId}/bom`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -157,34 +264,56 @@ export default function BomPage() {
           dimensions: bom.dimensions,
           furniture_type: bom.furniture_type,
           body_material: bom.body_material,
-          panels: bom.panels,
-          hardware: bom.hardware,
-          fasteners: bom.fasteners,
-          edge_bands: bom.edge_bands,
         }),
       })
 
+      // Затем вызываем пересчёт
+      const response = await fetch(`/api/v1/orders/${effectiveOrderId}/bom/recalculate`, {
+        method: 'POST',
+        headers: getAuthHeader(),
+      })
+
       if (!response.ok) {
-        throw new Error('Ошибка сохранения')
+        throw new Error('Ошибка пересчёта')
       }
 
       const updatedBom = await response.json()
       setBom(updatedBom)
+      originalBomRef.current = JSON.parse(JSON.stringify(updatedBom))
       setHasChanges(false)
+      setNeedsRecalculation(false)
+      setSaveStatus('saved')
+
       toast({
-        title: "Сохранено",
-        description: "Спецификация успешно обновлена",
+        title: "Пересчитано",
+        description: `Панели: ${updatedBom.summary?.total_panels || 0}, площадь: ${updatedBom.summary?.total_area_m2 || 0} м²`,
       })
+
+      // Убираем индикатор через 2 сек
+      if (savedIndicatorTimeoutRef.current) {
+        clearTimeout(savedIndicatorTimeoutRef.current)
+      }
+      savedIndicatorTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle')
+      }, 2000)
     } catch (error) {
       toast({
         title: "Ошибка",
-        description: error instanceof Error ? error.message : "Не удалось сохранить",
+        description: error instanceof Error ? error.message : "Не удалось пересчитать",
         variant: "destructive",
       })
     } finally {
-      setIsSaving(false)
+      setIsRecalculating(false)
     }
   }
+
+  // Очистка таймаутов при размонтировании
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+      if (savedIndicatorTimeoutRef.current) clearTimeout(savedIndicatorTimeoutRef.current)
+    }
+  }, [])
 
   // Panel handlers
   const handlePanelUpdate = (panelId: string, updates: Partial<BOMPanel>) => {
@@ -605,9 +734,9 @@ export default function BomPage() {
             handleBomUpdate({ furniture_type: updates.furniture_type })
           }
         }}
-        onSave={handleSave}
-        hasChanges={hasChanges}
-        isLoading={isSaving}
+        onRecalculate={needsRecalculation ? handleRecalculate : undefined}
+        hasChanges={needsRecalculation}
+        isLoading={isRecalculating}
       />
 
       {/* Production Stepper */}
@@ -685,18 +814,42 @@ export default function BomPage() {
         onEdgeBandUpdate={handleEdgeBandUpdate}
       />
 
-      {/* Индикатор несохранённых изменений */}
-      {hasChanges && (
-        <div className="fixed bottom-6 right-6 bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3">
-          <span className="text-amber-800 dark:text-amber-200 text-sm">
-            Есть несохранённые изменения
-          </span>
-          <Button size="sm" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-1" />
-            ) : null}
-            Сохранить
-          </Button>
+      {/* Индикатор статуса сохранения */}
+      {(saveStatus !== 'idle' || needsRecalculation) && (
+        <div className={`fixed bottom-6 right-6 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 transition-all ${
+          needsRecalculation
+            ? 'bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700'
+            : saveStatus === 'saving'
+              ? 'bg-blue-100 dark:bg-blue-900/50 border border-blue-300 dark:border-blue-700'
+              : saveStatus === 'saved'
+                ? 'bg-green-100 dark:bg-green-900/50 border border-green-300 dark:border-green-700'
+                : 'bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700'
+        }`}>
+          {needsRecalculation ? (
+            <>
+              <span className="text-amber-800 dark:text-amber-200 text-sm">
+                Габариты изменены — нужен пересчёт
+              </span>
+              <Button size="sm" onClick={handleRecalculate} disabled={isRecalculating}>
+                {isRecalculating ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : null}
+                Пересчитать
+              </Button>
+            </>
+          ) : saveStatus === 'saving' ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+              <span className="text-blue-800 dark:text-blue-200 text-sm">Сохранение...</span>
+            </>
+          ) : saveStatus === 'saved' ? (
+            <>
+              <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-green-800 dark:text-green-200 text-sm">Сохранено</span>
+            </>
+          ) : (
+            <span className="text-red-800 dark:text-red-200 text-sm">Ошибка сохранения</span>
+          )}
         </div>
       )}
     </div>
