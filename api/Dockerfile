@@ -19,5 +19,9 @@ RUN uv sync --frozen --no-dev
 COPY api ./api
 COPY shared ./shared
 
+# Копируем alembic для миграций
+COPY alembic ./alembic
+COPY alembic.ini ./
+
 EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
