@@ -81,8 +81,6 @@ services:
   web:
     image: ghcr.io/kirill552/firniture/web:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: http://api:8000
     depends_on:
       - api
     ports:

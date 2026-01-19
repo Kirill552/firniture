@@ -30,9 +30,9 @@ import { getAuthHeader, TokenResponse, AuthUser } from './auth'
 
 /**
  * Базовый URL API бэкенда
- * В production должен браться из переменной окружения
+ * Пустая строка = относительный путь (через nginx reverse proxy)
  */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 const API_PREFIX = '/api/v1'
 
 /**
