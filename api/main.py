@@ -20,10 +20,15 @@ from .routers import router as api_v1
 
 app = FastAPI(title="Furniture AI API", version="0.1.0")
 
-# CORS для фронтенда
+# CORS для фронтенда (локалка + прод)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://46.17.250.109",
+        "http://46.17.250.109:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
