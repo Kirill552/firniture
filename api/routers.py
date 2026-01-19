@@ -359,12 +359,6 @@ async def finalize_order_endpoint(
     """
     import re
 
-    # DEBUG: логируем что пришло в файл
-    with open("C:/Users/whirp/Desktop/bots/мебель ИИ/debug_finalize.log", "a", encoding="utf-8") as f:
-        f.write(f"\n=== FINALIZE SPEC RECEIVED ===\n")
-        f.write(f"spec keys: {spec.keys()}\n")
-        f.write(f"panels in spec: {spec.get('panels', 'NOT FOUND')}\n")
-
     # Проверяем существование заказа
     order = await crud.get_order_with_history(db, order_id)
     if not order:
@@ -482,19 +476,6 @@ async def finalize_order_endpoint(
                 })
         except Exception as e:
             log.warning(f"Failed to calculate panels: {e}")
-            # Логируем ошибку в файл тоже
-            with open("C:/Users/whirp/Desktop/bots/мебель ИИ/debug_finalize.log", "a", encoding="utf-8") as f:
-                f.write(f"=== CALCULATE PANELS ERROR ===\n")
-                f.write(f"Error: {e}\n")
-                f.write(f"cabinet_type={cabinet_type}, w={width_mm}, h={height_mm}, d={depth_mm}\n")
-
-    # DEBUG: логируем распарсенные панели
-    with open("C:/Users/whirp/Desktop/bots/мебель ИИ/debug_finalize.log", "a", encoding="utf-8") as f:
-        f.write(f"=== DIMENSIONS ===\n")
-        f.write(f"width_mm={width_mm}, height_mm={height_mm}, depth_mm={depth_mm}\n")
-        f.write(f"name={name}, cabinet_type will be detected from name\n")
-        f.write(f"=== PARSED PANELS ({len(parsed_panels)}) ===\n")
-        f.write(f"parsed_panels: {parsed_panels}\n")
 
     # Рассчитываем крепёж
     fasteners = _calculate_fasteners(
