@@ -18,8 +18,6 @@ RUN uv sync --frozen --no-dev
 # Копируем код
 COPY api ./api
 COPY shared ./shared
-COPY docs ./docs
-COPY data ./data
 
 EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
