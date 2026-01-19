@@ -1769,6 +1769,57 @@ async def download_cam_artifact(job_id: uuid.UUID, db: AsyncSession = Depends(ge
     )
 
 
+@router.get("/cam/jobs/{job_id}/file")
+async def stream_cam_file(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Скачать файл CAM задачи напрямую через API (без presigned URL).
+
+    Этот endpoint стримит файл из S3 через сервер, что обходит
+    проблемы с файерволом и подписями presigned URL.
+    """
+    from fastapi.responses import StreamingResponse
+
+    job = await db.get(CAMJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="CAM job not found")
+
+    if job.status != JobStatusEnum.Completed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job not completed. Current status: {job.status}"
+        )
+
+    if not job.artifact_id:
+        raise HTTPException(status_code=404, detail="No artifact for this job")
+
+    artifact = await db.get(Artifact, job.artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    # Скачиваем файл из S3
+    storage = ObjectStorage()
+    file_data = storage.get_object(artifact.storage_key)
+
+    # Определяем имя файла и content-type
+    ext = "dxf" if job.job_kind == "DXF" else "gcode" if job.job_kind == "GCODE" else "zip"
+    filename = f"order_{job.order_id}_{job.job_kind.lower()}.{ext}" if job.order_id else f"job_{job_id}.{ext}"
+
+    content_type = {
+        "DXF": "application/dxf",
+        "GCODE": "text/plain",
+        "ZIP": "application/zip",
+    }.get(job.job_kind, "application/octet-stream")
+
+    return StreamingResponse(
+        iter([file_data]),
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(file_data)),
+        }
+    )
+
+
 # ============================================================================
 # G-code генерация (P2)
 # ============================================================================

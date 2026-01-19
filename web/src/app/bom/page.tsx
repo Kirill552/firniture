@@ -497,13 +497,8 @@ export default function BomPage() {
         const data = await response.json()
 
         if (data.status === 'Completed' && data.artifact_id) {
-          const downloadResponse = await fetch(`/api/v1/cam/jobs/${jobId}/download`, {
-            headers: getAuthHeader()
-          })
-          if (downloadResponse.ok) {
-            const downloadData = await downloadResponse.json()
-            setDxfDownloadUrl(downloadData.download_url)
-          }
+          // Используем прямой endpoint /file вместо presigned URL
+          setDxfDownloadUrl(`/api/v1/cam/jobs/${jobId}/file`)
           setIsGeneratingDxf(false)
           return
         }
@@ -595,13 +590,8 @@ export default function BomPage() {
         const data = await response.json()
 
         if (data.status === "Completed" && data.artifact_id) {
-          const downloadResponse = await fetch(`/api/v1/cam/jobs/${jobId}/download`, {
-            headers: getAuthHeader(),
-          })
-          if (downloadResponse.ok) {
-            const downloadData = await downloadResponse.json()
-            setGcodeDownloadUrl(downloadData.download_url)
-          }
+          // Используем прямой endpoint /file вместо presigned URL
+          setGcodeDownloadUrl(`/api/v1/cam/jobs/${jobId}/file`)
           setIsGeneratingGcode(false)
           return
         }
