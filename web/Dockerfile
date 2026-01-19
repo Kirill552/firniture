@@ -5,8 +5,8 @@ WORKDIR /app
 # Копируем package files
 COPY package*.json ./
 
-# Устанавливаем зависимости
-RUN npm ci
+# Устанавливаем зависимости (--legacy-peer-deps для three-dxf-loader)
+RUN npm ci --legacy-peer-deps
 
 # Копируем исходники
 COPY . .
