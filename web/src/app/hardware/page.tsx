@@ -30,7 +30,7 @@ async function searchHardware(query: string, limit: number = 20): Promise<Hardwa
   if (!query.trim()) {
     return { items: [], total: 0, query: "" }
   }
-  const res = await fetch(`http://localhost:8000/api/v1/hardware/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+  const res = await fetch(`/api/v1/hardware/search?q=${encodeURIComponent(query)}&limit=${limit}`)
   if (!res.ok) throw new Error("Ошибка поиска")
   return res.json()
 }

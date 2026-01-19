@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
 /**
  * Страница создания нового заказа.
@@ -15,17 +16,7 @@ export default function NewOrderPage() {
   useEffect(() => {
     const createOrder = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        })
-
-        if (!response.ok) {
-          throw new Error('Не удалось создать заказ')
-        }
-
-        const data = await response.json()
+        const data = await apiClient.createOrder({})
         router.replace(`/orders/new/tz-upload?orderId=${data.id}`)
       } catch (err) {
         console.error("Failed to create order:", err)

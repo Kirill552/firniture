@@ -56,7 +56,7 @@ export default function Dashboard() {
     const loadData = async () => {
       try {
         // Загружаем заказы — это основной источник правды
-        const ordersRes = await fetch('http://localhost:8000/api/v1/orders')
+        const ordersRes = await fetch('/api/v1/orders')
         if (ordersRes.ok) {
           const data = await ordersRes.json()
           if (data && data.length > 0) {
@@ -79,7 +79,7 @@ export default function Dashboard() {
         }
 
         // Загружаем CAM задачи
-        const camRes = await fetch('http://localhost:8000/api/v1/cam/jobs?limit=5')
+        const camRes = await fetch('/api/v1/cam/jobs?limit=5')
         if (camRes.ok) {
           const camData = await camRes.json()
           if (camData?.jobs) {

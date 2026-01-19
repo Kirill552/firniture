@@ -58,7 +58,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/settings', {
+        const response = await fetch('/api/v1/settings', {
           headers: { ...getAuthHeader() },
         })
         if (response.ok) {
@@ -113,7 +113,7 @@ export default function SettingsPage() {
         return
       }
 
-      const response = await fetch('http://localhost:8000/api/v1/settings', {
+      const response = await fetch('/api/v1/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(changedFields),

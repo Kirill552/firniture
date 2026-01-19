@@ -73,7 +73,7 @@ export function SettingsIndicator({ fields, targetTab = 'generation', className 
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/settings')
+        const response = await fetch('/api/v1/settings')
         if (response.ok) {
           const result = await response.json()
           setData(result)

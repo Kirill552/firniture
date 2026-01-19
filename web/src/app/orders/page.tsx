@@ -121,7 +121,7 @@ const OrdersPageInner = () => {
   React.useEffect(() => {
     const loadOrders = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/orders')
+        const response = await fetch('/api/v1/orders')
         if (response.ok) {
           const data = await response.json()
           if (data && data.length > 0) {

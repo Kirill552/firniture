@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST() {
   try {
-    const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_API_URL || 'http://api:8000';
     const response = await fetch(`${backendUrl}/api/v1/orders`, {
       method: 'POST',
       headers: {
