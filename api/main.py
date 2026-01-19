@@ -32,6 +32,21 @@ from .routers import router as api_v1
 
 app = FastAPI(title="Furniture AI API", version="0.1.0")
 
+log = logging.getLogger(__name__)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Предзагрузка тяжёлых моделей при старте."""
+    log.info("[STARTUP] Предзагрузка модели FRIDA...")
+    try:
+        from shared.embeddings import _get_frida_model
+        _get_frida_model()  # Загрузит модель в память
+        log.info("[STARTUP] Модель FRIDA загружена успешно")
+    except Exception as e:
+        log.warning(f"[STARTUP] Не удалось загрузить FRIDA: {e}")
+
+
 # CORS для фронтенда (локалка + прод)
 app.add_middleware(
     CORSMiddleware,
