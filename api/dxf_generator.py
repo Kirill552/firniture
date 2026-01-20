@@ -25,7 +25,7 @@ from api.constants import (
 )
 
 try:
-    from rectpack import PackingAlgorithm, PackingMode, newPacker
+    from rectpack import PackingAlgorithm, PackingMode, newPacker, GuillotineBssfSas
     RECTPACK_AVAILABLE = True
 except ImportError:
     RECTPACK_AVAILABLE = False
@@ -196,6 +196,7 @@ def optimize_layout(
     sheet_height: float,
     gap_mm: float = DEFAULT_GAP_MM,  # зазор между панелями (на пропил)
     allow_rotation: bool = True,
+    use_guillotine: bool = True,  # использовать Guillotine для форматника (только сквозные пропилы)
 ) -> SheetLayout:
     """
     Оптимизирует размещение панелей на листе (bin packing).
@@ -206,6 +207,7 @@ def optimize_layout(
         sheet_height: Высота листа материала (мм)
         gap_mm: Зазор между панелями (мм)
         allow_rotation: Разрешить поворот панелей на 90°
+        use_guillotine: Guillotine режим для форматно-раскроечного станка (только сквозные пропилы)
 
     Returns:
         SheetLayout с результатами размещения
@@ -214,11 +216,20 @@ def optimize_layout(
         # Fallback: простое последовательное размещение
         return _simple_layout(panels, sheet_width, sheet_height, gap_mm)
 
-    packer = newPacker(
-        mode=PackingMode.Offline,
-        pack_algo=PackingAlgorithm.MaxRectsBssf,
-        rotation=allow_rotation,
-    )
+    if use_guillotine:
+        # Guillotine — только сквозные пропилы (для форматника)
+        packer = newPacker(
+            mode=PackingMode.Offline,
+            pack_algo=GuillotineBssfSas,
+            rotation=allow_rotation,
+        )
+    else:
+        # MaxRects — более гибкий (для фрезера ЧПУ)
+        packer = newPacker(
+            mode=PackingMode.Offline,
+            pack_algo=PackingAlgorithm.MaxRectsBssf,
+            rotation=allow_rotation,
+        )
 
     # Добавляем лист
     packer.add_bin(int(sheet_width), int(sheet_height))
