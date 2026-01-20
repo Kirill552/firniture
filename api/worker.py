@@ -15,6 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.storage import ObjectStorage
 
+from .constants import (
+    DEFAULT_EDGE_THICKNESS_MM,
+    DEFAULT_GAP_MM,
+    DEFAULT_SHEET_HEIGHT_MM,
+    DEFAULT_SHEET_WIDTH_MM,
+)
 from .database import SessionLocal
 from .models import Artifact, CAMJob, JobStatusEnum
 from .queues import DLQ_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
@@ -84,16 +90,16 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
                 edge_bottom=p.get("edge_bottom", False),
                 edge_left=p.get("edge_left", False),
                 edge_right=p.get("edge_right", False),
-                edge_thickness_mm=float(p.get("edge_thickness_mm", 0.4)),
+                edge_thickness_mm=float(p.get("edge_thickness_mm", DEFAULT_EDGE_THICKNESS_MM)),
                 drilling_holes=p.get("drilling_holes", []),
                 notes=p.get("notes", ""),
             ))
 
         # Параметры листа
-        sheet_width = float(context.get("sheet_width", 2800))
-        sheet_height = float(context.get("sheet_height", 2070))
+        sheet_width = float(context.get("sheet_width", DEFAULT_SHEET_WIDTH_MM))
+        sheet_height = float(context.get("sheet_height", DEFAULT_SHEET_HEIGHT_MM))
         optimize = context.get("optimize", True)
-        gap_mm = float(context.get("gap_mm", 4.0))
+        gap_mm = float(context.get("gap_mm", DEFAULT_GAP_MM))
 
         log.info(f"[DXF] Generating for {len(panels)} panels on sheet {sheet_width}x{sheet_height}")
 
