@@ -16,33 +16,21 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from api.constants import (
+    DEFAULT_THICKNESS_MM,
+    DEFAULT_EDGE_THICKNESS_MM,
+    DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
+    DEFAULT_FACADE_EDGE_THICKNESS_MM,
+    DEFAULT_SHELF_GAP_MM,
+    DEFAULT_DRAWER_GAP_MM,
+    DEFAULT_BACK_PANEL_INSET_MM,
+    DEFAULT_BACK_SLOT_WIDTH_MM,
+    DEFAULT_BACK_SLOT_DEPTH_MM,
+    DEFAULT_MAX_SHELF_SPAN_MM,
+    DEFAULT_TIE_BEAM_HEIGHT_MM,
+)
+
 log = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Константы из технических стандартов
-# ============================================================================
-
-# Толщина материалов
-DEFAULT_THICKNESS_MM = 16.0
-DEFAULT_EDGE_THICKNESS_MM = 0.4  # Скрытая кромка
-VISIBLE_EDGE_THICKNESS_MM = 1.0  # Видимая кромка
-FACADE_EDGE_THICKNESS_MM = 2.0  # Фасады
-
-# Зазоры
-SHELF_GAP_MM = 3.0  # Зазор съёмной полки с каждой стороны (итого 6мм)
-DRAWER_TOTAL_GAP_MM = 26.0  # Зазор для ящика ВСЕГО (не с каждой стороны!)
-BACK_PANEL_INSET_MM = 10.0  # Отступ задней стенки от края
-
-# Паз под заднюю стенку
-BACK_SLOT_WIDTH_MM = 4.0
-BACK_SLOT_DEPTH_MM = 10.0
-
-# Провис полки
-MAX_SHELF_SPAN_MM = 600.0  # Максимальная ширина без провиса
-
-# Связи (царги) для тумб под мойку
-TIE_BEAM_HEIGHT_MM = 100.0
 
 
 @dataclass
@@ -158,7 +146,7 @@ class CabinetTemplate:
     @property
     def inner_depth(self) -> float:
         """Внутренняя глубина (минус задняя стенка)."""
-        return self.depth_mm - BACK_SLOT_DEPTH_MM
+        return self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
     def calculate(self, shelf_count: int = 1, door_count: int = 1, drawer_count: int = 0) -> CalculationResult:
         """Рассчитать панели. Переопределяется в подклассах."""
@@ -179,7 +167,7 @@ class WallCabinetTemplate(CabinetTemplate):
         # Боковины (2 шт)
         # Высота = полная высота корпуса
         # Глубина = глубина корпуса - паз под заднюю стенку
-        side_depth = self.depth_mm - BACK_SLOT_DEPTH_MM
+        side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
         result.panels.append(PanelSpec(
             name="Боковина левая",
@@ -187,7 +175,7 @@ class WallCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,  # Видимая кромка спереди
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
             notes="Паз под ДВП 4x10мм",
         ))
@@ -198,7 +186,7 @@ class WallCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
             notes="Паз под ДВП 4x10мм",
         ))
@@ -227,8 +215,8 @@ class WallCabinetTemplate(CabinetTemplate):
         # Полки (съёмные)
         if shelf_count > 0:
             # Ширина полки = внутренняя ширина - 2 x зазор
-            shelf_width = horizontal_width - 2 * SHELF_GAP_MM
-            shelf_depth = horizontal_depth - SHELF_GAP_MM  # Зазор сзади
+            shelf_width = horizontal_width - 2 * DEFAULT_SHELF_GAP_MM
+            shelf_depth = horizontal_depth - DEFAULT_SHELF_GAP_MM  # Зазор сзади
 
             result.panels.append(PanelSpec(
                 name="Полка",
@@ -237,14 +225,14 @@ class WallCabinetTemplate(CabinetTemplate):
                 thickness_mm=self.thickness_mm,
                 quantity=shelf_count,
                 edge_front=True,
-                edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+                edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
                 notes="Съёмная полка на полкодержателях",
             ))
 
             # Проверка провиса
-            if shelf_width > MAX_SHELF_SPAN_MM:
+            if shelf_width > DEFAULT_MAX_SHELF_SPAN_MM:
                 result.warnings.append(
-                    f"Полка {shelf_width:.0f}мм может провиснуть (макс {MAX_SHELF_SPAN_MM:.0f}мм). "
+                    f"Полка {shelf_width:.0f}мм может провиснуть (макс {DEFAULT_MAX_SHELF_SPAN_MM:.0f}мм). "
                     "Рекомендуется вертикальная перегородка."
                 )
 
@@ -262,7 +250,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             depth_mm=self.depth_mm,
         )
 
-        side_depth = self.depth_mm - BACK_SLOT_DEPTH_MM
+        side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
         # Боковины (2 шт)
         result.panels.append(PanelSpec(
@@ -271,7 +259,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -281,7 +269,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -301,21 +289,21 @@ class BaseCabinetTemplate(CabinetTemplate):
         result.panels.append(PanelSpec(
             name="Царга передняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         result.panels.append(PanelSpec(
             name="Царга задняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         # Полки
         if shelf_count > 0:
-            shelf_width = horizontal_width - 2 * SHELF_GAP_MM
-            shelf_depth = horizontal_depth - SHELF_GAP_MM
+            shelf_width = horizontal_width - 2 * DEFAULT_SHELF_GAP_MM
+            shelf_depth = horizontal_depth - DEFAULT_SHELF_GAP_MM
 
             result.panels.append(PanelSpec(
                 name="Полка",
@@ -324,10 +312,10 @@ class BaseCabinetTemplate(CabinetTemplate):
                 thickness_mm=self.thickness_mm,
                 quantity=shelf_count,
                 edge_front=True,
-                edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+                edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             ))
 
-            if shelf_width > MAX_SHELF_SPAN_MM:
+            if shelf_width > DEFAULT_MAX_SHELF_SPAN_MM:
                 result.warnings.append(
                     f"Полка {shelf_width:.0f}мм может провиснуть"
                 )
@@ -346,7 +334,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             depth_mm=self.depth_mm,
         )
 
-        side_depth = self.depth_mm - BACK_SLOT_DEPTH_MM
+        side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
         # Боковины
         result.panels.append(PanelSpec(
@@ -355,7 +343,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -365,7 +353,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -375,28 +363,28 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
         result.panels.append(PanelSpec(
             name="Связь верхняя передняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         result.panels.append(PanelSpec(
             name="Связь верхняя задняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         result.panels.append(PanelSpec(
             name="Связь нижняя передняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         result.panels.append(PanelSpec(
             name="Связь нижняя задняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
@@ -419,7 +407,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             depth_mm=self.depth_mm,
         )
 
-        side_depth = self.depth_mm - BACK_SLOT_DEPTH_MM
+        side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
         # Боковины
         result.panels.append(PanelSpec(
@@ -428,7 +416,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -438,7 +426,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -458,20 +446,20 @@ class DrawerCabinetTemplate(CabinetTemplate):
         result.panels.append(PanelSpec(
             name="Царга передняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         result.panels.append(PanelSpec(
             name="Царга задняя",
             width_mm=horizontal_width,
-            height_mm=TIE_BEAM_HEIGHT_MM,
+            height_mm=DEFAULT_TIE_BEAM_HEIGHT_MM,
             thickness_mm=self.thickness_mm,
         ))
 
         # Ящики
         # Ширина ящика = внутренняя ширина - 26мм (зазор под направляющие)
-        drawer_outer_width = horizontal_width - DRAWER_TOTAL_GAP_MM
+        drawer_outer_width = horizontal_width - DEFAULT_DRAWER_GAP_MM
         drawer_inner_width = drawer_outer_width - 2 * self.thickness_mm
 
         # Высота ящика: равномерно делим внутреннюю высоту
@@ -493,7 +481,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
                 edge_back=True,
                 edge_top=True,
                 edge_bottom=True,
-                edge_thickness_mm=FACADE_EDGE_THICKNESS_MM,
+                edge_thickness_mm=DEFAULT_FACADE_EDGE_THICKNESS_MM,
             ))
 
             # Боковины ящика (2 шт)
@@ -537,7 +525,7 @@ class TallCabinetTemplate(CabinetTemplate):
             depth_mm=self.depth_mm,
         )
 
-        side_depth = self.depth_mm - BACK_SLOT_DEPTH_MM
+        side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
         # Боковины
         result.panels.append(PanelSpec(
@@ -546,7 +534,7 @@ class TallCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -556,7 +544,7 @@ class TallCabinetTemplate(CabinetTemplate):
             height_mm=self.height_mm,
             thickness_mm=self.thickness_mm,
             edge_front=True,
-            edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+            edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
         ))
 
@@ -582,8 +570,8 @@ class TallCabinetTemplate(CabinetTemplate):
 
         # Полки
         if shelf_count > 0:
-            shelf_width = horizontal_width - 2 * SHELF_GAP_MM
-            shelf_depth = horizontal_depth - SHELF_GAP_MM
+            shelf_width = horizontal_width - 2 * DEFAULT_SHELF_GAP_MM
+            shelf_depth = horizontal_depth - DEFAULT_SHELF_GAP_MM
 
             result.panels.append(PanelSpec(
                 name="Полка",
@@ -592,10 +580,10 @@ class TallCabinetTemplate(CabinetTemplate):
                 thickness_mm=self.thickness_mm,
                 quantity=shelf_count,
                 edge_front=True,
-                edge_thickness_mm=VISIBLE_EDGE_THICKNESS_MM,
+                edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             ))
 
-            if shelf_width > MAX_SHELF_SPAN_MM:
+            if shelf_width > DEFAULT_MAX_SHELF_SPAN_MM:
                 result.warnings.append(f"Полка {shelf_width:.0f}мм может провиснуть")
 
         # Для высоких шкафов рекомендуем крепление к стене
