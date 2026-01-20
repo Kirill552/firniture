@@ -155,14 +155,14 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
         dxf_data = storage.get_object(dxf_artifact.storage_key)
 
         # Получаем профиль станка
-        machine_profile = context.get("machine_profile", "mach3")
+        machine_profile = context.get("machine_profile", "weihong")
         log.info(f"[GCODE] Generating G-code from DXF {dxf_artifact_id}, profile={machine_profile}")
 
         # Создаём кастомный профиль с переопределёнными параметрами
         base_profile = MACHINE_PROFILES.get(machine_profile)
         if not base_profile:
-            log.warning(f"Unknown profile {machine_profile}, using mach3")
-            base_profile = MACHINE_PROFILES["mach3"]
+            log.warning(f"Unknown profile {machine_profile}, using weihong")
+            base_profile = MACHINE_PROFILES["weihong"]
 
         # Применяем переопределения из контекста
         custom_profile = MachineProfile(
