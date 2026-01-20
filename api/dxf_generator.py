@@ -234,9 +234,16 @@ def optimize_layout(
     # Добавляем лист
     packer.add_bin(int(sheet_width), int(sheet_height))
 
+    # Сортировка панелей по площади (большие первыми) для лучшей упаковки
+    sorted_panels = sorted(
+        enumerate(panels),
+        key=lambda x: x[1].width_mm * x[1].height_mm,
+        reverse=True
+    )
+
     # Добавляем панели с учётом зазора
     panel_map = {}
-    for i, panel in enumerate(panels):
+    for i, panel in sorted_panels:
         # Добавляем зазор к размерам
         w = int(panel.width_mm + gap_mm)
         h = int(panel.height_mm + gap_mm)
