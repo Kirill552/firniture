@@ -15,20 +15,20 @@ from ezdxf import units
 from ezdxf.document import Drawing
 from ezdxf.layouts import Modelspace
 
+from api.constants import (
+    DEFAULT_SHEET_WIDTH_MM,
+    DEFAULT_SHEET_HEIGHT_MM,
+    DEFAULT_THICKNESS_MM,
+    DEFAULT_EDGE_THICKNESS_MM,
+    DEFAULT_GAP_MM,
+    STANDARD_SHEETS,
+)
+
 try:
     from rectpack import PackingAlgorithm, PackingMode, newPacker
     RECTPACK_AVAILABLE = True
 except ImportError:
     RECTPACK_AVAILABLE = False
-
-
-# Стандартные размеры листов ЛДСП/МДФ (мм)
-STANDARD_SHEETS = {
-    "ЛДСП_2800x2070": (2800, 2070),
-    "ЛДСП_2750x1830": (2750, 1830),
-    "МДФ_2800x2070": (2800, 2070),
-    "МДФ_2440x1830": (2440, 1830),
-}
 
 # Цвета слоёв (AutoCAD ACI)
 LAYER_COLORS = {
@@ -47,7 +47,7 @@ class Panel:
     name: str
     width_mm: float
     height_mm: float
-    thickness_mm: float = 16.0
+    thickness_mm: float = DEFAULT_THICKNESS_MM
     material: str = "ЛДСП"
 
     # Кромка (какие стороны)
@@ -55,7 +55,7 @@ class Panel:
     edge_bottom: bool = False
     edge_left: bool = False
     edge_right: bool = False
-    edge_thickness_mm: float = 0.4
+    edge_thickness_mm: float = DEFAULT_EDGE_THICKNESS_MM
 
     # Присадка (отверстия для фурнитуры)
     drilling_holes: list[dict] = field(default_factory=list)
@@ -194,7 +194,7 @@ def optimize_layout(
     panels: list[Panel],
     sheet_width: float,
     sheet_height: float,
-    gap_mm: float = 4.0,  # зазор между панелями (на пропил)
+    gap_mm: float = DEFAULT_GAP_MM,  # зазор между панелями (на пропил)
     allow_rotation: bool = True,
 ) -> SheetLayout:
     """
@@ -317,7 +317,7 @@ def generate_panel_dxf(
     panels: list[Panel],
     sheet_size: tuple[float, float] | None = None,
     optimize: bool = True,
-    gap_mm: float = 4.0,
+    gap_mm: float = DEFAULT_GAP_MM,
 ) -> tuple[bytes, SheetLayout]:
     """
     Генерирует DXF файл с раскладкой панелей.
@@ -334,8 +334,7 @@ def generate_panel_dxf(
     """
     # Выбираем размер листа
     if sheet_size is None:
-        # Выбираем стандартный лист ЛДСП
-        sheet_size = STANDARD_SHEETS["ЛДСП_2800x2070"]
+        sheet_size = (DEFAULT_SHEET_WIDTH_MM, DEFAULT_SHEET_HEIGHT_MM)
 
     sheet_width, sheet_height = sheet_size
 
