@@ -285,6 +285,42 @@ def optimize_layout(
     )
 
 
+def optimize_layout_best(
+    panels: list[Panel],
+    sheet_width: float,
+    sheet_height: float,
+    gap_mm: float = DEFAULT_GAP_MM,
+) -> SheetLayout:
+    """Пробует несколько стратегий и выбирает лучшую по utilization."""
+
+    strategies = [
+        {"use_guillotine": True, "allow_rotation": False},  # Без поворота (учёт текстуры)
+        {"use_guillotine": True, "allow_rotation": True},   # С поворотом
+        {"use_guillotine": False, "allow_rotation": True},  # MaxRects с поворотом
+    ]
+
+    best_layout: SheetLayout | None = None
+    best_utilization = 0.0
+
+    for strategy in strategies:
+        layout = optimize_layout(
+            panels=panels,
+            sheet_width=sheet_width,
+            sheet_height=sheet_height,
+            gap_mm=gap_mm,
+            **strategy,
+        )
+        if layout.utilization_percent > best_utilization:
+            best_utilization = layout.utilization_percent
+            best_layout = layout
+
+    # Fallback если ничего не нашли
+    if best_layout is None:
+        best_layout = optimize_layout(panels, sheet_width, sheet_height, gap_mm)
+
+    return best_layout
+
+
 def _simple_layout(
     panels: list[Panel],
     sheet_width: float,
