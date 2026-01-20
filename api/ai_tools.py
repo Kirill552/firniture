@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from api.constants import DEFAULT_THICKNESS_MM
 from api.database import SessionLocal
 from api.models import HardwareItem
 from shared.embeddings import embed_text
@@ -209,7 +210,7 @@ async def handle_calculate_panels(
     log.info(f"[AI Tool] calculate_panels: {cabinet_type} {width_mm}×{height_mm}×{depth_mm}")
 
     try:
-        thickness_mm = 18.0 if "18" in material else 16.0
+        thickness_mm = 18.0 if "18" in material else DEFAULT_THICKNESS_MM
 
         result = calculate_panels(
             cabinet_type=cabinet_type,
