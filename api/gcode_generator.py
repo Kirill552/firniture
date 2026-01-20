@@ -21,6 +21,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
+from api.constants import (
+    DEFAULT_DRILLING_DEPTH,
+    DEFAULT_BACK_SLOT_WIDTH_MM,
+    DEFAULT_BACK_SLOT_DEPTH_MM,
+)
+
 try:
     import ezdxf
     EZDXF_AVAILABLE = True
@@ -753,7 +759,7 @@ def extract_all_from_dxf(dxf_data: bytes) -> DXFExtractResult:
             x=round(center.x, 3),
             y=round(center.y, 3),
             diameter=diameter,
-            depth=12.0,  # Стандартная глубина присадки
+            depth=DEFAULT_DRILLING_DEPTH,
             dwell=dwell,
         ))
 
@@ -764,8 +770,8 @@ def extract_all_from_dxf(dxf_data: bytes) -> DXFExtractResult:
         slots.append(SlotPath(
             start=start,
             end=end,
-            width=8.0,  # Стандартная ширина паза под заднюю стенку
-            depth=10.0,  # Стандартная глубина паза
+            width=DEFAULT_BACK_SLOT_WIDTH_MM,
+            depth=DEFAULT_BACK_SLOT_DEPTH_MM,
         ))
 
     return DXFExtractResult(

@@ -7,6 +7,20 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from api.constants import (
+    DEFAULT_SHEET_WIDTH_MM,
+    DEFAULT_SHEET_HEIGHT_MM,
+    DEFAULT_THICKNESS_MM,
+    DEFAULT_EDGE_THICKNESS_MM,
+    DEFAULT_GAP_MM,
+    DEFAULT_SPINDLE_SPEED,
+    DEFAULT_FEED_RATE_CUTTING,
+    DEFAULT_FEED_RATE_PLUNGE,
+    DEFAULT_CUT_DEPTH,
+    DEFAULT_SAFE_HEIGHT,
+    DEFAULT_TOOL_DIAMETER,
+)
+
 
 class OrderBase(BaseModel):
     customer_ref: str | None = None
@@ -258,7 +272,7 @@ class PanelInput(BaseModel):
     name: str = Field(..., description="Название панели (напр. 'Боковина левая')")
     width_mm: float = Field(..., gt=0, description="Ширина в мм")
     height_mm: float = Field(..., gt=0, description="Высота в мм")
-    thickness_mm: float = Field(16.0, gt=0, description="Толщина в мм")
+    thickness_mm: float = Field(DEFAULT_THICKNESS_MM, gt=0, description="Толщина в мм")
     material: str = Field("ЛДСП", description="Материал")
 
     # Кромка
@@ -266,7 +280,7 @@ class PanelInput(BaseModel):
     edge_bottom: bool = Field(False, description="Кромка снизу")
     edge_left: bool = Field(False, description="Кромка слева")
     edge_right: bool = Field(False, description="Кромка справа")
-    edge_thickness_mm: float = Field(0.4, ge=0, description="Толщина кромки")
+    edge_thickness_mm: float = Field(DEFAULT_EDGE_THICKNESS_MM, ge=0, description="Толщина кромки")
 
     # Присадка (отверстия)
     drilling_holes: list[dict[str, Any]] = Field(
@@ -288,7 +302,7 @@ class DXFJobRequest(BaseModel):
 
     # Опции
     optimize_layout: bool = Field(True, description="Оптимизировать раскрой")
-    gap_mm: float = Field(4.0, ge=0, description="Зазор между панелями (на пропил)")
+    gap_mm: float = Field(DEFAULT_GAP_MM, ge=0, description="Зазор между панелями (на пропил)")
 
     # Идемпотентность
     idempotency_key: str | None = Field(None, description="Ключ идемпотентности")
@@ -410,7 +424,7 @@ class DirectGCodeRequest(BaseModel):
     sheet_width_mm: float | None = Field(None, description="Ширина листа")
     sheet_height_mm: float | None = Field(None, description="Высота листа")
     optimize_layout: bool = Field(True, description="Оптимизировать раскрой")
-    gap_mm: float = Field(4.0, ge=0, description="Зазор между панелями")
+    gap_mm: float = Field(DEFAULT_GAP_MM, ge=0, description="Зазор между панелями")
 
     # Переопределение параметров профиля
     cut_depth: float | None = Field(None, ge=1, le=50, description="Глубина резки (мм)")
@@ -525,17 +539,17 @@ class HardwareSearchResponse(BaseModel):
 # Дефолтные значения для настроек
 SETTINGS_DEFAULTS: dict[str, Any] = {
     "machine_profile": "weihong",
-    "sheet_width_mm": 2800,
-    "sheet_height_mm": 2070,
-    "thickness_mm": 16,
-    "edge_thickness_mm": 0.4,
-    "gap_mm": 4,
-    "spindle_speed": 18000,
-    "feed_rate_cutting": 800,
-    "feed_rate_plunge": 400,
-    "cut_depth": 18,
-    "safe_height": 5,
-    "tool_diameter": 6,
+    "sheet_width_mm": DEFAULT_SHEET_WIDTH_MM,
+    "sheet_height_mm": DEFAULT_SHEET_HEIGHT_MM,
+    "thickness_mm": DEFAULT_THICKNESS_MM,
+    "edge_thickness_mm": DEFAULT_EDGE_THICKNESS_MM,
+    "gap_mm": DEFAULT_GAP_MM,
+    "spindle_speed": DEFAULT_SPINDLE_SPEED,
+    "feed_rate_cutting": DEFAULT_FEED_RATE_CUTTING,
+    "feed_rate_plunge": DEFAULT_FEED_RATE_PLUNGE,
+    "cut_depth": DEFAULT_CUT_DEPTH,
+    "safe_height": DEFAULT_SAFE_HEIGHT,
+    "tool_diameter": DEFAULT_TOOL_DIAMETER,
 }
 
 
@@ -630,7 +644,7 @@ class CalculatedPanel(BaseModel):
     name: str = Field(..., description="Название панели (Боковина левая, Дно и т.д.)")
     width_mm: float = Field(..., gt=0, description="Ширина в мм")
     height_mm: float = Field(..., gt=0, description="Высота в мм")
-    thickness_mm: float = Field(16.0, gt=0, description="Толщина в мм")
+    thickness_mm: float = Field(DEFAULT_THICKNESS_MM, gt=0, description="Толщина в мм")
     quantity: int = Field(1, ge=1, description="Количество")
 
     # Кромка
@@ -638,7 +652,7 @@ class CalculatedPanel(BaseModel):
     edge_back: bool = Field(False, description="Кромка сзади")
     edge_top: bool = Field(False, description="Кромка сверху")
     edge_bottom: bool = Field(False, description="Кромка снизу")
-    edge_thickness_mm: float = Field(0.4, ge=0, description="Толщина кромки")
+    edge_thickness_mm: float = Field(DEFAULT_EDGE_THICKNESS_MM, ge=0, description="Толщина кромки")
 
     # Опции
     has_slot_for_back: bool = Field(False, description="Паз под заднюю стенку")
