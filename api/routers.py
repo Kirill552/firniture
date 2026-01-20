@@ -188,16 +188,15 @@ dialogue_router = APIRouter(prefix="/api/v1/dialogue", tags=["Dialogue"])
 async def create_order(
     order: OrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Создать новый заказ.
 
-    Если пользователь авторизован — заказ привязывается к его фабрике.
-    Если нет — заказ создаётся без привязки (для анонимных демо).
+    Требует авторизации. Заказ привязывается к фабрике пользователя.
     """
-    factory_id = current_user.factory_id if current_user else None
-    created_by_id = current_user.id if current_user else None
+    factory_id = current_user.factory_id
+    created_by_id = current_user.id
 
     return await crud.create_order(
         db=db,

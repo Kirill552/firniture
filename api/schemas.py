@@ -531,9 +531,9 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "edge_thickness_mm": 0.4,
     "gap_mm": 4,
     "spindle_speed": 18000,
-    "feed_rate_cutting": 3000,
-    "feed_rate_plunge": 1500,
-    "cut_depth": 8,
+    "feed_rate_cutting": 800,
+    "feed_rate_plunge": 400,
+    "cut_depth": 18,
     "safe_height": 5,
     "tool_diameter": 6,
 }
