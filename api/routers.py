@@ -1829,11 +1829,11 @@ async def list_machine_profiles() -> MachineProfilesList:
     Получить список доступных профилей станков ЧПУ.
 
     Профили включают настройки для популярных систем управления:
-    - **fanuc** — Fanuc (ISO 6983, ГОСТ 20999-83) — промышленный стандарт
-    - **mach3** — Mach3 — популярен для малого/среднего бизнеса
-    - **nc_studio** — NC Studio (Weihong) — китайские станки, массовый сегмент в России
-    - **grbl** — GRBL — любительские станки
-    - **homag** — Homag — премиум мебельное оборудование
+    - **weihong** — Weihong NCStudio — ~30-35% рынка России, популярен для малого/среднего бизнеса
+    - **syntec** — Syntec — ~20-25% рынка России, FANUC-совместимый
+    - **fanuc** — Fanuc (ISO 6983, ГОСТ 20999-83) — ~15-20% рынка, промышленный стандарт
+    - **dsp** — DSP — ~8-12% рынка, бюджетный сегмент
+    - **homag** — Homag — ~2-3% рынка, премиум мебельное оборудование
     """
     profiles = get_available_profiles()
     return MachineProfilesList(
@@ -1862,7 +1862,7 @@ async def create_gcode_job(
     ```json
     {
         "dxf_artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-        "machine_profile": "mach3",
+        "machine_profile": "weihong",
         "cut_depth": 18.0
     }
     ```
