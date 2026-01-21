@@ -75,8 +75,8 @@ export function BOMHeader({
 
   return (
     <Card className={compact ? "border-0 shadow-none bg-transparent" : ""}>
-      <CardContent className={compact ? "p-0" : "pt-6"}>
-        <div className={compact ? "flex flex-wrap items-center gap-4" : "space-y-4"}>
+      <CardContent className={compact ? "px-0 py-3" : "pt-6"}>
+        <div className={compact ? "flex flex-wrap items-center gap-4 min-h-[40px]" : "space-y-4"}>
           {/* Название изделия */}
           <div className="flex items-center gap-2">
             {!compact && <span className="text-muted-foreground">Заказ:</span>}
