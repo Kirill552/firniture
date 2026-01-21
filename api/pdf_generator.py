@@ -18,8 +18,11 @@ from datetime import datetime
 try:
     import fitz  # PyMuPDF
     PYMUPDF_AVAILABLE = True
+    # Кодировка для кириллицы (русский текст)
+    TEXT_ENCODING_CYRILLIC = 2
 except ImportError:
     PYMUPDF_AVAILABLE = False
+    TEXT_ENCODING_CYRILLIC = 2
 
 from api.dxf_generator import PlacedPanel
 
@@ -177,6 +180,7 @@ def generate_cutting_map_pdf(
                 fontsize=cfg.font_size_panel,
                 fontname=cfg.font_title,
                 color=cfg.color_text,
+                encoding=TEXT_ENCODING_CYRILLIC,
             )
 
         # Размеры панели (если помещается)
@@ -234,6 +238,7 @@ def _draw_header(page: fitz.Page, cfg: PDFConfig, order_info: str) -> None:
         fontsize=cfg.font_size_title,
         fontname=cfg.font_title,
         color=cfg.color_text,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
 
     # Подзаголовок с информацией о заказе
@@ -244,6 +249,7 @@ def _draw_header(page: fitz.Page, cfg: PDFConfig, order_info: str) -> None:
             fontsize=cfg.font_size_subtitle,
             fontname=cfg.font_title,
             color=cfg.color_dimension,
+            encoding=TEXT_ENCODING_CYRILLIC,
         )
 
     # Дата
@@ -279,16 +285,18 @@ def _draw_legend(
         fontsize=cfg.font_size_subtitle,
         fontname=cfg.font_title,
         color=cfg.color_text,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height + 8
 
     # Размер листа
     page.insert_text(
         fitz.Point(x, current_y),
-        f"Лист: {int(sheet_w)}×{int(sheet_h)} мм",
+        f"Лист: {int(sheet_w)}x{int(sheet_h)} мм",
         fontsize=cfg.font_size_stats,
         fontname=cfg.font_title,
         color=cfg.color_dimension,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height
 
@@ -296,10 +304,11 @@ def _draw_legend(
     sheet_area = (sheet_w * sheet_h) / 1_000_000
     page.insert_text(
         fitz.Point(x, current_y),
-        f"Площадь: {sheet_area:.2f} м²",
+        f"Площадь: {sheet_area:.2f} м2",
         fontsize=cfg.font_size_stats,
         fontname=cfg.font_title,
         color=cfg.color_dimension,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height
 
@@ -310,6 +319,7 @@ def _draw_legend(
         fontsize=cfg.font_size_stats,
         fontname=cfg.font_title,
         color=cfg.color_dimension,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height
 
@@ -321,6 +331,7 @@ def _draw_legend(
         fontsize=cfg.font_size_stats,
         fontname=cfg.font_title,
         color=util_color,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height * 2
 
@@ -331,12 +342,13 @@ def _draw_legend(
         fontsize=cfg.font_size_subtitle,
         fontname=cfg.font_title,
         color=cfg.color_text,
+        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height + 4
 
     for i, panel in enumerate(panels[:10]):  # Максимум 10 панелей в легенде
         name = panel.name[:18] + "..." if len(panel.name) > 20 else panel.name
-        rotated = " ↻" if panel.rotated else ""
+        rotated = " R" if panel.rotated else ""
         text = f"{i+1}. {name}{rotated}"
         page.insert_text(
             fitz.Point(x, current_y),
@@ -344,6 +356,7 @@ def _draw_legend(
             fontsize=cfg.font_size_panel,
             fontname=cfg.font_title,
             color=cfg.color_dimension,
+            encoding=TEXT_ENCODING_CYRILLIC,
         )
         current_y += line_height - 2
 
