@@ -1,20 +1,40 @@
 "use client"
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Download, Package, Loader2, Check } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Download, Package, Loader2, Check, FileText, FileCode, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getAuthHeader } from "@/lib/auth"
 import { StatCardSkeleton } from "@/components/ui/table-skeleton"
-import { ProductionStepper } from "@/components/production-stepper"
 import { MachineProfileModal, hasSelectedMachineProfile } from "@/components/machine-profile-modal"
-import { BOMHeader, PanelsTable, HardwareTable, EdgeBandTable, SheetLayoutPreview } from "@/components/bom"
+import {
+  BOMHeader,
+  PanelsTable,
+  HardwareTable,
+  EdgeBandTable,
+  SheetLayoutPreview,
+  DualPanelLayout,
+  FileGenerationCard,
+  MiniStepper,
+  type FileStatus,
+} from "@/components/bom"
 import type { FullBOM, BOMPanel, BOMHardware, BOMFastener, BOMEdgeBand } from "@/types/api"
 
 // Тип статуса сохранения
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+const getFileStatus = (
+  isGenerating: boolean,
+  error: string | null,
+  downloadUrl: string | null
+): FileStatus => {
+  if (isGenerating) return "generating"
+  if (error) return "error"
+  if (downloadUrl) return "ready"
+  return "idle"
+}
 
 // Empty state component
 function EmptyBomState() {
@@ -623,6 +643,34 @@ export default function BomPage() {
     })
   }
 
+  // Расчёт стоимости для Header
+  const totalCost = useMemo(() => {
+    if (!bom) return 0
+    const hardwareCost = bom.hardware.reduce((sum, h) => sum + (h.quantity || h.qty || 0) * (h.unit_price || 0), 0)
+    const fastenersCost = bom.fasteners.reduce((sum, f) => sum + f.quantity * (f.unit_price || 0), 0)
+    const edgeCost = bom.edge_bands.reduce((sum, eb) => sum + eb.length_m * (eb.unit_price || 0), 0)
+    return hardwareCost + fastenersCost + edgeCost
+  }, [bom])
+
+  // Шаги производства для MiniStepper
+  type StepStatus = "completed" | "current" | "pending"
+  const productionSteps = useMemo(() => {
+    const dxfSt = getFileStatus(isGeneratingDxf, dxfError, dxfDownloadUrl)
+    const gcodeSt = getFileStatus(isGeneratingGcode, gcodeError, gcodeDownloadUrl)
+
+    const mapStatus = (st: FileStatus): StepStatus => {
+      if (st === "generating") return "current"
+      if (st === "ready") return "completed"
+      return "pending"
+    }
+
+    return [
+      { label: "Спецификация", status: "completed" as StepStatus },
+      { label: "Раскрой", status: mapStatus(dxfSt) },
+      { label: "Присадка", status: mapStatus(gcodeSt) },
+    ]
+  }, [isGeneratingDxf, dxfError, dxfDownloadUrl, isGeneratingGcode, gcodeError, gcodeDownloadUrl])
+
   // Empty state
   if (!effectiveOrderId) {
     return (
@@ -691,28 +739,16 @@ export default function BomPage() {
   }
 
   return (
-    <div className="p-6 w-full space-y-6">
-      {/* Заголовок */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Спецификация (BOM)</h1>
-          <p className="text-muted-foreground">
-            Детальная спецификация материалов и компонентов для производства
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleExport} variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Экспорт
-          </Button>
-        </div>
-      </div>
-
-      {/* Шапка заказа (редактируемая) */}
+    <div className="p-6 w-full space-y-4">
+      {/* Компактная шапка */}
       <BOMHeader
+        compact
         furnitureType={bom.furniture_type}
         dimensions={bom.dimensions}
         bodyMaterial={bom.body_material}
+        panelCount={bom.panels.length}
+        totalCost={totalCost}
+        saveStatus={saveStatus}
         onUpdate={(updates) => {
           if (updates.dimensions) {
             handleBomUpdate({ dimensions: { ...bom.dimensions, ...updates.dimensions } })
@@ -729,39 +765,93 @@ export default function BomPage() {
         isLoading={isRecalculating}
       />
 
-      {/* Production Stepper */}
-      <ProductionStepper
-        orderId={effectiveOrderId}
-        hasOrder={true}
-        dxfStatus={
-          isGeneratingDxf
-            ? "loading"
-            : dxfError
-              ? "error"
-              : dxfDownloadUrl
-                ? "completed"
-                : "pending"
+      <DualPanelLayout
+        leftColumn={
+          <>
+            {/* Таблица панелей */}
+            <PanelsTable
+              panels={bom.panels}
+              onPanelUpdate={handlePanelUpdate}
+              onPanelDelete={handlePanelDelete}
+              onPanelAdd={handlePanelAdd}
+              sheetArea={5.8}
+            />
+
+            {/* Фурнитура (collapsible) */}
+            <HardwareTable
+              hardware={bom.hardware}
+              fasteners={bom.fasteners}
+              onHardwareUpdate={handleHardwareUpdate}
+              onFastenerUpdate={handleFastenerUpdate}
+              collapsible
+              defaultOpen={false}
+            />
+
+            {/* Кромка (collapsible) */}
+            <EdgeBandTable
+              edgeBands={bom.edge_bands}
+              onEdgeBandUpdate={handleEdgeBandUpdate}
+              collapsible
+              defaultOpen={false}
+            />
+          </>
         }
-        dxfDownloadUrl={dxfDownloadUrl}
-        dxfError={dxfError}
-        onGenerateDxf={handleGenerateDxf}
-        gcodeStatus={
-          isGeneratingGcode
-            ? "loading"
-            : gcodeError
-              ? "error"
-              : gcodeDownloadUrl
-                ? "completed"
-                : "pending"
+        rightColumn={
+          <>
+            {/* Canvas раскладки */}
+            <SheetLayoutPreview
+              panels={bom.panels}
+              sheetWidth={2800}
+              sheetHeight={2070}
+              showCombineSuggestion={true}
+            />
+
+            {/* Файлы для станка */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium">Файлы для станка</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <FileGenerationCard
+                  icon={FileText}
+                  label="PDF Карта раскроя"
+                  status="idle"
+                  onGenerate={() => {
+                    toast({ title: "PDF", description: "Функция в разработке" })
+                  }}
+                />
+                <FileGenerationCard
+                  icon={FileCode}
+                  label="DXF Раскладка"
+                  status={getFileStatus(isGeneratingDxf, dxfError, dxfDownloadUrl)}
+                  downloadUrl={dxfDownloadUrl}
+                  error={dxfError}
+                  onGenerate={handleGenerateDxf}
+                  onRegenerate={handleGenerateDxf}
+                />
+                <FileGenerationCard
+                  icon={Settings}
+                  label={`G-code (${machineProfile || "weihong"})`}
+                  status={
+                    !dxfDownloadUrl && !isGeneratingDxf
+                      ? "blocked"
+                      : getFileStatus(isGeneratingGcode, gcodeError, gcodeDownloadUrl)
+                  }
+                  downloadUrl={gcodeDownloadUrl}
+                  error={gcodeError}
+                  blockedReason="Сначала создайте DXF"
+                  onGenerate={handleGenerateGcode}
+                  onRegenerate={handleGenerateGcode}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Mini Stepper */}
+            <div className="flex justify-center pt-2">
+              <MiniStepper steps={productionSteps} />
+            </div>
+          </>
         }
-        gcodeDownloadUrl={gcodeDownloadUrl}
-        gcodeError={gcodeError}
-        onGenerateGcode={handleGenerateGcode}
-        machineProfile={machineProfile}
-        onOpenProfileModal={() => {
-          setIsFirstTimeProfile(false)
-          setShowProfileModal(true)
-        }}
       />
 
       {/* Machine Profile Modal */}
@@ -773,73 +863,16 @@ export default function BomPage() {
         isFirstTime={isFirstTimeProfile}
       />
 
-      {/* Визуализация раскладки на листе */}
-      <SheetLayoutPreview
-        panels={bom.panels}
-        sheetWidth={2800}
-        sheetHeight={2070}
-        showCombineSuggestion={true}
-      />
-
-      {/* Таблица панелей */}
-      <PanelsTable
-        panels={bom.panels}
-        onPanelUpdate={handlePanelUpdate}
-        onPanelDelete={handlePanelDelete}
-        onPanelAdd={handlePanelAdd}
-        sheetArea={5.8}
-      />
-
-      {/* Таблица фурнитуры и крепежа */}
-      <HardwareTable
-        hardware={bom.hardware}
-        fasteners={bom.fasteners}
-        onHardwareUpdate={handleHardwareUpdate}
-        onFastenerUpdate={handleFastenerUpdate}
-      />
-
-      {/* Таблица кромки */}
-      <EdgeBandTable
-        edgeBands={bom.edge_bands}
-        onEdgeBandUpdate={handleEdgeBandUpdate}
-      />
-
-      {/* Индикатор статуса сохранения */}
-      {(saveStatus !== 'idle' || needsRecalculation) && (
-        <div className={`fixed bottom-6 right-6 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 transition-all ${
-          needsRecalculation
-            ? 'bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700'
-            : saveStatus === 'saving'
-              ? 'bg-blue-100 dark:bg-blue-900/50 border border-blue-300 dark:border-blue-700'
-              : saveStatus === 'saved'
-                ? 'bg-green-100 dark:bg-green-900/50 border border-green-300 dark:border-green-700'
-                : 'bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700'
-        }`}>
-          {needsRecalculation ? (
-            <>
-              <span className="text-amber-800 dark:text-amber-200 text-sm">
-                Габариты изменены — нужен пересчёт
-              </span>
-              <Button size="sm" onClick={handleRecalculate} disabled={isRecalculating}>
-                {isRecalculating ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : null}
-                Пересчитать
-              </Button>
-            </>
-          ) : saveStatus === 'saving' ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
-              <span className="text-blue-800 dark:text-blue-200 text-sm">Сохранение...</span>
-            </>
-          ) : saveStatus === 'saved' ? (
-            <>
-              <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-              <span className="text-green-800 dark:text-green-200 text-sm">Сохранено</span>
-            </>
-          ) : (
-            <span className="text-red-800 dark:text-red-200 text-sm">Ошибка сохранения</span>
-          )}
+      {/* Floating status indicator для needsRecalculation */}
+      {needsRecalculation && (
+        <div className="fixed bottom-6 right-6 rounded-lg px-4 py-3 shadow-lg bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 flex items-center gap-3 z-50">
+          <span className="text-amber-800 dark:text-amber-200 text-sm">
+            Габариты изменены — нужен пересчёт
+          </span>
+          <Button size="sm" onClick={handleRecalculate} disabled={isRecalculating}>
+            {isRecalculating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            Пересчитать
+          </Button>
         </div>
       )}
     </div>

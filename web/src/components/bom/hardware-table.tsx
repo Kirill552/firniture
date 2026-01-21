@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CollapsibleSection } from "./collapsible-section"
 import type { BOMHardware, BOMFastener } from "@/types/api"
 
 interface HardwareTableProps {
@@ -24,6 +25,8 @@ interface HardwareTableProps {
   onFastenerUpdate?: (id: string, updates: Partial<BOMFastener>) => void
   onFastenerDelete?: (id: string) => void
   readOnly?: boolean
+  collapsible?: boolean
+  defaultOpen?: boolean
 }
 
 export function HardwareTable({
@@ -34,6 +37,8 @@ export function HardwareTable({
   onFastenerUpdate,
   onFastenerDelete,
   readOnly = false,
+  collapsible = false,
+  defaultOpen = false,
 }: HardwareTableProps) {
   const [editingCell, setEditingCell] = useState<{
     type: "hardware" | "fastener"
@@ -141,6 +146,161 @@ export function HardwareTable({
     )
   }
 
+  const content = (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Артикул</TableHead>
+            <TableHead className="w-[250px]">Наименование</TableHead>
+            <TableHead>Тип</TableHead>
+            <TableHead className="text-right">Кол-во</TableHead>
+            <TableHead className="text-right">Цена</TableHead>
+            <TableHead className="text-right">Сумма</TableHead>
+            {!readOnly && <TableHead className="w-[50px]"></TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {/* Фурнитура (петли, направляющие, ручки) */}
+          {hardware.length === 0 && fasteners.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={readOnly ? 6 : 7} className="text-center text-muted-foreground py-8">
+                Нет фурнитуры и крепежа
+              </TableCell>
+            </TableRow>
+          ) : (
+            <>
+              {hardware.map((item) => {
+                const qty = item.quantity || item.qty || 0
+                const price = item.unit_price || 0
+                const sum = qty * price
+                const id = item.id || item.sku
+
+                return (
+                  <TableRow key={id}>
+                    <TableCell className="font-mono text-sm">{item.sku}</TableCell>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs">
+                        {item.category || "Фурнитура"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {renderEditableCell("hardware", id, "quantity", qty, " шт", true)}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatPrice(price)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatPrice(sum)}
+                    </TableCell>
+                    {!readOnly && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => onHardwareDelete?.(item.sku)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                )
+              })}
+
+              {/* Крепёж (конфирматы, заглушки, полкодержатели) */}
+              {fasteners.map((item) => {
+                const sum = item.quantity * (item.unit_price || 0)
+
+                return (
+                  <TableRow key={item.id} className="bg-muted/20">
+                    <TableCell className="font-mono text-sm text-muted-foreground">
+                      —
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <span className="font-medium">{item.name}</span>
+                        {item.size && (
+                          <span className="text-muted-foreground ml-1">({item.size})</span>
+                        )}
+                      </div>
+                      {item.purpose && (
+                        <div className="text-xs text-muted-foreground">{item.purpose}</div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        Крепёж
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {renderEditableCell("fastener", item.id, "quantity", item.quantity, " шт", true)}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatPrice(item.unit_price || 0)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatPrice(sum)}
+                    </TableCell>
+                    {!readOnly && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => onFastenerDelete?.(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                )
+              })}
+            </>
+          )}
+        </TableBody>
+      </Table>
+
+      {/* Итого */}
+      {(hardware.length > 0 || fasteners.length > 0) && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t text-sm">
+          <div className="flex gap-6">
+            <div>
+              <span className="text-muted-foreground">Фурнитура: </span>
+              <span className="font-medium">{hardware.length} поз.</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Крепёж: </span>
+              <span className="font-medium">{fasteners.length} поз.</span>
+            </div>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Итого: </span>
+            <span className="font-bold">{formatPrice(totalCost)}</span>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
+  if (collapsible) {
+    const badge = `${hardware.length + fasteners.length} поз, ${formatPrice(totalCost)}`
+    return (
+      <Card>
+        <CollapsibleSection
+          title="Фурнитура и крепёж"
+          badge={badge}
+          defaultOpen={defaultOpen}
+        >
+          {content}
+        </CollapsibleSection>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -149,141 +309,7 @@ export function HardwareTable({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Артикул</TableHead>
-              <TableHead className="w-[250px]">Наименование</TableHead>
-              <TableHead>Тип</TableHead>
-              <TableHead className="text-right">Кол-во</TableHead>
-              <TableHead className="text-right">Цена</TableHead>
-              <TableHead className="text-right">Сумма</TableHead>
-              {!readOnly && <TableHead className="w-[50px]"></TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {/* Фурнитура (петли, направляющие, ручки) */}
-            {hardware.length === 0 && fasteners.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={readOnly ? 6 : 7} className="text-center text-muted-foreground py-8">
-                  Нет фурнитуры и крепежа
-                </TableCell>
-              </TableRow>
-            ) : (
-              <>
-                {hardware.map((item) => {
-                  const qty = item.quantity || item.qty || 0
-                  const price = item.unit_price || 0
-                  const sum = qty * price
-                  const id = item.id || item.sku
-
-                  return (
-                    <TableRow key={id}>
-                      <TableCell className="font-mono text-sm">{item.sku}</TableCell>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {item.category || "Фурнитура"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {renderEditableCell("hardware", id, "quantity", qty, " шт", true)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatPrice(price)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatPrice(sum)}
-                      </TableCell>
-                      {!readOnly && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => onHardwareDelete?.(item.sku)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  )
-                })}
-
-                {/* Крепёж (конфирматы, заглушки, полкодержатели) */}
-                {fasteners.map((item) => {
-                  const sum = item.quantity * (item.unit_price || 0)
-
-                  return (
-                    <TableRow key={item.id} className="bg-muted/20">
-                      <TableCell className="font-mono text-sm text-muted-foreground">
-                        —
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium">{item.name}</span>
-                          {item.size && (
-                            <span className="text-muted-foreground ml-1">({item.size})</span>
-                          )}
-                        </div>
-                        {item.purpose && (
-                          <div className="text-xs text-muted-foreground">{item.purpose}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          Крепёж
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {renderEditableCell("fastener", item.id, "quantity", item.quantity, " шт", true)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatPrice(item.unit_price || 0)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatPrice(sum)}
-                      </TableCell>
-                      {!readOnly && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => onFastenerDelete?.(item.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  )
-                })}
-              </>
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Итого */}
-        {(hardware.length > 0 || fasteners.length > 0) && (
-          <div className="flex items-center justify-between mt-4 pt-3 border-t text-sm">
-            <div className="flex gap-6">
-              <div>
-                <span className="text-muted-foreground">Фурнитура: </span>
-                <span className="font-medium">{hardware.length} поз.</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Крепёж: </span>
-                <span className="font-medium">{fasteners.length} поз.</span>
-              </div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Итого: </span>
-              <span className="font-bold">{formatPrice(totalCost)}</span>
-            </div>
-          </div>
-        )}
+        {content}
       </CardContent>
     </Card>
   )

@@ -106,7 +106,11 @@ export function SheetLayoutPreview({
   )
 
   // Масштаб для отображения (чтобы вписать в контейнер)
-  const scale = 0.12 // ~336x248 px для стандартного листа
+  const CANVAS_WIDTH = 400
+  const CANVAS_HEIGHT = 300
+  const scaleX = CANVAS_WIDTH / sheetWidth
+  const scaleY = CANVAS_HEIGHT / sheetHeight
+  const scale = Math.min(scaleX, scaleY) * 0.95 // 5% отступ от краёв
   const displayWidth = sheetWidth * scale
   const displayHeight = sheetHeight * scale
 

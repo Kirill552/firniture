@@ -332,10 +332,11 @@ export function useCAMJobStatus(
       return apiFetch<CAMJobStatusResponse>(`/api/v1/cam/jobs/${jobId}`)
     },
     enabled: !!jobId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Автоматически обновлять статус каждые 2 секунды, пока задача в процессе
-      if (data?.state === 'data') {
-        const status = data.data.status
+      const data = query.state.data
+      if (data) {
+        const status = data.status
         return status === 'Processing' || status === 'Created' ? 2000 : false
       }
       return false

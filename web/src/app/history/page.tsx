@@ -152,10 +152,10 @@ export default function HistoryPage() {
       const to = dateRange.to || dateRange.from
 
       // Устанавливаем время на начало и конец дня для корректного сравнения
-      const fromStart = new Date(from)
+      const fromStart = new Date(from!)
       fromStart.setHours(0, 0, 0, 0)
 
-      const toEnd = new Date(to)
+      const toEnd = new Date(to!)
       toEnd.setHours(23, 59, 59, 999)
 
       return orderDate >= fromStart && orderDate <= toEnd

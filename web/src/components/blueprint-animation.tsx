@@ -35,7 +35,7 @@ export function BlueprintAnimation() {
         pathLength: {
           delay: i * 0.15,
           duration: 1.2,
-          ease: 'easeInOut',
+          ease: 'easeInOut' as const,
         },
         opacity: {
           delay: i * 0.15,
@@ -58,7 +58,7 @@ export function BlueprintAnimation() {
         pathLength: {
           delay: 2 + i * 0.1,
           duration: 0.6,
-          ease: 'easeOut',
+          ease: 'easeOut' as const,
         },
         opacity: {
           delay: 2 + i * 0.1,
@@ -80,7 +80,7 @@ export function BlueprintAnimation() {
       transition: {
         delay: 2.5 + i * 0.15,
         duration: 0.4,
-        ease: 'easeOut',
+        ease: 'easeOut' as const,
       },
     }),
   }
@@ -97,7 +97,7 @@ export function BlueprintAnimation() {
       transition: {
         delay: 1.8 + i * 0.08,
         duration: 0.3,
-        type: 'spring',
+        type: 'spring' as const,
         stiffness: 300,
       },
     }),

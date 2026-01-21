@@ -172,7 +172,7 @@ export const LazyBlueprintAnimation = dynamic(
 export const LazyAnimatedLayout = dynamic(
   () => import('../animated-layout').then(mod => ({ default: mod.AnimatedLayout })),
   {
-    loading: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    loading: () => <div />,
     ssr: false // Анимации переходов не нужны на сервере
   }
 )

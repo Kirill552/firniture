@@ -5,5 +5,5 @@
 // Экспортируем все типы из api.ts
 export * from './api'
 
-// Экспортируем типы для Three.js DXF loader
-export * from './three-dxf-loader'
+// Типы для Three.js DXF loader определены в three-dxf-loader.d.ts как ambient module
+// Они автоматически доступны через import 'three-dxf-loader'
