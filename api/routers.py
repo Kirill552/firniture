@@ -2131,11 +2131,12 @@ async def generate_cutting_map_pdf(
         order_info=order_info,
     )
 
-    # Формируем имя файла
+    # Формируем имя файла (только ASCII для совместимости с HTTP заголовками)
     filename = "cutting_map.pdf"
     if req.order_info:
-        # Убираем спецсимволы из имени
-        safe_name = "".join(c for c in req.order_info if c.isalnum() or c in " -_").strip()
+        # Оставляем только ASCII буквы, цифры и безопасные символы
+        safe_name = "".join(c for c in req.order_info if c.isascii() and (c.isalnum() or c in " -_")).strip()
+        safe_name = safe_name.replace(" ", "_")
         if safe_name:
             filename = f"cutting_map_{safe_name[:30]}.pdf"
 
