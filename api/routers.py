@@ -1978,7 +1978,7 @@ async def create_drilling_job(
     Возвращает ZIP архив с .nc файлами (по одному на панель).
     """
     # Проверяем заказ
-    order = await crud.get_order(db, request.order_id)
+    order = await crud.get_order_with_products(db, request.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
 
