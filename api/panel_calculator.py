@@ -49,6 +49,9 @@ class PanelSpec:
     has_slot_for_back: bool = False
     notes: str = ""
 
+    # Координаты присадки (для G-code)
+    drilling_points: list[dict] = field(default_factory=list)
+
     @property
     def area_m2(self) -> float:
         """Площадь панели в м2."""
@@ -83,6 +86,7 @@ class PanelSpec:
             "edge_thickness_mm": self.edge_thickness_mm,
             "has_slot_for_back": self.has_slot_for_back,
             "notes": self.notes,
+            "drilling_points": self.drilling_points,
         }
 
 

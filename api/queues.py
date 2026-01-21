@@ -13,6 +13,7 @@ DXF_QUEUE = "cam:dxf"
 GCODE_QUEUE = "cam:gcode"
 ZIP_QUEUE = "cam:zip"
 DLQ_QUEUE = "cam:dlq"
+DRILLING_QUEUE = "cam:drilling"
 
 
 def get_redis() -> AsyncRedis:

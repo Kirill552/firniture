@@ -38,7 +38,7 @@ from .models import (
     ProductConfig,
     User,
 )
-from .queues import DXF_QUEUE, GCODE_QUEUE, enqueue
+from .queues import DRILLING_QUEUE, DXF_QUEUE, GCODE_QUEUE, enqueue
 from .schemas import (
     SETTINGS_DEFAULTS,
     CalculatedPanel,
@@ -1556,6 +1556,8 @@ from .gcode_generator import get_available_profiles
 from .schemas import (
     ArtifactDownload,
     CAMJobStatus,
+    DrillingGcodeRequest,
+    DrillingGcodeResponse,
     DXFJobRequest,
     DXFJobResponse,
     GCodeJobRequest,
@@ -1960,6 +1962,83 @@ async def create_gcode_job(
         status="created",
         machine_profile=machine_profile,
         dxf_artifact_id=req.dxf_artifact_id,
+    )
+
+
+@router.post("/cam/drilling", response_model=DrillingGcodeResponse)
+async def create_drilling_job(
+    request: DrillingGcodeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DrillingGcodeResponse:
+    """
+    Создать задачу генерации G-code присадки.
+
+    Генерирует G-code напрямую из BOM заказа, минуя DXF.
+    Возвращает ZIP архив с .nc файлами (по одному на панель).
+    """
+    # Проверяем заказ
+    order = await crud.get_order(db, request.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+
+    if order.factory_id != current_user.factory_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к заказу")
+
+    # Получаем панели заказа
+    panels_query = await db.execute(
+        select(Panel).where(Panel.order_id == request.order_id)
+    )
+    panels = panels_query.scalars().all()
+
+    if not panels:
+        raise HTTPException(status_code=400, detail="В заказе нет панелей")
+
+    # Формируем список файлов (упрощённая транслитерация для превью)
+    def simple_transliterate(text: str) -> str:
+        table = {'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e',
+                 'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l',
+                 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's',
+                 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch',
+                 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e',
+                 'ю': 'yu', 'я': 'ya', ' ': '_'}
+        return ''.join(table.get(c, c) for c in text.lower())
+
+    estimated_files = []
+    for panel in panels:
+        name_ascii = simple_transliterate(panel.name)
+        filename = f"{name_ascii}_{panel.width_mm:.0f}x{panel.height_mm:.0f}.nc"
+        estimated_files.append(filename)
+    estimated_files.append("README.txt")
+
+    # Создаём задачу
+    job = CAMJob(
+        id=uuid.uuid4(),
+        order_id=request.order_id,
+        job_kind="DRILLING",
+        status=JobStatusEnum.Created,
+        context={
+            "machine_profile": request.machine_profile,
+            "output_format": request.output_format,
+            "panels_count": len(panels),
+        },
+    )
+    db.add(job)
+    await db.commit()
+
+    # Ставим в очередь
+    await enqueue(DRILLING_QUEUE, {
+        "job_id": str(job.id),
+        "job_kind": "DRILLING",
+        "order_id": str(request.order_id),
+        "machine_profile": request.machine_profile,
+    })
+
+    return DrillingGcodeResponse(
+        job_id=job.id,
+        status="processing",
+        panels_count=len(panels),
+        estimated_files=estimated_files,
     )
 
 

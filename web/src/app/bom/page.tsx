@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Download, Package, Loader2, Check, FileText, FileCode, Settings } from "lucide-react"
+import { Download, Package, Loader2, Check, FileText, FileCode, Settings, CircleDot } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getAuthHeader } from "@/lib/auth"
 import { StatCardSkeleton } from "@/components/ui/table-skeleton"
@@ -89,6 +89,12 @@ export default function BomPage() {
   const [gcodeJobId, setGcodeJobId] = useState<string | null>(null)
   const [gcodeDownloadUrl, setGcodeDownloadUrl] = useState<string | null>(null)
   const [gcodeError, setGcodeError] = useState<string | null>(null)
+
+  // Drilling G-code generation state
+  const [isGeneratingDrilling, setIsGeneratingDrilling] = useState(false)
+  const [drillingJobId, setDrillingJobId] = useState<string | null>(null)
+  const [drillingDownloadUrl, setDrillingDownloadUrl] = useState<string | null>(null)
+  const [drillingError, setDrillingError] = useState<string | null>(null)
 
   // PDF generation state
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
@@ -657,6 +663,78 @@ export default function BomPage() {
     }, 100)
   }
 
+  // Drilling G-code generation
+  const handleGenerateDrilling = async () => {
+    if (!hasSelectedMachineProfile() || !machineProfile) {
+      setIsFirstTimeProfile(true)
+      setShowProfileModal(true)
+      return
+    }
+
+    if (!effectiveOrderId) return
+
+    setIsGeneratingDrilling(true)
+    setDrillingError(null)
+
+    try {
+      const response = await fetch("/api/v1/cam/drilling", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          order_id: effectiveOrderId,
+          machine_profile: machineProfile,
+          output_format: "zip",
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.job_id) {
+        setDrillingJobId(data.job_id)
+        pollDrillingJobStatus(data.job_id)
+      } else {
+        setDrillingError(data.detail || "Ошибка создания задачи присадки")
+        setIsGeneratingDrilling(false)
+      }
+    } catch (error) {
+      setDrillingError(error instanceof Error ? error.message : "Ошибка генерации присадки")
+      setIsGeneratingDrilling(false)
+    }
+  }
+
+  const pollDrillingJobStatus = async (jobId: string) => {
+    const maxAttempts = 30
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      try {
+        const response = await fetch(`/api/v1/cam/jobs/${jobId}`, {
+          headers: getAuthHeader(),
+        })
+        const data = await response.json()
+
+        if (data.status === "Completed" && data.artifact_id) {
+          setDrillingDownloadUrl(`/api/v1/cam/jobs/${jobId}/file`)
+          setIsGeneratingDrilling(false)
+          return
+        }
+        if (data.status === "Failed") {
+          setDrillingError(data.error || "Генерация присадки не удалась")
+          setIsGeneratingDrilling(false)
+          return
+        }
+      } catch {
+        // Continue polling
+      }
+    }
+
+    setDrillingError("Превышено время ожидания")
+    setIsGeneratingDrilling(false)
+  }
+
   // PDF cutting map generation
   const handleGeneratePdf = async () => {
     if (!bom) return
@@ -941,6 +1019,15 @@ export default function BomPage() {
                   blockedReason="Сначала создайте DXF"
                   onGenerate={handleGenerateGcode}
                   onRegenerate={handleGenerateGcode}
+                />
+                <FileGenerationCard
+                  icon={CircleDot}
+                  label={`G-code присадки (${machineProfile ?? "профиль не выбран"})`}
+                  status={getFileStatus(isGeneratingDrilling, drillingError, drillingDownloadUrl)}
+                  downloadUrl={drillingDownloadUrl}
+                  error={drillingError}
+                  onGenerate={handleGenerateDrilling}
+                  onRegenerate={handleGenerateDrilling}
                 />
               </CardContent>
             </Card>

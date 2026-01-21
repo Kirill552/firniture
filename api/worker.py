@@ -23,7 +23,7 @@ from .constants import (
 )
 from .database import SessionLocal
 from .models import Artifact, CAMJob, JobStatusEnum
-from .queues import DLQ_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
+from .queues import DRILLING_QUEUE, DLQ_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
 
 try:
     import ezdxf  # type: ignore
@@ -39,6 +39,18 @@ try:
     GCODE_GENERATOR_AVAILABLE = True
 except Exception:  # pragma: no cover
     GCODE_GENERATOR_AVAILABLE = False
+
+try:
+    from .drilling_gcode import (
+        generate_drilling_zip,
+        PanelDrilling,
+        DrillHole,
+        DrillingSide,
+        HardwareType,
+    )
+    DRILLING_GENERATOR_AVAILABLE = True
+except Exception:
+    DRILLING_GENERATOR_AVAILABLE = False
 
 
 log = logging.getLogger("cam-worker")
@@ -257,6 +269,71 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
             .values(artifact_id=artifact_id)
         )
         await session.commit()
+    elif payload.get("job_kind") == "DRILLING":
+        if not DRILLING_GENERATOR_AVAILABLE:
+            raise RuntimeError("Drilling generator not available")
+
+        context = payload.get("context", {})
+        order_id = payload.get("order_id")
+        machine_profile = context.get("machine_profile", "weihong")
+
+        # Получаем панели заказа
+        from .models import Panel
+        panels_query = await session.execute(
+            select(Panel).where(Panel.order_id == order_id)
+        )
+        db_panels = panels_query.scalars().all()
+
+        # Конвертируем в PanelDrilling
+        panels: list[PanelDrilling] = []
+        for p in db_panels:
+            # Получаем drilling_points из JSON поля или генерируем базовые
+            drilling_points = p.drilling_points if hasattr(p, 'drilling_points') and p.drilling_points else []
+
+            holes = []
+            for dp in drilling_points:
+                holes.append(DrillHole(
+                    x=dp.get("x", 0),
+                    y=dp.get("y", 0),
+                    diameter=dp.get("diameter", 5),
+                    depth=dp.get("depth", 50),
+                    side=DrillingSide(dp.get("side", "edge")),
+                    hardware_type=HardwareType(dp.get("hardware_type", "confirmat")),
+                ))
+
+            panels.append(PanelDrilling(
+                panel_id=str(p.id),
+                panel_name=p.name,
+                width_mm=p.width_mm,
+                height_mm=p.height_mm,
+                thickness_mm=p.thickness_mm,
+                holes=holes,
+                order_id=order_id,
+            ))
+
+        # Генерируем ZIP
+        zip_bytes, filenames = generate_drilling_zip(panels, machine_profile, order_id)
+
+        # Сохраняем в S3
+        storage = ObjectStorage()
+        storage.ensure_bucket()
+        key = f"drilling/{order_id}/{job_id}.zip"
+        storage.put_object(key, zip_bytes, content_type="application/zip")
+
+        # Создаём артефакт
+        ins = insert(Artifact).values(type="DRILLING_ZIP", storage_key=key, size_bytes=len(zip_bytes))
+        res = await session.execute(ins.returning(Artifact.id))
+        artifact_id = res.scalar_one()
+
+        # Обновляем задачу
+        await session.execute(
+            update(CAMJob)
+            .where(CAMJob.id == job_id)
+            .values(artifact_id=artifact_id)
+        )
+        await session.commit()
+
+        log.info(f"[DRILLING] Job {job_id} completed: {len(filenames)} files, {len(zip_bytes)} bytes")
 
     # → Completed
     await session.execute(
@@ -272,12 +349,12 @@ BACKOFF_FACTOR = 2
 
 async def run_worker(stop_event: asyncio.Event) -> None:
     r = get_redis()
-    log.info("Worker started. Listening queues: %s, %s, %s", DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE)
+    log.info("Worker started. Listening queues: %s, %s, %s, %s", DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, DRILLING_QUEUE)
     while not stop_event.is_set():
         try:
             # Блокирующее ожидание события из любой очереди
             # Pylance: указываем, что это awaitable и возвращает пару [queue, payload]
-            res = await cast(Awaitable[list[str] | None], r.blpop([DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE], timeout=5))
+            res = await cast(Awaitable[list[str] | None], r.blpop([DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, DRILLING_QUEUE], timeout=5))
             if not res:
                 continue
             queue, raw = res

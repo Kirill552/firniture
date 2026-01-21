@@ -800,3 +800,31 @@ class PDFCuttingMapRequest(BaseModel):
 
     # Дополнительная информация
     order_info: str | None = Field(None, description="Информация о заказе для заголовка")
+
+
+# =============================================================================
+# Drilling G-code
+# =============================================================================
+
+class DrillingGcodeRequest(BaseModel):
+    """Запрос на генерацию G-code присадки."""
+    order_id: UUID
+    machine_profile: str = Field(
+        default="weihong",
+        description="Профиль станка: weihong, syntec, fanuc, dsp, homag"
+    )
+    output_format: Literal["zip", "single"] = Field(
+        default="zip",
+        description="zip — архив с файлами по панелям, single — один файл"
+    )
+
+
+class DrillingGcodeResponse(BaseModel):
+    """Ответ на запрос G-code присадки."""
+    job_id: UUID
+    status: str
+    panels_count: int
+    estimated_files: list[str] = Field(
+        default_factory=list,
+        description="Список ожидаемых файлов в архиве"
+    )
