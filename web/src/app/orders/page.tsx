@@ -8,6 +8,7 @@ import { DateRangeFilter, DateRange } from "@/components/date-range-filter"
 import Link from "next/link"
 import * as React from "react"
 import { Loader2, Plus, Eye } from "lucide-react"
+import { getAuthHeader } from "@/lib/auth"
 
 // Определяем тип для данных заказа
 type Order = {
@@ -121,7 +122,9 @@ const OrdersPageInner = () => {
   React.useEffect(() => {
     const loadOrders = async () => {
       try {
-        const response = await fetch('/api/v1/orders')
+        const response = await fetch('/api/v1/orders', {
+          headers: getAuthHeader(),
+        })
         if (response.ok) {
           const data = await response.json()
           if (data && data.length > 0) {

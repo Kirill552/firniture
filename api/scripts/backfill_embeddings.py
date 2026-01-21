@@ -105,7 +105,7 @@ async def main(
                     embeddings = embed_batch_frida(batch_texts)
 
                     for item, emb, fingerprint in zip(
-                        batch_items, embeddings, batch_fingerprints
+                        batch_items, embeddings, batch_fingerprints, strict=True
                     ):
                         item.embedding = emb  # type: ignore[assignment]
                         item.embedding_version = EMBED_VERSION
@@ -113,7 +113,7 @@ async def main(
                         item.indexed_at = datetime.now(UTC)
 
                     await session.flush()
-                    logger.info(f"Батч обработан успешно")
+                    logger.info("Батч обработан успешно")
 
                 except Exception as e:
                     logger.error(f"Ошибка батча: {e}")
@@ -124,7 +124,7 @@ async def main(
             logger.info("Последовательная генерация (Yandex API)...")
 
             for item, text, fingerprint in zip(
-                items_to_process, texts, fingerprints
+                items_to_process, texts, fingerprints, strict=True
             ):
                 logger.info(f"Обработка: {item.sku} - {item.name}")
 

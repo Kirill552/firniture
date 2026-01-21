@@ -5,19 +5,19 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api.constants import (
-    DEFAULT_SHEET_WIDTH_MM,
-    DEFAULT_SHEET_HEIGHT_MM,
-    DEFAULT_THICKNESS_MM,
+    DEFAULT_CUT_DEPTH,
     DEFAULT_EDGE_THICKNESS_MM,
-    DEFAULT_GAP_MM,
-    DEFAULT_SPINDLE_SPEED,
     DEFAULT_FEED_RATE_CUTTING,
     DEFAULT_FEED_RATE_PLUNGE,
-    DEFAULT_CUT_DEPTH,
+    DEFAULT_GAP_MM,
     DEFAULT_SAFE_HEIGHT,
+    DEFAULT_SHEET_HEIGHT_MM,
+    DEFAULT_SHEET_WIDTH_MM,
+    DEFAULT_SPINDLE_SPEED,
+    DEFAULT_THICKNESS_MM,
     DEFAULT_TOOL_DIAMETER,
 )
 
@@ -735,3 +735,68 @@ class GenerateBOMResponse(BaseModel):
     total_hardware_items: int
 
     warnings: list[str] = Field(default_factory=list)
+
+
+# ============================================================================
+# Layout Preview (предпросмотр раскладки без генерации DXF)
+# ============================================================================
+
+class LayoutPanelInput(BaseModel):
+    """Упрощённая панель для preview (только размеры)."""
+    name: str = Field(..., description="Название панели")
+    width_mm: float = Field(..., gt=0, description="Ширина в мм")
+    height_mm: float = Field(..., gt=0, description="Высота в мм")
+
+
+class LayoutPreviewRequest(BaseModel):
+    """Запрос на предпросмотр раскладки."""
+    panels: list[LayoutPanelInput] = Field(..., min_length=1, description="Список панелей")
+
+    # Параметры листа
+    sheet_width_mm: float = Field(DEFAULT_SHEET_WIDTH_MM, gt=0, description="Ширина листа")
+    sheet_height_mm: float = Field(DEFAULT_SHEET_HEIGHT_MM, gt=0, description="Высота листа")
+    gap_mm: float = Field(DEFAULT_GAP_MM, ge=0, description="Зазор между панелями (на пропил)")
+
+
+class PlacedPanelInfo(BaseModel):
+    """Информация о размещённой панели."""
+    name: str
+    x: float = Field(..., description="X координата левого нижнего угла")
+    y: float = Field(..., description="Y координата левого нижнего угла")
+    width_mm: float = Field(..., description="Ширина (после возможного поворота)")
+    height_mm: float = Field(..., description="Высота (после возможного поворота)")
+    rotated: bool = Field(False, description="Повёрнута ли панель на 90°")
+
+
+class LayoutPreviewResponse(BaseModel):
+    """Ответ с раскладкой панелей (без генерации файла)."""
+    success: bool = True
+    placed_panels: list[PlacedPanelInfo]
+    unplaced_panels: list[str] = Field(default_factory=list, description="Названия панелей, которые не поместились")
+
+    # Статистика
+    sheet_width_mm: float
+    sheet_height_mm: float
+    utilization_percent: float = Field(..., description="Утилизация листа (%)")
+    panels_placed: int
+    panels_total: int
+
+    # Метаданные раскладки
+    layout_method: str = Field("guillotine", description="Метод раскладки (guillotine/maxrects)")
+
+
+# ============================================================================
+# PDF Cutting Map (карта раскроя)
+# ============================================================================
+
+class PDFCuttingMapRequest(BaseModel):
+    """Запрос на генерацию PDF карты раскроя."""
+    panels: list[LayoutPanelInput] = Field(..., min_length=1, description="Список панелей")
+
+    # Параметры листа (если не указаны — берутся из настроек фабрики)
+    sheet_width_mm: float | None = Field(None, gt=0, description="Ширина листа (мм)")
+    sheet_height_mm: float | None = Field(None, gt=0, description="Высота листа (мм)")
+    gap_mm: float = Field(DEFAULT_GAP_MM, ge=0, description="Зазор на пропил (мм)")
+
+    # Дополнительная информация
+    order_info: str | None = Field(None, description="Информация о заказе для заголовка")

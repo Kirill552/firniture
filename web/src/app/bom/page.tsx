@@ -90,10 +90,20 @@ export default function BomPage() {
   const [gcodeDownloadUrl, setGcodeDownloadUrl] = useState<string | null>(null)
   const [gcodeError, setGcodeError] = useState<string | null>(null)
 
+  // PDF generation state
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+
   // Machine profile state
   const [machineProfile, setMachineProfile] = useState<string | null>(null)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [isFirstTimeProfile, setIsFirstTimeProfile] = useState(false)
+
+  // Factory settings (sheet size, thickness, etc.)
+  const [sheetWidth, setSheetWidth] = useState<number | null>(null)
+  const [sheetHeight, setSheetHeight] = useState<number | null>(null)
+  const [defaultThickness, setDefaultThickness] = useState<number | null>(null)
 
   // Ключ для localStorage
   const LAST_ORDER_KEY = 'lastBomOrderId'
@@ -147,7 +157,7 @@ export default function BomPage() {
     loadBom()
   }, [effectiveOrderId])
 
-  // Load machine profile from settings
+  // Load factory settings (machine profile, sheet size)
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -158,6 +168,17 @@ export default function BomPage() {
           const data = await response.json()
           if (data.settings?.machine_profile) {
             setMachineProfile(data.settings.machine_profile)
+          }
+          // Размер листа из настроек фабрики
+          if (data.settings?.sheet_width_mm) {
+            setSheetWidth(data.settings.sheet_width_mm)
+          }
+          if (data.settings?.sheet_height_mm) {
+            setSheetHeight(data.settings.sheet_height_mm)
+          }
+          // Толщина по умолчанию
+          if (data.settings?.default_thickness_mm) {
+            setDefaultThickness(data.settings.default_thickness_mm)
           }
         }
       } catch (error) {
@@ -476,6 +497,7 @@ export default function BomPage() {
         },
       ]
 
+      // Не передаём sheet_width_mm/sheet_height_mm — backend возьмёт из настроек фабрики
       const response = await fetch('/api/v1/cam/dxf', {
         method: 'POST',
         headers: {
@@ -485,8 +507,6 @@ export default function BomPage() {
         body: JSON.stringify({
           order_id: effectiveOrderId,
           panels,
-          sheet_width_mm: 2440,
-          sheet_height_mm: 1220,
         }),
       })
 
@@ -579,7 +599,8 @@ export default function BomPage() {
         body: JSON.stringify({
           dxf_artifact_id: jobData.artifact_id,
           machine_profile: machineProfile,
-          cut_depth: bom?.body_material.thickness_mm || 18.0,
+          // Используем толщину из BOM, затем из настроек, затем дефолт
+          cut_depth: bom?.body_material.thickness_mm ?? effectiveThickness,
         }),
       })
 
@@ -636,12 +657,89 @@ export default function BomPage() {
     }, 100)
   }
 
+  // PDF cutting map generation
+  const handleGeneratePdf = async () => {
+    if (!bom) return
+
+    setIsGeneratingPdf(true)
+    setPdfError(null)
+    setPdfDownloadUrl(null)
+
+    try {
+      const panels = bom.panels.map(p => ({
+        name: p.name,
+        width_mm: p.width_mm,
+        height_mm: p.height_mm,
+      }))
+
+      // Информация о заказе для заголовка PDF
+      const orderInfo = bom.furniture_type
+        ? `${bom.furniture_type} ${bom.dimensions.width_mm}×${bom.dimensions.height_mm}×${bom.dimensions.depth_mm}`
+        : undefined
+
+      const response = await fetch('/api/v1/cam/cutting-map-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          panels,
+          order_info: orderInfo,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Ошибка генерации PDF')
+      }
+
+      // Создаём blob и URL для скачивания
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      setPdfDownloadUrl(url)
+
+      // Автоматически скачиваем
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `cutting_map_${Date.now()}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: "PDF готов",
+        description: "Карта раскроя успешно сгенерирована",
+      })
+    } catch (error) {
+      setPdfError(error instanceof Error ? error.message : 'Ошибка генерации PDF')
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : 'Не удалось сгенерировать PDF',
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingPdf(false)
+    }
+  }
+
   const handleExport = () => {
     toast({
       title: "Экспорт BOM",
       description: "Функционал экспорта будет доступен в ближайшем обновлении",
     })
   }
+
+  // Дефолтные значения из constants.py
+  const DEFAULT_SHEET_WIDTH_MM = 2800
+  const DEFAULT_SHEET_HEIGHT_MM = 2070
+  const DEFAULT_THICKNESS_MM = 16.0
+
+  // Вычисляем площадь листа в м² (с fallback на дефолт)
+  const effectiveSheetWidth = sheetWidth ?? DEFAULT_SHEET_WIDTH_MM
+  const effectiveSheetHeight = sheetHeight ?? DEFAULT_SHEET_HEIGHT_MM
+  const effectiveThickness = defaultThickness ?? DEFAULT_THICKNESS_MM
+  const sheetAreaM2 = (effectiveSheetWidth * effectiveSheetHeight) / 1_000_000
 
   // Расчёт стоимости для Header
   const totalCost = useMemo(() => {
@@ -774,7 +872,7 @@ export default function BomPage() {
               onPanelUpdate={handlePanelUpdate}
               onPanelDelete={handlePanelDelete}
               onPanelAdd={handlePanelAdd}
-              sheetArea={5.8}
+              sheetArea={sheetAreaM2}
             />
 
             {/* Фурнитура (collapsible) */}
@@ -801,8 +899,8 @@ export default function BomPage() {
             {/* Canvas раскладки */}
             <SheetLayoutPreview
               panels={bom.panels}
-              sheetWidth={2800}
-              sheetHeight={2070}
+              sheetWidth={effectiveSheetWidth}
+              sheetHeight={effectiveSheetHeight}
               showCombineSuggestion={true}
             />
 
@@ -815,10 +913,11 @@ export default function BomPage() {
                 <FileGenerationCard
                   icon={FileText}
                   label="PDF Карта раскроя"
-                  status="idle"
-                  onGenerate={() => {
-                    toast({ title: "PDF", description: "Функция в разработке" })
-                  }}
+                  status={getFileStatus(isGeneratingPdf, pdfError, pdfDownloadUrl)}
+                  downloadUrl={pdfDownloadUrl}
+                  error={pdfError}
+                  onGenerate={handleGeneratePdf}
+                  onRegenerate={handleGeneratePdf}
                 />
                 <FileGenerationCard
                   icon={FileCode}
@@ -831,7 +930,7 @@ export default function BomPage() {
                 />
                 <FileGenerationCard
                   icon={Settings}
-                  label={`G-code (${machineProfile || "weihong"})`}
+                  label={`G-code (${machineProfile ?? "профиль не выбран"})`}
                   status={
                     !dxfDownloadUrl && !isGeneratingDxf
                       ? "blocked"

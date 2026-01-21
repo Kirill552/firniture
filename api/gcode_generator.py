@@ -22,9 +22,9 @@ from enum import Enum
 from typing import Literal
 
 from api.constants import (
-    DEFAULT_DRILLING_DEPTH,
-    DEFAULT_BACK_SLOT_WIDTH_MM,
     DEFAULT_BACK_SLOT_DEPTH_MM,
+    DEFAULT_BACK_SLOT_WIDTH_MM,
+    DEFAULT_DRILLING_DEPTH,
 )
 
 try:
@@ -787,6 +787,7 @@ def dxf_to_gcode(
     machine_profile: str = "weihong",
     cut_depth: float | None = None,
     custom_profile: MachineProfile | None = None,
+    drilling_only: bool = True,
 ) -> str:
     """
     Конвертирует DXF файл в G-code.
@@ -796,34 +797,51 @@ def dxf_to_gcode(
         machine_profile: Название профиля (weihong, syntec, fanuc, dsp, homag)
         cut_depth: Глубина резки (переопределяет профиль)
         custom_profile: Пользовательский профиль станка
+        drilling_only: Генерировать только присадку (сверление + пазы).
+                       По умолчанию True — контурная резка выполняется
+                       на форматнике по PDF карте раскроя.
 
     Returns:
         G-code программа в виде строки
 
-    Поддерживаемые операции:
-        - Контурная резка (CONTOUR layer) → G00/G01
-        - Круговая интерполяция (ARC entities) → G02/G03
-        - Фрезеровка пазов (SLOT layer) → G01 с несколькими проходами
-        - Сверление (DRILLING layer):
-            - G81: простое сверление
-            - G82: с задержкой (петли, эксцентрики)
-            - G83: глубокое с пеком
+    Режимы работы:
+        drilling_only=True (по умолчанию):
+            - Сверление (DRILLING layer): G81/G82/G83
+            - Фрезеровка пазов под заднюю стенку (SLOT layer)
+            - Контуры и дуги ИГНОРИРУЮТСЯ (резка на форматнике)
+
+        drilling_only=False (для станков с нестингом):
+            - Контурная резка (CONTOUR layer) → G00/G01
+            - Круговая интерполяция (ARC entities) → G02/G03
+            - Фрезеровка пазов (SLOT layer)
+            - Сверление (DRILLING layer)
     """
     result = extract_all_from_dxf(dxf_data)
-
-    if cut_depth is not None:
-        for path in result.paths:
-            path.depth = cut_depth
 
     profile = custom_profile if custom_profile else machine_profile
     generator = GCodeGenerator(profile)
 
-    return generator.generate_from_paths(
-        paths=result.paths,
-        holes=result.holes,
-        arcs=result.arcs,
-        slots=result.slots,
-    )
+    if drilling_only:
+        # Режим "только присадка" — для станков где раскрой делается на форматнике
+        # Генерируем только сверление и пазы, контуры игнорируем
+        return generator.generate_from_paths(
+            paths=[],  # Контуры не нужны — резка на форматнике
+            holes=result.holes,
+            arcs=[],  # Дуги относятся к контурам
+            slots=result.slots,  # Пазы под заднюю стенку нужны
+        )
+    else:
+        # Полный режим — для нестинг-станков (HOMAG и т.п.)
+        if cut_depth is not None:
+            for path in result.paths:
+                path.depth = cut_depth
+
+        return generator.generate_from_paths(
+            paths=result.paths,
+            holes=result.holes,
+            arcs=result.arcs,
+            slots=result.slots,
+        )
 
 
 def get_available_profiles() -> list[dict]:

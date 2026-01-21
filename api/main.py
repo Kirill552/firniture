@@ -1,6 +1,6 @@
-import sys
 import io
 import logging
+import sys
 
 # Фикс кодировки для Windows консоли (cp1251 -> utf-8)
 if sys.platform == "win32":

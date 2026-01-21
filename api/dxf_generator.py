@@ -16,16 +16,15 @@ from ezdxf.document import Drawing
 from ezdxf.layouts import Modelspace
 
 from api.constants import (
-    DEFAULT_SHEET_WIDTH_MM,
-    DEFAULT_SHEET_HEIGHT_MM,
-    DEFAULT_THICKNESS_MM,
     DEFAULT_EDGE_THICKNESS_MM,
     DEFAULT_GAP_MM,
-    STANDARD_SHEETS,
+    DEFAULT_SHEET_HEIGHT_MM,
+    DEFAULT_SHEET_WIDTH_MM,
+    DEFAULT_THICKNESS_MM,
 )
 
 try:
-    from rectpack import PackingAlgorithm, PackingMode, newPacker, GuillotineBssfSas
+    from rectpack import GuillotineBssfSas, PackingAlgorithm, PackingMode, newPacker
     RECTPACK_AVAILABLE = True
 except ImportError:
     RECTPACK_AVAILABLE = False

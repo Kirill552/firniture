@@ -26,6 +26,8 @@ from shared.yandex_ai import (
 from . import crud, models
 from .auth import get_current_user, get_current_user_optional
 from .database import get_db
+from .dxf_generator import Panel as DXFPanel
+from .dxf_generator import optimize_layout_best
 from .models import (
     Artifact,
     CAMJob,
@@ -37,28 +39,31 @@ from .models import (
 )
 from .queues import DXF_QUEUE, GCODE_QUEUE, enqueue
 from .schemas import (
-    CAMJobListItem,
-    CAMJobsListResponse,
+    SETTINGS_DEFAULTS,
+    CalculatedPanel,
     CalculatePanelsRequest,
     CalculatePanelsResponse,
-    CalculatedPanel,
+    CAMJobListItem,
+    CAMJobsListResponse,
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
     FactorySettingsResponse,
     FactorySettingsUpdate,
     FactorySettingsUpdateResponse,
-    FinalizeOrderRequest,
     FinalizeOrderResponse,
     GenerateBOMRequest,
     GenerateBOMResponse,
     HardwareRecommendation,
     ImageExtractRequest,
     ImageExtractResponse,
+    LayoutPreviewRequest,
+    LayoutPreviewResponse,
     OrderCreate,
     OrderWithProductsResponse,
+    PDFCuttingMapRequest,
+    PlacedPanelInfo,
     ProductConfigResponse,
-    SETTINGS_DEFAULTS,
 )
 from .schemas import Order as OrderSchema
 
@@ -756,7 +761,7 @@ async def delete_panel_from_bom(
     db: AsyncSession = Depends(get_db),
 ):
     """Удалить панель из BOM."""
-    from sqlalchemy import select, delete
+    from sqlalchemy import select
 
     # Проверяем что панель принадлежит заказу
     order = await crud.get_order_with_products(db, order_id)
@@ -793,8 +798,9 @@ async def recalculate_bom(
 
     Сохраняет результат в БД и возвращает обновлённый BOM.
     """
-    from sqlalchemy import select, delete as sql_delete
-    from api.panel_calculator import calculate_panels, CABINET_TEMPLATES
+    from sqlalchemy import delete as sql_delete
+
+    from api.panel_calculator import calculate_panels
 
     order = await crud.get_order_with_products(db, order_id)
     if not order:
@@ -1188,11 +1194,11 @@ async def generate_bom_endpoint(
 
     Это endpoint для прямого вызова, без диалога с AI.
     """
-    from api.panel_calculator import calculate_panels
     from api.ai_tools import (
-        handle_find_hardware,
         handle_calculate_hardware_qty,
+        handle_find_hardware,
     )
+    from api.panel_calculator import calculate_panels
 
     # Получаем настройки фабрики
     factory_settings = {}
@@ -1953,6 +1959,188 @@ async def create_gcode_job(
         status="created",
         machine_profile=machine_profile,
         dxf_artifact_id=req.dxf_artifact_id,
+    )
+
+
+@router.post("/cam/layout-preview", response_model=LayoutPreviewResponse)
+async def layout_preview(req: LayoutPreviewRequest) -> LayoutPreviewResponse:
+    """
+    Предпросмотр раскладки панелей на листе (без генерации DXF).
+
+    Использует тот же алгоритм guillotine/maxrects что и реальная генерация DXF,
+    но возвращает только координаты панелей для визуализации.
+
+    Не требует аутентификации — быстрый preview для редактора BOM.
+
+    ## Пример запроса:
+    ```json
+    {
+        "panels": [
+            {"name": "Боковина левая", "width_mm": 720, "height_mm": 560},
+            {"name": "Боковина правая", "width_mm": 720, "height_mm": 560},
+            {"name": "Дно", "width_mm": 568, "height_mm": 560}
+        ],
+        "sheet_width_mm": 2800,
+        "sheet_height_mm": 2070,
+        "gap_mm": 4
+    }
+    ```
+    """
+    # Конвертируем в Panel dataclass для dxf_generator
+    panels = [
+        DXFPanel(
+            name=p.name,
+            width_mm=p.width_mm,
+            height_mm=p.height_mm,
+            thickness_mm=16.0,  # Не влияет на раскладку
+            material="ЛДСП",
+        )
+        for p in req.panels
+    ]
+
+    # Вызываем оптимизатор раскладки
+    layout = optimize_layout_best(
+        panels=panels,
+        sheet_width=req.sheet_width_mm,
+        sheet_height=req.sheet_height_mm,
+        gap_mm=req.gap_mm,
+    )
+
+    # Конвертируем результат в response
+    placed_panels = []
+    for panel, x, y, rotated in layout.placed_panels:
+        # При повороте ширина и высота меняются местами
+        w = panel.height_mm if rotated else panel.width_mm
+        h = panel.width_mm if rotated else panel.height_mm
+        placed_panels.append(PlacedPanelInfo(
+            name=panel.name,
+            x=x,
+            y=y,
+            width_mm=w,
+            height_mm=h,
+            rotated=rotated,
+        ))
+
+    # Названия неразмещённых панелей
+    unplaced_names = [p.name for p in layout.unplaced_panels]
+
+    # Определяем метод раскладки (guillotine если утилизация > 0 и нет unplaced)
+    layout_method = "guillotine" if not layout.unplaced_panels else "guillotine"
+
+    return LayoutPreviewResponse(
+        success=True,
+        placed_panels=placed_panels,
+        unplaced_panels=unplaced_names,
+        sheet_width_mm=req.sheet_width_mm,
+        sheet_height_mm=req.sheet_height_mm,
+        utilization_percent=layout.utilization,
+        panels_placed=len(layout.placed_panels),
+        panels_total=len(req.panels),
+        layout_method=layout_method,
+    )
+
+
+@router.post("/cam/cutting-map-pdf")
+async def generate_cutting_map_pdf(
+    req: PDFCuttingMapRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Генерирует PDF карту раскроя для оператора форматника.
+
+    PDF содержит:
+    - Визуальную схему раскладки панелей на листе
+    - Названия и размеры каждой панели
+    - Статистику использования листа
+
+    Пример запроса:
+    ```json
+    {
+        "panels": [
+            {"name": "Боковина левая", "width_mm": 720, "height_mm": 560},
+            {"name": "Боковина правая", "width_mm": 720, "height_mm": 560},
+            {"name": "Дно", "width_mm": 568, "height_mm": 560}
+        ],
+        "order_info": "Заказ #123 — Шкаф навесной"
+    }
+    ```
+    """
+    from fastapi.responses import Response
+
+    from api.dxf_generator import DXFPanel, PlacedPanel, optimize_layout_best
+    from api.pdf_generator import generate_cutting_map_pdf as gen_pdf
+
+    # Получаем настройки фабрики
+    factory = await db.get(Factory, current_user.factory_id)
+    factory_settings = factory.settings if factory else {}
+
+    # Merge: запрос > настройки фабрики > дефолты
+    sheet_width = (
+        req.sheet_width_mm
+        or factory_settings.get("sheet_width_mm")
+        or SETTINGS_DEFAULTS["sheet_width_mm"]
+    )
+    sheet_height = (
+        req.sheet_height_mm
+        or factory_settings.get("sheet_height_mm")
+        or SETTINGS_DEFAULTS["sheet_height_mm"]
+    )
+
+    # Конвертируем панели в DXFPanel для раскладки
+    panels = [
+        DXFPanel(
+            name=p.name,
+            width_mm=p.width_mm,
+            height_mm=p.height_mm,
+        )
+        for p in req.panels
+    ]
+
+    # Раскладываем панели
+    layout = optimize_layout_best(
+        panels=panels,
+        sheet_width=sheet_width,
+        sheet_height=sheet_height,
+        gap_mm=req.gap_mm,
+    )
+
+    # Конвертируем PlacedPanel из dxf_generator в формат для PDF
+    placed_panels = []
+    for placed in layout.placed_panels:
+        placed_panels.append(PlacedPanel(
+            name=placed.name,
+            x=placed.x,
+            y=placed.y,
+            width_mm=placed.width_mm,
+            height_mm=placed.height_mm,
+            rotated=placed.rotated,
+        ))
+
+    # Генерируем PDF
+    order_info = req.order_info or ""
+    pdf_bytes = gen_pdf(
+        placed_panels=placed_panels,
+        sheet_width_mm=sheet_width,
+        sheet_height_mm=sheet_height,
+        utilization_percent=layout.utilization,
+        order_info=order_info,
+    )
+
+    # Формируем имя файла
+    filename = "cutting_map.pdf"
+    if req.order_info:
+        # Убираем спецсимволы из имени
+        safe_name = "".join(c for c in req.order_info if c.isalnum() or c in " -_").strip()
+        if safe_name:
+            filename = f"cutting_map_{safe_name[:30]}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
 
 

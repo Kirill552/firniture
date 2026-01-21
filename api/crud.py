@@ -34,10 +34,20 @@ async def get_orders_by_factory(
     limit: int = 50,
     offset: int = 0
 ) -> list[models.Order]:
-    """Получить заказы фабрики с пагинацией."""
+    """Получить заказы фабрики с пагинацией.
+
+    Также возвращает заказы с factory_id = NULL (созданные до исправления бага).
+    """
+    from sqlalchemy import or_
+
     stmt = (
         select(models.Order)
-        .where(models.Order.factory_id == factory_id)
+        .where(
+            or_(
+                models.Order.factory_id == factory_id,
+                models.Order.factory_id.is_(None)  # Старые заказы без factory_id
+            )
+        )
         .order_by(models.Order.created_at.desc())
         .limit(limit)
         .offset(offset)

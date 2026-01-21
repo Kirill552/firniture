@@ -825,3 +825,58 @@ export interface AddPanelRequest {
   thickness_mm?: number
   material?: string
 }
+
+// ============================================================================
+// Layout Preview — предпросмотр раскладки на листе (без генерации DXF)
+// ============================================================================
+
+/** Панель для запроса раскладки */
+export interface LayoutPanelInput {
+  name: string
+  width_mm: number
+  height_mm: number
+}
+
+/** Запрос на предпросмотр раскладки */
+export interface LayoutPreviewRequest {
+  panels: LayoutPanelInput[]
+  sheet_width_mm?: number
+  sheet_height_mm?: number
+  gap_mm?: number
+}
+
+/** Информация о размещённой панели */
+export interface PlacedPanelInfo {
+  name: string
+  x: number
+  y: number
+  width_mm: number
+  height_mm: number
+  rotated: boolean
+}
+
+/** Ответ с раскладкой панелей */
+export interface LayoutPreviewResponse {
+  success: boolean
+  placed_panels: PlacedPanelInfo[]
+  unplaced_panels: string[]
+  sheet_width_mm: number
+  sheet_height_mm: number
+  utilization_percent: number
+  panels_placed: number
+  panels_total: number
+  layout_method: string
+}
+
+// ============================================================================
+// PDF Cutting Map — карта раскроя
+// ============================================================================
+
+/** Запрос на генерацию PDF карты раскроя */
+export interface PDFCuttingMapRequest {
+  panels: LayoutPanelInput[]
+  sheet_width_mm?: number
+  sheet_height_mm?: number
+  gap_mm?: number
+  order_info?: string
+}

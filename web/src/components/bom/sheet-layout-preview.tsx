@@ -1,76 +1,18 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertTriangle, Lightbulb, Layers } from "lucide-react"
-import type { BOMPanel } from "@/types/api"
+import { AlertTriangle, Lightbulb, Layers, Loader2 } from "lucide-react"
+import type { BOMPanel, PlacedPanelInfo } from "@/types/api"
+import { useLayoutPreview } from "@/hooks/use-api"
 
 interface SheetLayoutPreviewProps {
   panels: BOMPanel[]
   sheetWidth?: number // мм
   sheetHeight?: number // мм
+  gap?: number // мм — зазор на пропил
   showCombineSuggestion?: boolean
-}
-
-interface PlacedPanel {
-  panel: BOMPanel
-  x: number
-  y: number
-  rotated: boolean
-}
-
-// Простой жадный алгоритм раскладки панелей
-function packPanels(
-  panels: BOMPanel[],
-  sheetWidth: number,
-  sheetHeight: number
-): PlacedPanel[] {
-  const placed: PlacedPanel[] = []
-  const remaining = [...panels].sort(
-    (a, b) => b.width_mm * b.height_mm - a.width_mm * a.height_mm
-  )
-
-  // Простая раскладка: слева направо, снизу вверх
-  let currentX = 0
-  let currentY = 0
-  let rowHeight = 0
-
-  for (const panel of remaining) {
-    const w = panel.width_mm
-    const h = panel.height_mm
-
-    // Пробуем разместить без поворота
-    if (currentX + w <= sheetWidth && currentY + h <= sheetHeight) {
-      placed.push({ panel, x: currentX, y: currentY, rotated: false })
-      currentX += w + 5 // 5мм зазор
-      rowHeight = Math.max(rowHeight, h)
-    }
-    // Пробуем с поворотом
-    else if (currentX + h <= sheetWidth && currentY + w <= sheetHeight) {
-      placed.push({ panel, x: currentX, y: currentY, rotated: true })
-      currentX += h + 5
-      rowHeight = Math.max(rowHeight, w)
-    }
-    // Переходим на новый ряд
-    else if (currentX > 0) {
-      currentX = 0
-      currentY += rowHeight + 5
-      rowHeight = 0
-
-      if (currentX + w <= sheetWidth && currentY + h <= sheetHeight) {
-        placed.push({ panel, x: currentX, y: currentY, rotated: false })
-        currentX += w + 5
-        rowHeight = Math.max(rowHeight, h)
-      } else if (currentX + h <= sheetWidth && currentY + w <= sheetHeight) {
-        placed.push({ panel, x: currentX, y: currentY, rotated: true })
-        currentX += h + 5
-        rowHeight = Math.max(rowHeight, w)
-      }
-    }
-  }
-
-  return placed
 }
 
 // Генерируем цвет для панели (пастельные тона)
@@ -89,32 +31,61 @@ export function SheetLayoutPreview({
   panels,
   sheetWidth = 2800,
   sheetHeight = 2070,
+  gap = 4,
   showCombineSuggestion = true,
 }: SheetLayoutPreviewProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // Вызываем API для раскладки
+  const layoutMutation = useLayoutPreview()
+
+  // Запрашиваем раскладку при изменении панелей
+  useEffect(() => {
+    if (panels.length === 0) return
+
+    layoutMutation.mutate({
+      panels: panels.map((p) => ({
+        name: p.name,
+        width_mm: p.width_mm,
+        height_mm: p.height_mm,
+      })),
+      sheet_width_mm: sheetWidth,
+      sheet_height_mm: sheetHeight,
+      gap_mm: gap,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panels, sheetWidth, sheetHeight, gap])
+
+  // Прокручиваем контейнер вправо при загрузке
+  useEffect(() => {
+    if (scrollContainerRef.current && layoutMutation.data) {
+      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth
+    }
+  }, [layoutMutation.data])
+
+  // Данные из API или fallback
+  const placedPanels: PlacedPanelInfo[] = layoutMutation.data?.placed_panels ?? []
+  const unplacedPanels: string[] = layoutMutation.data?.unplaced_panels ?? []
+  const utilization = layoutMutation.data?.utilization_percent ?? 0
+  const layoutMethod = layoutMutation.data?.layout_method ?? "—"
+
   // Расчёт площадей
   const totalPanelArea = panels.reduce(
     (sum, p) => sum + (p.width_mm * p.height_mm) / 1_000_000,
     0
   )
   const sheetArea = (sheetWidth * sheetHeight) / 1_000_000
-  const utilization = sheetArea > 0 ? (totalPanelArea / sheetArea) * 100 : 0
 
-  // Раскладка панелей
-  const placedPanels = useMemo(
-    () => packPanels(panels, sheetWidth, sheetHeight),
-    [panels, sheetWidth, sheetHeight]
-  )
-
-  // Масштаб для отображения (чтобы вписать в контейнер)
+  // Масштаб для отображения
   const CANVAS_WIDTH = 400
   const CANVAS_HEIGHT = 300
   const scaleX = CANVAS_WIDTH / sheetWidth
   const scaleY = CANVAS_HEIGHT / sheetHeight
-  const scale = Math.min(scaleX, scaleY) * 0.95 // 5% отступ от краёв
+  const scale = Math.min(scaleX, scaleY) * 0.9
   const displayWidth = sheetWidth * scale
   const displayHeight = sheetHeight * scale
 
-  // Определяем статус использования
+  // Статус использования
   const isLowUtilization = utilization < 50
   const isVeryLowUtilization = utilization < 30
 
@@ -124,62 +95,60 @@ export function SheetLayoutPreview({
         <CardTitle className="text-base font-medium flex items-center gap-2">
           <Layers className="h-4 w-4" />
           Раскладка на листе
+          {layoutMutation.isPending && (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Визуализация листа */}
-        <div className="flex gap-10">
+        {/* Визуализация — flex column на мобильных, row на десктопе */}
+        <div
+          ref={scrollContainerRef}
+          className="flex flex-col lg:flex-row gap-6 overflow-x-auto"
+        >
           {/* Лист с панелями */}
-          <div className="relative">
+          <div className="relative shrink-0" style={{ minWidth: displayWidth + 50 }}>
             <div
-              className="relative bg-stone-100 dark:bg-stone-800 border-2 border-stone-300 dark:border-stone-600 rounded"
+              className="relative bg-stone-100 dark:bg-stone-800 border-2 border-stone-300 dark:border-stone-600 rounded ml-2"
               style={{
                 width: displayWidth,
                 height: displayHeight,
               }}
             >
-              {/* Размеры листа */}
+              {/* Размеры листа — сверху */}
               <div className="absolute -top-5 left-0 right-0 text-center text-xs text-muted-foreground">
                 {sheetWidth} мм
               </div>
+              {/* Размеры листа — справа (внутри контейнера) */}
               <div
-                className="absolute top-1/2 -translate-y-1/2 -right-5 text-xs text-muted-foreground"
+                className="absolute -right-12 top-1/2 -translate-y-1/2 text-xs text-muted-foreground whitespace-nowrap"
                 style={{ writingMode: "vertical-rl" }}
               >
                 {sheetHeight} мм
               </div>
 
               {/* Панели */}
-              {placedPanels.map((placed, index) => {
-                const w = placed.rotated
-                  ? placed.panel.height_mm
-                  : placed.panel.width_mm
-                const h = placed.rotated
-                  ? placed.panel.width_mm
-                  : placed.panel.height_mm
-
-                return (
-                  <div
-                    key={placed.panel.id || index}
-                    className="absolute border border-stone-400 dark:border-stone-500 rounded-sm overflow-hidden flex items-center justify-center"
-                    style={{
-                      left: placed.x * scale,
-                      top: placed.y * scale,
-                      width: w * scale - 1,
-                      height: h * scale - 1,
-                      backgroundColor: panelColors[index % panelColors.length],
-                    }}
-                    title={`${placed.panel.name}: ${placed.panel.width_mm}×${placed.panel.height_mm} мм`}
-                  >
-                    {/* Название панели (если помещается) */}
-                    {w * scale > 40 && h * scale > 20 && (
-                      <span className="text-[8px] text-stone-600 dark:text-stone-300 truncate px-1">
-                        {placed.panel.name}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
+              {placedPanels.map((placed, index) => (
+                <div
+                  key={`${placed.name}-${index}`}
+                  className="absolute border border-stone-400 dark:border-stone-500 rounded-sm overflow-hidden flex items-center justify-center"
+                  style={{
+                    left: placed.x * scale,
+                    bottom: placed.y * scale, // y=0 внизу листа
+                    width: placed.width_mm * scale - 1,
+                    height: placed.height_mm * scale - 1,
+                    backgroundColor: panelColors[index % panelColors.length],
+                  }}
+                  title={`${placed.name}: ${placed.width_mm}×${placed.height_mm} мм${placed.rotated ? " (повёрнута)" : ""}`}
+                >
+                  {/* Название панели (если помещается) */}
+                  {placed.width_mm * scale > 40 && placed.height_mm * scale > 20 && (
+                    <span className="text-[8px] text-stone-600 dark:text-stone-300 truncate px-1">
+                      {placed.name}
+                    </span>
+                  )}
+                </div>
+              ))}
 
               {/* Пустое место */}
               {panels.length === 0 && (
@@ -187,11 +156,18 @@ export function SheetLayoutPreview({
                   Нет панелей
                 </div>
               )}
+
+              {/* Индикатор загрузки */}
+              {layoutMutation.isPending && panels.length > 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-stone-100/50 dark:bg-stone-800/50">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
           </div>
 
           {/* Статистика */}
-          <div className="flex-1 space-y-3 ml-4">
+          <div className="flex-1 min-w-[180px] space-y-3">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <div className="text-muted-foreground">Площадь панелей</div>
@@ -216,17 +192,35 @@ export function SheetLayoutPreview({
                 </div>
               </div>
               <div>
-                <div className="text-muted-foreground">Количество</div>
-                <div className="font-medium">{panels.length} шт</div>
+                <div className="text-muted-foreground">Размещено</div>
+                <div className="font-medium">
+                  {placedPanels.length} / {panels.length} шт
+                </div>
               </div>
             </div>
 
+            {/* Метод раскладки */}
+            <div className="text-xs text-muted-foreground">
+              Алгоритм: {layoutMethod === "guillotine" ? "Гильотина" : layoutMethod}
+            </div>
+
+            {/* Неразмещённые панели */}
+            {unplacedPanels.length > 0 && (
+              <Alert variant="destructive" className="py-2">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle className="text-sm">Не поместились</AlertTitle>
+                <AlertDescription className="text-xs">
+                  {unplacedPanels.join(", ")}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Легенда */}
-            {panels.length > 0 && (
+            {panels.length > 0 && panels.length <= 8 && (
               <div className="pt-2 border-t space-y-1">
                 <div className="text-xs text-muted-foreground mb-1">Панели:</div>
                 <div className="flex flex-wrap gap-1">
-                  {panels.slice(0, 6).map((panel, index) => (
+                  {panels.map((panel, index) => (
                     <div
                       key={panel.id || index}
                       className="flex items-center gap-1 text-xs"
@@ -240,11 +234,6 @@ export function SheetLayoutPreview({
                       <span className="truncate max-w-[80px]">{panel.name}</span>
                     </div>
                   ))}
-                  {panels.length > 6 && (
-                    <span className="text-xs text-muted-foreground">
-                      +{panels.length - 6}
-                    </span>
-                  )}
                 </div>
               </div>
             )}
@@ -252,7 +241,7 @@ export function SheetLayoutPreview({
         </div>
 
         {/* Предупреждение о низком использовании */}
-        {showCombineSuggestion && isLowUtilization && panels.length > 0 && (
+        {showCombineSuggestion && isLowUtilization && panels.length > 0 && !layoutMutation.isPending && (
           <Alert variant={isVeryLowUtilization ? "destructive" : "default"}>
             {isVeryLowUtilization ? (
               <AlertTriangle className="h-4 w-4" />
@@ -269,9 +258,7 @@ export function SheetLayoutPreview({
                 <>
                   Используется только <strong>{utilization.toFixed(0)}%</strong>{" "}
                   листа. Рекомендуем объединить этот заказ с другими похожими
-                  заказами для экономии материала. Остаток листа (
-                  {((1 - utilization / 100) * sheetArea).toFixed(2)} м²) можно
-                  использовать для небольших деталей.
+                  заказами для экономии материала.
                 </>
               ) : (
                 <>

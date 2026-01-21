@@ -22,7 +22,7 @@ from shared.yandex_ai import (
     create_vision_client,
 )
 
-from .pdf_utils import PDFValidationError, MAX_PDF_SIZE_BYTES, pdf_to_images
+from .pdf_utils import MAX_PDF_SIZE_BYTES, PDFValidationError, pdf_to_images
 from .schemas import (
     ExtractedDimensions,
     ExtractedFurnitureParams,
@@ -159,7 +159,7 @@ async def analyze_module_count(
         text = response.text.strip()
         if text.startswith("```"):
             lines = text.split("\n")
-            json_lines = [l for l in lines if not l.startswith("```")]
+            json_lines = [line for line in lines if not line.startswith("```")]
             text = "\n".join(json_lines)
 
         data = json.loads(text)

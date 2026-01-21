@@ -17,6 +17,8 @@ import type {
   Export1CRequest,
   Export1CResponse,
   ZIPJobRequest,
+  LayoutPreviewRequest,
+  LayoutPreviewResponse,
 } from '@/types/api'
 
 // ============================================================================
@@ -307,6 +309,37 @@ export function useCreateZIP(
   return useMutation({
     mutationFn: async (data: ZIPJobRequest) => {
       return apiFetch<ZIPJobResponse>('/api/v1/cam/zip', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    },
+    ...options,
+  })
+}
+
+/**
+ * Получить предпросмотр раскладки панелей на листе (без генерации DXF)
+ *
+ * Использует тот же алгоритм guillotine/maxrects что и реальная генерация DXF,
+ * но возвращает только координаты для визуализации.
+ *
+ * @example
+ * const mutation = useLayoutPreview()
+ * mutation.mutate({
+ *   panels: [
+ *     { name: 'Боковина', width_mm: 720, height_mm: 560 },
+ *     { name: 'Дно', width_mm: 568, height_mm: 560 }
+ *   ],
+ *   sheet_width_mm: 2800,
+ *   sheet_height_mm: 2070
+ * })
+ */
+export function useLayoutPreview(
+  options?: UseMutationOptions<LayoutPreviewResponse, Error, LayoutPreviewRequest>
+) {
+  return useMutation({
+    mutationFn: async (data: LayoutPreviewRequest) => {
+      return apiFetch<LayoutPreviewResponse>('/api/v1/cam/layout-preview', {
         method: 'POST',
         body: JSON.stringify(data),
       })
