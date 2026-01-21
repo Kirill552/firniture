@@ -989,15 +989,6 @@ export default function BomPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <FileGenerationCard
-                  icon={FileText}
-                  label="PDF Карта раскроя"
-                  status={getFileStatus(isGeneratingPdf, pdfError, pdfDownloadUrl)}
-                  downloadUrl={pdfDownloadUrl}
-                  error={pdfError}
-                  onGenerate={handleGeneratePdf}
-                  onRegenerate={handleGeneratePdf}
-                />
-                <FileGenerationCard
                   icon={FileCode}
                   label="DXF Раскладка"
                   status={getFileStatus(isGeneratingDxf, dxfError, dxfDownloadUrl)}
@@ -1005,6 +996,15 @@ export default function BomPage() {
                   error={dxfError}
                   onGenerate={handleGenerateDxf}
                   onRegenerate={handleGenerateDxf}
+                />
+                <FileGenerationCard
+                  icon={FileText}
+                  label="PDF Карта раскроя"
+                  status={getFileStatus(isGeneratingPdf, pdfError, pdfDownloadUrl)}
+                  downloadUrl={pdfDownloadUrl}
+                  error={pdfError}
+                  onGenerate={handleGeneratePdf}
+                  onRegenerate={handleGeneratePdf}
                 />
                 <FileGenerationCard
                   icon={Settings}
