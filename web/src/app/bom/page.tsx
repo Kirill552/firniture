@@ -832,7 +832,7 @@ export default function BomPage() {
   type StepStatus = "completed" | "current" | "pending"
   const productionSteps = useMemo(() => {
     const dxfSt = getFileStatus(isGeneratingDxf, dxfError, dxfDownloadUrl)
-    const gcodeSt = getFileStatus(isGeneratingGcode, gcodeError, gcodeDownloadUrl)
+    const drillingSt = getFileStatus(isGeneratingDrilling, drillingError, drillingDownloadUrl)
 
     const mapStatus = (st: FileStatus): StepStatus => {
       if (st === "generating") return "current"
@@ -843,9 +843,9 @@ export default function BomPage() {
     return [
       { label: "Спецификация", status: "completed" as StepStatus },
       { label: "Раскрой", status: mapStatus(dxfSt) },
-      { label: "Присадка", status: mapStatus(gcodeSt) },
+      { label: "Присадка", status: mapStatus(drillingSt) },
     ]
-  }, [isGeneratingDxf, dxfError, dxfDownloadUrl, isGeneratingGcode, gcodeError, gcodeDownloadUrl])
+  }, [isGeneratingDxf, dxfError, dxfDownloadUrl, isGeneratingDrilling, drillingError, drillingDownloadUrl])
 
   // Empty state
   if (!effectiveOrderId) {
@@ -1008,7 +1008,7 @@ export default function BomPage() {
                 />
                 <FileGenerationCard
                   icon={Settings}
-                  label={`G-code (${machineProfile ?? "профиль не выбран"})`}
+                  label={`G-code раскрой CNC (${machineProfile ?? "профиль не выбран"})`}
                   status={
                     !dxfDownloadUrl && !isGeneratingDxf
                       ? "blocked"
@@ -1022,7 +1022,7 @@ export default function BomPage() {
                 />
                 <FileGenerationCard
                   icon={CircleDot}
-                  label={`G-code присадки (${machineProfile ?? "профиль не выбран"})`}
+                  label={`G-code присадка (${machineProfile ?? "профиль не выбран"})`}
                   status={getFileStatus(isGeneratingDrilling, drillingError, drillingDownloadUrl)}
                   downloadUrl={drillingDownloadUrl}
                   error={drillingError}

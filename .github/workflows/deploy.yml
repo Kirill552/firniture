@@ -137,7 +137,7 @@ jobs:
             docker compose up -d --force-recreate api worker web
 
             # Миграции БД (если есть)
-            docker compose exec -T api alembic upgrade head 2>/dev/null || echo "Migrations skipped"
+            docker compose exec -T api python -m alembic upgrade head 2>/dev/null || echo "Migrations skipped"
 
             # Очистка старых образов
             docker image prune -f
