@@ -73,6 +73,22 @@ class SheetLayout:
     unplaced_panels: list[Panel]
     utilization_percent: float
 
+    @property
+    def utilization(self) -> float:
+        """Alias для совместимости с routers.py."""
+        return self.utilization_percent
+
+
+@dataclass
+class PlacedPanel:
+    """Размещённая панель с координатами на листе."""
+    name: str
+    x: float
+    y: float
+    width_mm: float
+    height_mm: float
+    rotated: bool = False
+
 
 def create_dxf_document() -> Drawing:
     """Создаёт новый DXF документ с настройками для мебельного производства."""

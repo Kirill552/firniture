@@ -27,6 +27,7 @@ from . import crud, models
 from .auth import get_current_user, get_current_user_optional
 from .database import get_db
 from .dxf_generator import Panel as DXFPanel
+from .dxf_generator import PlacedPanel
 from .dxf_generator import optimize_layout_best
 from .models import (
     Artifact,
@@ -1989,13 +1990,14 @@ async def layout_preview(req: LayoutPreviewRequest) -> LayoutPreviewResponse:
     # Конвертируем в Panel dataclass для dxf_generator
     panels = [
         DXFPanel(
+            id=str(i),
             name=p.name,
             width_mm=p.width_mm,
             height_mm=p.height_mm,
             thickness_mm=16.0,  # Не влияет на раскладку
             material="ЛДСП",
         )
-        for p in req.panels
+        for i, p in enumerate(req.panels)
     ]
 
     # Вызываем оптимизатор раскладки
@@ -2068,7 +2070,6 @@ async def generate_cutting_map_pdf(
     """
     from fastapi.responses import Response
 
-    from api.dxf_generator import DXFPanel, PlacedPanel, optimize_layout_best
     from api.pdf_generator import generate_cutting_map_pdf as gen_pdf
 
     # Получаем настройки фабрики
@@ -2090,11 +2091,12 @@ async def generate_cutting_map_pdf(
     # Конвертируем панели в DXFPanel для раскладки
     panels = [
         DXFPanel(
+            id=str(i),
             name=p.name,
             width_mm=p.width_mm,
             height_mm=p.height_mm,
         )
-        for p in req.panels
+        for i, p in enumerate(req.panels)
     ]
 
     # Раскладываем панели
@@ -2105,16 +2107,18 @@ async def generate_cutting_map_pdf(
         gap_mm=req.gap_mm,
     )
 
-    # Конвертируем PlacedPanel из dxf_generator в формат для PDF
+    # Конвертируем tuple из layout в PlacedPanel для PDF
     placed_panels = []
-    for placed in layout.placed_panels:
+    for panel, x, y, rotated in layout.placed_panels:
+        w = panel.height_mm if rotated else panel.width_mm
+        h = panel.width_mm if rotated else panel.height_mm
         placed_panels.append(PlacedPanel(
-            name=placed.name,
-            x=placed.x,
-            y=placed.y,
-            width_mm=placed.width_mm,
-            height_mm=placed.height_mm,
-            rotated=placed.rotated,
+            name=panel.name,
+            x=x,
+            y=y,
+            width_mm=w,
+            height_mm=h,
+            rotated=rotated,
         ))
 
     # Генерируем PDF
