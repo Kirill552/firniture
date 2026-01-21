@@ -22,7 +22,7 @@ from .constants import (
     DEFAULT_SHEET_WIDTH_MM,
 )
 from .database import SessionLocal
-from .models import Artifact, CAMJob, JobStatusEnum, Panel as DBPanel
+from .models import Artifact, CAMJob, JobStatusEnum, Panel as DBPanel, ProductConfig
 from .queues import DRILLING_QUEUE, DLQ_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
 
 try:
@@ -277,9 +277,11 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
         order_id = payload.get("order_id")
         machine_profile = context.get("machine_profile", "weihong")
 
-        # Получаем панели заказа (DBPanel = SQLAlchemy модель)
+        # Получаем панели заказа через ProductConfig (DBPanel = SQLAlchemy модель)
         panels_query = await session.execute(
-            select(DBPanel).where(DBPanel.order_id == order_id)
+            select(DBPanel)
+            .join(ProductConfig)
+            .where(ProductConfig.order_id == order_id)
         )
         db_panels = panels_query.scalars().all()
 

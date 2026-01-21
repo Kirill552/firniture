@@ -126,7 +126,7 @@ class CAMJobResponse(BaseModel):
 
 class CAMJobStatusResponse(BaseModel):
     job_id: str
-    job_kind: Literal["DXF", "GCODE"]
+    job_kind: Literal["DXF", "GCODE", "DRILLING"]
     status: Literal["Created", "Processing", "Completed", "Failed"]
     artifact_id: str | None = None
     error: str | None = None
@@ -319,7 +319,7 @@ class DXFJobResponse(BaseModel):
 class CAMJobStatus(BaseModel):
     """Статус CAM задачи."""
     job_id: UUID
-    job_kind: Literal["DXF", "GCODE", "ZIP"]
+    job_kind: Literal["DXF", "GCODE", "ZIP", "DRILLING"]
     status: Literal["Created", "Processing", "Completed", "Failed"]
     artifact_id: UUID | None = None
     error: str | None = None
@@ -335,7 +335,7 @@ class CAMJobStatus(BaseModel):
 class CAMJobListItem(BaseModel):
     """Краткая информация о CAM задаче для списка."""
     job_id: UUID
-    job_kind: Literal["DXF", "GCODE", "ZIP"]
+    job_kind: Literal["DXF", "GCODE", "ZIP", "DRILLING"]
     status: Literal["Created", "Processing", "Completed", "Failed"]
     order_id: UUID | None = None
     created_at: datetime
