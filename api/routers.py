@@ -1985,9 +1985,11 @@ async def create_drilling_job(
     if order.factory_id != current_user.factory_id:
         raise HTTPException(status_code=403, detail="Нет доступа к заказу")
 
-    # Получаем панели заказа
+    # Получаем панели заказа через ProductConfig
     panels_query = await db.execute(
-        select(Panel).where(Panel.order_id == request.order_id)
+        select(Panel)
+        .join(ProductConfig)
+        .where(ProductConfig.order_id == request.order_id)
     )
     panels = panels_query.scalars().all()
 
