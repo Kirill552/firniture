@@ -540,6 +540,7 @@ async def finalize_order_endpoint(
             material=material,
             edge_front=panel_data.get("edge_front", False),
             edge_back=panel_data.get("edge_back", False),
+            drilling_points=panel_data.get("drilling_points"),
         )
         db.add(panel)
 
@@ -748,6 +749,7 @@ async def add_panel_to_bom(
         height_mm=float(panel_data.get("height_mm", 0)),
         thickness_mm=float(panel_data.get("thickness_mm", product.thickness_mm or 16)),
         material=panel_data.get("material", product.material),
+        drilling_points=panel_data.get("drilling_points"),
     )
     db.add(panel)
     await db.commit()
@@ -867,6 +869,7 @@ async def recalculate_bom(
             material=product.material,
             edge_front=panel_spec.edge_front,
             edge_back=panel_spec.edge_back,
+            drilling_points=panel_spec.drilling_points,
         )
         db.add(panel)
         new_panels.append(panel)

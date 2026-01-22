@@ -126,6 +126,10 @@ class Panel(Base):
     edge_back: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Точки присадки для G-code (сверление, конфирматы, полкодержатели)
+    # Формат: [{"x": float, "y": float, "diameter": float, "depth": float, "side": "face"|"edge", "hardware_type": str}]
+    drilling_points: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=list)
+
     product: Mapped[ProductConfig] = relationship(back_populates="panels")
 
 

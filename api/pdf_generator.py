@@ -15,14 +15,36 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from pathlib import Path
+
 try:
     import fitz  # PyMuPDF
     PYMUPDF_AVAILABLE = True
-    # Кодировка для кириллицы (русский текст)
-    TEXT_ENCODING_CYRILLIC = 2
 except ImportError:
     PYMUPDF_AVAILABLE = False
-    TEXT_ENCODING_CYRILLIC = 2
+
+# Путь к шрифту с кириллицей (DejaVu Sans или системный Arial)
+def _find_cyrillic_font() -> str | None:
+    """Ищет шрифт с поддержкой кириллицы."""
+    candidates = [
+        # Проект (если добавим шрифт)
+        Path(__file__).parent / "fonts" / "DejaVuSans.ttf",
+        # Windows
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("C:/Windows/Fonts/tahoma.ttf"),
+        # Linux
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path("/usr/share/fonts/TTF/DejaVuSans.ttf"),
+        # macOS
+        Path("/System/Library/Fonts/Helvetica.ttc"),
+        Path("/Library/Fonts/Arial.ttf"),
+    ]
+    for font_path in candidates:
+        if font_path.exists():
+            return str(font_path)
+    return None
+
+CYRILLIC_FONT_PATH = _find_cyrillic_font()
 
 from api.dxf_generator import PlacedPanel
 
@@ -37,8 +59,8 @@ class PDFConfig:
     # Отступы
     margin: float = 40
 
-    # Шрифты
-    font_title: str = "helv"
+    # Шрифты (F0 - кириллический шрифт, регистрируется при генерации)
+    font_cyrillic: str = "F0"  # Имя регистрируемого шрифта с кириллицей
     font_size_title: float = 16
     font_size_subtitle: float = 12
     font_size_panel: float = 8
@@ -85,6 +107,13 @@ def generate_cutting_map_pdf(
     doc = fitz.open()
     page = doc.new_page(width=cfg.page_width, height=cfg.page_height)
 
+    # Регистрируем шрифт с поддержкой кириллицы
+    if CYRILLIC_FONT_PATH:
+        page.insert_font(fontname=cfg.font_cyrillic, fontfile=CYRILLIC_FONT_PATH)
+    else:
+        # Fallback на встроенный шрифт (без кириллицы, но хоть что-то)
+        cfg.font_cyrillic = "helv"
+
     # Область для рисования схемы (с учётом отступов и места для заголовка)
     header_height = 60
     footer_height = 40
@@ -126,7 +155,7 @@ def generate_cutting_map_pdf(
         fitz.Point(sheet_x + sheet_draw_width / 2 - 30, sheet_y - 8),
         f"{int(sheet_width_mm)} мм",
         fontsize=cfg.font_size_dimension,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
     )
 
@@ -137,7 +166,7 @@ def generate_cutting_map_pdf(
         fitz.Point(height_text_x, height_text_y),
         f"{int(sheet_height_mm)} мм",
         fontsize=cfg.font_size_dimension,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
         rotate=90,
     )
@@ -178,9 +207,8 @@ def generate_cutting_map_pdf(
                 fitz.Point(text_x, text_y),
                 name_text,
                 fontsize=cfg.font_size_panel,
-                fontname=cfg.font_title,
+                fontname=cfg.font_cyrillic,
                 color=cfg.color_text,
-                encoding=TEXT_ENCODING_CYRILLIC,
             )
 
         # Размеры панели (если помещается)
@@ -192,7 +220,7 @@ def generate_cutting_map_pdf(
                 fitz.Point(dim_x, dim_y),
                 dim_text,
                 fontsize=cfg.font_size_dimension,
-                fontname=cfg.font_title,
+                fontname=cfg.font_cyrillic,
                 color=cfg.color_dimension,
             )
 
@@ -204,7 +232,7 @@ def generate_cutting_map_pdf(
                 fitz.Point(rotate_x, rotate_y),
                 "↻",
                 fontsize=10,
-                fontname=cfg.font_title,
+                fontname=cfg.font_cyrillic,
                 color=cfg.color_dimension,
             )
 
@@ -236,9 +264,8 @@ def _draw_header(page: fitz.Page, cfg: PDFConfig, order_info: str) -> None:
         fitz.Point(cfg.margin, cfg.margin + 20),
         "Карта раскроя",
         fontsize=cfg.font_size_title,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_text,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
 
     # Подзаголовок с информацией о заказе
@@ -247,10 +274,9 @@ def _draw_header(page: fitz.Page, cfg: PDFConfig, order_info: str) -> None:
             fitz.Point(cfg.margin, cfg.margin + 38),
             order_info,
             fontsize=cfg.font_size_subtitle,
-            fontname=cfg.font_title,
+            fontname=cfg.font_cyrillic,
             color=cfg.color_dimension,
-            encoding=TEXT_ENCODING_CYRILLIC,
-        )
+            )
 
     # Дата
     date_text = datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -258,7 +284,7 @@ def _draw_header(page: fitz.Page, cfg: PDFConfig, order_info: str) -> None:
         fitz.Point(cfg.page_width - cfg.margin - 100, cfg.margin + 20),
         date_text,
         fontsize=cfg.font_size_stats,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
     )
 
@@ -283,9 +309,8 @@ def _draw_legend(
         fitz.Point(x, current_y),
         "Статистика",
         fontsize=cfg.font_size_subtitle,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_text,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height + 8
 
@@ -294,9 +319,8 @@ def _draw_legend(
         fitz.Point(x, current_y),
         f"Лист: {int(sheet_w)}x{int(sheet_h)} мм",
         fontsize=cfg.font_size_stats,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height
 
@@ -306,9 +330,8 @@ def _draw_legend(
         fitz.Point(x, current_y),
         f"Площадь: {sheet_area:.2f} м2",
         fontsize=cfg.font_size_stats,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height
 
@@ -317,9 +340,8 @@ def _draw_legend(
         fitz.Point(x, current_y),
         f"Панелей: {len(panels)} шт",
         fontsize=cfg.font_size_stats,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height
 
@@ -329,9 +351,8 @@ def _draw_legend(
         fitz.Point(x, current_y),
         f"Использование: {utilization:.1f}%",
         fontsize=cfg.font_size_stats,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=util_color,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height * 2
 
@@ -340,9 +361,8 @@ def _draw_legend(
         fitz.Point(x, current_y),
         "Панели:",
         fontsize=cfg.font_size_subtitle,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_text,
-        encoding=TEXT_ENCODING_CYRILLIC,
     )
     current_y += line_height + 4
 
@@ -354,10 +374,9 @@ def _draw_legend(
             fitz.Point(x, current_y),
             text,
             fontsize=cfg.font_size_panel,
-            fontname=cfg.font_title,
+            fontname=cfg.font_cyrillic,
             color=cfg.color_dimension,
-            encoding=TEXT_ENCODING_CYRILLIC,
-        )
+            )
         current_y += line_height - 2
 
         # Размеры
@@ -366,7 +385,7 @@ def _draw_legend(
             fitz.Point(x, current_y),
             dim_text,
             fontsize=cfg.font_size_dimension,
-            fontname=cfg.font_title,
+            fontname=cfg.font_cyrillic,
             color=cfg.color_dimension,
         )
         current_y += line_height - 2
@@ -376,7 +395,7 @@ def _draw_legend(
             fitz.Point(x, current_y),
             f"... и ещё {len(panels) - 10} панелей",
             fontsize=cfg.font_size_dimension,
-            fontname=cfg.font_title,
+            fontname=cfg.font_cyrillic,
             color=cfg.color_dimension,
         )
 
@@ -389,7 +408,7 @@ def _draw_footer(page: fitz.Page, cfg: PDFConfig) -> None:
         fitz.Point(cfg.margin, footer_y),
         "Сгенерировано: Мебель-ИИ",
         fontsize=cfg.font_size_dimension,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
     )
 
@@ -397,6 +416,6 @@ def _draw_footer(page: fitz.Page, cfg: PDFConfig) -> None:
         fitz.Point(cfg.page_width - cfg.margin - 80, footer_y),
         "mebel-ai.ru",
         fontsize=cfg.font_size_dimension,
-        fontname=cfg.font_title,
+        fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
     )

@@ -56,9 +56,9 @@ class Panel:
     edge_right: bool = False
     edge_thickness_mm: float = DEFAULT_EDGE_THICKNESS_MM
 
-    # Присадка (отверстия для фурнитуры)
-    drilling_holes: list[dict] = field(default_factory=list)
-    # Формат: [{"x": 50, "y": 37, "diameter": 5, "depth": 12}, ...]
+    # Присадка (точки сверления для фурнитуры)
+    drilling_points: list[dict] = field(default_factory=list)
+    # Формат: [{"x": 50, "y": 37, "diameter": 5, "depth": 12, "side": "face", "hardware_type": "confirmat"}, ...]
 
     # Комментарий
     notes: str = ""
@@ -155,7 +155,7 @@ def draw_panel(
         )
 
     # 3. Присадка (DRILLING) — круги для отверстий
-    for hole in panel.drilling_holes:
+    for hole in panel.drilling_points:
         hx = hole.get("x", 0)
         hy = hole.get("y", 0)
         diameter = hole.get("diameter", 5)

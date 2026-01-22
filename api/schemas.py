@@ -282,10 +282,10 @@ class PanelInput(BaseModel):
     edge_right: bool = Field(False, description="Кромка справа")
     edge_thickness_mm: float = Field(DEFAULT_EDGE_THICKNESS_MM, ge=0, description="Толщина кромки")
 
-    # Присадка (отверстия)
-    drilling_holes: list[dict[str, Any]] = Field(
+    # Присадка (точки сверления)
+    drilling_points: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Отверстия: [{'x': 50, 'y': 37, 'diameter': 5, 'depth': 12}, ...]"
+        description="Точки присадки: [{'x': 50, 'y': 37, 'diameter': 5, 'depth': 12, 'side': 'face', 'hardware_type': 'confirmat'}, ...]"
     )
 
     notes: str = Field("", description="Комментарий")

@@ -31,6 +31,183 @@ from api.constants import (
 log = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Константы присадки (мебельные стандарты ЛДСП 16мм)
+# =============================================================================
+
+# Конфирмат 5x50 (евровинт)
+CONFIRMAT_DIAMETER_MM = 5.0           # Диаметр сверла
+CONFIRMAT_DEPTH_FACE_MM = 11.0        # Глубина в пласть
+CONFIRMAT_DEPTH_EDGE_MM = 50.0        # Глубина в торец
+CONFIRMAT_EDGE_OFFSET_MM = 8.0        # Отступ от края панели
+CONFIRMAT_FRONT_OFFSET_MM = 50.0      # Отступ от передней кромки
+CONFIRMAT_SPACING_MM = 128.0          # Расстояние между конфирматами (кратно 32)
+
+# Система 32 (полкодержатели, петли)
+SYSTEM32_STEP_MM = 32.0               # Шаг отверстий
+SYSTEM32_FRONT_OFFSET_MM = 37.0       # Отступ от переднего края
+SYSTEM32_DIAMETER_MM = 5.0            # Диаметр под полкодержатель
+SYSTEM32_DEPTH_MM = 12.0              # Глубина отверстия
+
+# Петля мебельная (чашка 35мм)
+HINGE_CUP_DIAMETER_MM = 35.0          # Диаметр чашки
+HINGE_CUP_DEPTH_MM = 12.0             # Глубина фрезеровки
+HINGE_EDGE_OFFSET_MM = 22.0           # Отступ от края фасада
+HINGE_TOP_BOTTOM_OFFSET_MM = 100.0    # Отступ от верха/низа фасада
+
+
+def _generate_confirmat_holes_for_horizontal(
+    panel_width: float,
+    panel_height: float,
+    thickness: float,
+) -> list[dict]:
+    """
+    Генерирует отверстия под конфирматы для горизонтальной панели (верх, низ, дно).
+    Конфирматы идут в торец панели с двух сторон (слева и справа).
+    """
+    holes = []
+
+    # Отступ от переднего и заднего края
+    front_offset = CONFIRMAT_FRONT_OFFSET_MM
+    back_offset = CONFIRMAT_FRONT_OFFSET_MM
+
+    # Количество конфирматов по глубине
+    usable_depth = panel_height - front_offset - back_offset
+    if usable_depth > CONFIRMAT_SPACING_MM:
+        # 2 конфирмата: спереди и сзади
+        y_positions = [front_offset, panel_height - back_offset]
+    else:
+        # 1 конфирмат по центру
+        y_positions = [panel_height / 2]
+
+    # Левая сторона (торец)
+    for y in y_positions:
+        holes.append({
+            "x": 0,
+            "y": y,
+            "diameter": CONFIRMAT_DIAMETER_MM,
+            "depth": CONFIRMAT_DEPTH_EDGE_MM,
+            "side": "edge",
+            "hardware_type": "confirmat",
+        })
+
+    # Правая сторона (торец)
+    for y in y_positions:
+        holes.append({
+            "x": panel_width,
+            "y": y,
+            "diameter": CONFIRMAT_DIAMETER_MM,
+            "depth": CONFIRMAT_DEPTH_EDGE_MM,
+            "side": "edge",
+            "hardware_type": "confirmat",
+        })
+
+    return holes
+
+
+def _generate_confirmat_holes_for_side(
+    panel_width: float,
+    panel_height: float,
+    thickness: float,
+    top_panel: bool = True,
+    bottom_panel: bool = True,
+) -> list[dict]:
+    """
+    Генерирует отверстия под конфирматы для боковины.
+    Конфирматы идут в пласть панели сверху и снизу.
+    """
+    holes = []
+
+    # Отступ от переднего и заднего края
+    front_offset = CONFIRMAT_FRONT_OFFSET_MM
+    back_offset = CONFIRMAT_FRONT_OFFSET_MM
+
+    # Позиции по глубине (ось X на боковине = глубина корпуса)
+    usable_depth = panel_width - front_offset - back_offset
+    if usable_depth > CONFIRMAT_SPACING_MM:
+        x_positions = [front_offset, panel_width - back_offset]
+    else:
+        x_positions = [panel_width / 2]
+
+    # Верхние отверстия (под верхнюю панель)
+    if top_panel:
+        y_top = panel_height - thickness / 2  # Центр верхней панели
+        for x in x_positions:
+            holes.append({
+                "x": x,
+                "y": y_top,
+                "diameter": CONFIRMAT_DIAMETER_MM,
+                "depth": CONFIRMAT_DEPTH_FACE_MM,
+                "side": "face",
+                "hardware_type": "confirmat",
+            })
+
+    # Нижние отверстия (под нижнюю панель)
+    if bottom_panel:
+        y_bottom = thickness / 2  # Центр нижней панели
+        for x in x_positions:
+            holes.append({
+                "x": x,
+                "y": y_bottom,
+                "diameter": CONFIRMAT_DIAMETER_MM,
+                "depth": CONFIRMAT_DEPTH_FACE_MM,
+                "side": "face",
+                "hardware_type": "confirmat",
+            })
+
+    return holes
+
+
+def _generate_shelf_pin_holes(
+    panel_width: float,
+    panel_height: float,
+    thickness: float,
+    shelf_count: int,
+    bottom_offset: float = 100.0,
+    top_offset: float = 100.0,
+) -> list[dict]:
+    """
+    Генерирует ряды отверстий системы 32 для полкодержателей на боковине.
+    """
+    if shelf_count == 0:
+        return []
+
+    holes = []
+
+    # Позиция по X (глубина) — отступ от переднего края
+    x_front = SYSTEM32_FRONT_OFFSET_MM
+    x_back = panel_width - SYSTEM32_FRONT_OFFSET_MM
+
+    # Диапазон по Y (высота) — где могут быть полки
+    y_start = bottom_offset + thickness
+    y_end = panel_height - top_offset - thickness
+
+    # Генерируем отверстия с шагом 32мм
+    y = y_start
+    while y <= y_end:
+        # Передний ряд
+        holes.append({
+            "x": x_front,
+            "y": y,
+            "diameter": SYSTEM32_DIAMETER_MM,
+            "depth": SYSTEM32_DEPTH_MM,
+            "side": "face",
+            "hardware_type": "shelf_pin",
+        })
+        # Задний ряд
+        holes.append({
+            "x": x_back,
+            "y": y,
+            "diameter": SYSTEM32_DIAMETER_MM,
+            "depth": SYSTEM32_DEPTH_MM,
+            "side": "face",
+            "hardware_type": "shelf_pin",
+        })
+        y += SYSTEM32_STEP_MM
+
+    return holes
+
+
 @dataclass
 class PanelSpec:
     """Спецификация панели."""
@@ -171,6 +348,22 @@ class WallCabinetTemplate(CabinetTemplate):
         # Глубина = глубина корпуса - паз под заднюю стенку
         side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
+        # Присадка для боковин: конфирматы под верх/низ + полкодержатели
+        side_drilling = _generate_confirmat_holes_for_side(
+            panel_width=side_depth,
+            panel_height=self.height_mm,
+            thickness=self.thickness_mm,
+            top_panel=True,
+            bottom_panel=True,
+        )
+        if shelf_count > 0:
+            side_drilling.extend(_generate_shelf_pin_holes(
+                panel_width=side_depth,
+                panel_height=self.height_mm,
+                thickness=self.thickness_mm,
+                shelf_count=shelf_count,
+            ))
+
         result.panels.append(PanelSpec(
             name="Боковина левая",
             width_mm=side_depth,
@@ -180,6 +373,7 @@ class WallCabinetTemplate(CabinetTemplate):
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
             notes="Паз под ДВП 4x10мм",
+            drilling_points=side_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -191,6 +385,7 @@ class WallCabinetTemplate(CabinetTemplate):
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
             notes="Паз под ДВП 4x10мм",
+            drilling_points=side_drilling,  # Зеркальная копия
         ))
 
         # Верх и низ
@@ -198,12 +393,20 @@ class WallCabinetTemplate(CabinetTemplate):
         horizontal_width = self.inner_width
         horizontal_depth = side_depth
 
+        # Присадка для горизонтальных панелей: конфирматы в торцы
+        horizontal_drilling = _generate_confirmat_holes_for_horizontal(
+            panel_width=horizontal_width,
+            panel_height=horizontal_depth,
+            thickness=self.thickness_mm,
+        )
+
         result.panels.append(PanelSpec(
             name="Верх",
             width_mm=horizontal_width,
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
+            drilling_points=horizontal_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -212,6 +415,7 @@ class WallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
+            drilling_points=horizontal_drilling,
         ))
 
         # Полки (съёмные)
@@ -254,6 +458,22 @@ class BaseCabinetTemplate(CabinetTemplate):
 
         side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
+        # Присадка для боковин: конфирматы только под дно (верха нет), + полкодержатели
+        side_drilling = _generate_confirmat_holes_for_side(
+            panel_width=side_depth,
+            panel_height=self.height_mm,
+            thickness=self.thickness_mm,
+            top_panel=False,  # Нет верхней панели
+            bottom_panel=True,
+        )
+        if shelf_count > 0:
+            side_drilling.extend(_generate_shelf_pin_holes(
+                panel_width=side_depth,
+                panel_height=self.height_mm,
+                thickness=self.thickness_mm,
+                shelf_count=shelf_count,
+            ))
+
         # Боковины (2 шт)
         result.panels.append(PanelSpec(
             name="Боковина левая",
@@ -263,6 +483,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -273,10 +494,18 @@ class BaseCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         horizontal_width = self.inner_width
         horizontal_depth = side_depth
+
+        # Присадка для дна
+        bottom_drilling = _generate_confirmat_holes_for_horizontal(
+            panel_width=horizontal_width,
+            panel_height=horizontal_depth,
+            thickness=self.thickness_mm,
+        )
 
         # Дно
         result.panels.append(PanelSpec(
@@ -285,6 +514,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
+            drilling_points=bottom_drilling,
         ))
 
         # Верхние планки (царги) вместо сплошного верха
@@ -338,6 +568,30 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
 
         side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
+        # Присадка для боковин: только конфирматы под связи (нет дна и верха)
+        # Минимальная присадка - конфирматы под верхние и нижние связи
+        side_drilling: list[dict] = []
+        # Верхние связи
+        for x in [CONFIRMAT_FRONT_OFFSET_MM, side_depth - CONFIRMAT_FRONT_OFFSET_MM]:
+            side_drilling.append({
+                "x": x,
+                "y": self.height_mm - self.thickness_mm / 2,
+                "diameter": CONFIRMAT_DIAMETER_MM,
+                "depth": CONFIRMAT_DEPTH_FACE_MM,
+                "side": "face",
+                "hardware_type": "confirmat",
+            })
+        # Нижние связи
+        for x in [CONFIRMAT_FRONT_OFFSET_MM, side_depth - CONFIRMAT_FRONT_OFFSET_MM]:
+            side_drilling.append({
+                "x": x,
+                "y": self.thickness_mm / 2,
+                "diameter": CONFIRMAT_DIAMETER_MM,
+                "depth": CONFIRMAT_DEPTH_FACE_MM,
+                "side": "face",
+                "hardware_type": "confirmat",
+            })
+
         # Боковины
         result.panels.append(PanelSpec(
             name="Боковина левая",
@@ -347,6 +601,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -357,6 +612,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         horizontal_width = self.inner_width
@@ -411,6 +667,15 @@ class DrawerCabinetTemplate(CabinetTemplate):
 
         side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
+        # Присадка для боковин: конфирматы под дно (без полкодержателей - тут ящики)
+        side_drilling = _generate_confirmat_holes_for_side(
+            panel_width=side_depth,
+            panel_height=self.height_mm,
+            thickness=self.thickness_mm,
+            top_panel=False,
+            bottom_panel=True,
+        )
+
         # Боковины
         result.panels.append(PanelSpec(
             name="Боковина левая",
@@ -420,6 +685,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -430,10 +696,18 @@ class DrawerCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         horizontal_width = self.inner_width
         horizontal_depth = side_depth
+
+        # Присадка для дна
+        bottom_drilling = _generate_confirmat_holes_for_horizontal(
+            panel_width=horizontal_width,
+            panel_height=horizontal_depth,
+            thickness=self.thickness_mm,
+        )
 
         # Дно корпуса
         result.panels.append(PanelSpec(
@@ -442,6 +716,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
+            drilling_points=bottom_drilling,
         ))
 
         # Царги
@@ -529,6 +804,22 @@ class TallCabinetTemplate(CabinetTemplate):
 
         side_depth = self.depth_mm - DEFAULT_BACK_SLOT_DEPTH_MM
 
+        # Присадка для боковин пенала: конфирматы + полкодержатели
+        side_drilling = _generate_confirmat_holes_for_side(
+            panel_width=side_depth,
+            panel_height=self.height_mm,
+            thickness=self.thickness_mm,
+            top_panel=True,
+            bottom_panel=True,
+        )
+        if shelf_count > 0:
+            side_drilling.extend(_generate_shelf_pin_holes(
+                panel_width=side_depth,
+                panel_height=self.height_mm,
+                thickness=self.thickness_mm,
+                shelf_count=shelf_count,
+            ))
+
         # Боковины
         result.panels.append(PanelSpec(
             name="Боковина левая",
@@ -538,6 +829,7 @@ class TallCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -548,10 +840,18 @@ class TallCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
+            drilling_points=side_drilling,
         ))
 
         horizontal_width = self.inner_width
         horizontal_depth = side_depth
+
+        # Присадка для горизонтальных панелей
+        horizontal_drilling = _generate_confirmat_holes_for_horizontal(
+            panel_width=horizontal_width,
+            panel_height=horizontal_depth,
+            thickness=self.thickness_mm,
+        )
 
         # Верх и низ
         result.panels.append(PanelSpec(
@@ -560,6 +860,7 @@ class TallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
+            drilling_points=horizontal_drilling,
         ))
 
         result.panels.append(PanelSpec(
@@ -568,6 +869,7 @@ class TallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
+            drilling_points=horizontal_drilling,
         ))
 
         # Полки

@@ -103,7 +103,7 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
                 edge_left=p.get("edge_left", False),
                 edge_right=p.get("edge_right", False),
                 edge_thickness_mm=float(p.get("edge_thickness_mm", DEFAULT_EDGE_THICKNESS_MM)),
-                drilling_holes=p.get("drilling_holes", []),
+                drilling_points=p.get("drilling_points", []),
                 notes=p.get("notes", ""),
             ))
 
