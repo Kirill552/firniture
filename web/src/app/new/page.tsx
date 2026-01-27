@@ -10,6 +10,48 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Keyboard, ArrowLeft } from "lucide-react";
 
+// Маппинг русских названий → enum значения для API
+const CABINET_TYPE_MAP: Record<string, string> = {
+  // Русские названия
+  "навесной": "wall",
+  "навесной шкаф": "wall",
+  "верхний": "wall",
+  "верхний шкаф": "wall",
+  "напольный": "base",
+  "напольная тумба": "base",
+  "нижний": "base",
+  "нижний шкаф": "base",
+  "тумба": "base",
+  "тумба под мойку": "base_sink",
+  "мойка": "base_sink",
+  "под мойку": "base_sink",
+  "с ящиками": "drawer",
+  "тумба с ящиками": "drawer",
+  "ящики": "drawer",
+  "пенал": "tall",
+  "шкаф-пенал": "tall",
+  "высокий": "tall",
+  "угловой": "corner",
+  "угловой шкаф": "corner",
+  "угол": "corner",
+  // Общие
+  "шкаф": "base",
+  "кухонный": "base",
+  "кухонный шкаф": "base",
+  // Английские (на случай если уже правильные)
+  "wall": "wall",
+  "base": "base",
+  "base_sink": "base_sink",
+  "drawer": "drawer",
+  "tall": "tall",
+  "corner": "corner",
+};
+
+function mapCabinetType(input: string): string {
+  const normalized = input.toLowerCase().trim();
+  return CABINET_TYPE_MAP[normalized] || "base";
+}
+
 export default function NewOrderPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -33,7 +75,8 @@ export default function NewOrderPage() {
 
     try {
       // Извлечь и нормализовать параметры
-      const productType = (params.product_type || params.cabinet_type || "base") as string;
+      const rawProductType = (params.product_type || params.cabinet_type || "base") as string;
+      const cabinetType = mapCabinetType(rawProductType);
       const width_mm = Number(params.width_mm || params.width) || 600;
       const height_mm = Number(params.height_mm || params.height) || 720;
       const depth_mm = Number(params.depth_mm || params.depth) || 560;
@@ -45,9 +88,9 @@ export default function NewOrderPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: productType,
+          name: rawProductType,
           description: "Создан через Vision OCR",
-          spec: { ...params, product_type: productType, width: width_mm, height: height_mm, depth: depth_mm },
+          spec: { ...params, product_type: cabinetType, width: width_mm, height: height_mm, depth: depth_mm },
         }),
       });
 
@@ -60,14 +103,14 @@ export default function NewOrderPage() {
       // Маппинг для BOM generate endpoint
       const bomParams = {
         order_id: order.id,
-        cabinet_type: productType,
+        cabinet_type: cabinetType,
         width_mm,
         height_mm,
         depth_mm,
         material: `${material} ${thickness}мм`,
-        shelf_count: productType === "tall" ? 4 : 1,
-        door_count: productType === "drawer" ? 0 : (width_mm > 600 ? 2 : 1),
-        drawer_count: productType === "drawer" ? 3 : 0,
+        shelf_count: cabinetType === "tall" ? 4 : 1,
+        door_count: cabinetType === "drawer" ? 0 : (width_mm > 600 ? 2 : 1),
+        drawer_count: cabinetType === "drawer" ? 3 : 0,
       };
 
       // Сгенерировать BOM
