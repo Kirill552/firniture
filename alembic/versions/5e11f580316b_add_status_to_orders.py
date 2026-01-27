@@ -5,9 +5,9 @@ Revises: 0006_frida_embedding_768
 Create Date: 2026-01-16 14:44:08.632996
 
 """
-from alembic import op  # type: ignore
 import sqlalchemy as sa  # type: ignore
 
+from alembic import op  # type: ignore
 
 # revision identifiers, used by Alembic.
 revision = '5e11f580316b'

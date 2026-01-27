@@ -38,7 +38,7 @@ jobs:
       - name: Install deps
         working-directory: web
         run: |
-          npm ci || npm install
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
       - name: Build
         working-directory: web
         run: npm run build --if-present
