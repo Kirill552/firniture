@@ -50,11 +50,16 @@ export default function ManualOrderPage() {
     setIsSubmitting(true);
 
     try {
-      const params = {
+      const width_mm = parseInt(formData.width);
+      const height_mm = parseInt(formData.height);
+      const depth_mm = parseInt(formData.depth);
+
+      // Параметры для сохранения в заказе
+      const specParams = {
         product_type: formData.product_type,
-        width: parseInt(formData.width),
-        height: parseInt(formData.height),
-        depth: parseInt(formData.depth),
+        width: width_mm,
+        height: height_mm,
+        depth: depth_mm,
         material: formData.material,
         thickness: parseInt(formData.thickness),
       };
@@ -66,7 +71,7 @@ export default function ManualOrderPage() {
         body: JSON.stringify({
           name: PRODUCT_TYPES[formData.product_type] || "Новый заказ",
           description: "Создан вручную",
-          spec: params,
+          spec: specParams,
         }),
       });
 
@@ -76,15 +81,29 @@ export default function ManualOrderPage() {
 
       const order = await orderResponse.json();
 
+      // Маппинг для BOM generate endpoint
+      const bomParams = {
+        order_id: order.id,
+        cabinet_type: formData.product_type,
+        width_mm,
+        height_mm,
+        depth_mm,
+        material: `${formData.material} ${formData.thickness}мм`,
+        shelf_count: formData.product_type === "tall" ? 4 : 1,
+        door_count: formData.product_type === "drawer" ? 0 : (width_mm > 600 ? 2 : 1),
+        drawer_count: formData.product_type === "drawer" ? 3 : 0,
+      };
+
       // Сгенерировать BOM
-      await fetch("/api/v1/bom/generate", {
+      const bomResponse = await fetch("/api/v1/bom/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: order.id,
-          ...params,
-        }),
+        body: JSON.stringify(bomParams),
       });
+
+      if (!bomResponse.ok) {
+        console.error("BOM generation failed:", await bomResponse.text());
+      }
 
       // Перейти в BOM
       router.push(`/bom?orderId=${order.id}`);

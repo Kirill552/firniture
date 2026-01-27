@@ -32,14 +32,22 @@ export default function NewOrderPage() {
     setIsCreating(true);
 
     try {
+      // Извлечь и нормализовать параметры
+      const productType = (params.product_type || params.cabinet_type || "base") as string;
+      const width_mm = Number(params.width_mm || params.width) || 600;
+      const height_mm = Number(params.height_mm || params.height) || 720;
+      const depth_mm = Number(params.depth_mm || params.depth) || 560;
+      const material = (params.material || "ЛДСП") as string;
+      const thickness = Number(params.thickness || params.thickness_mm) || 16;
+
       // Создать заказ
       const orderResponse = await fetch("/api/v1/orders/anonymous", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: typeof params.product_type === 'string' ? params.product_type : "Новый заказ",
+          name: productType,
           description: "Создан через Vision OCR",
-          spec: params,
+          spec: { ...params, product_type: productType, width: width_mm, height: height_mm, depth: depth_mm },
         }),
       });
 
@@ -49,15 +57,29 @@ export default function NewOrderPage() {
 
       const order = await orderResponse.json();
 
+      // Маппинг для BOM generate endpoint
+      const bomParams = {
+        order_id: order.id,
+        cabinet_type: productType,
+        width_mm,
+        height_mm,
+        depth_mm,
+        material: `${material} ${thickness}мм`,
+        shelf_count: productType === "tall" ? 4 : 1,
+        door_count: productType === "drawer" ? 0 : (width_mm > 600 ? 2 : 1),
+        drawer_count: productType === "drawer" ? 3 : 0,
+      };
+
       // Сгенерировать BOM
-      await fetch("/api/v1/bom/generate", {
+      const bomResponse = await fetch("/api/v1/bom/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: order.id,
-          ...params,
-        }),
+        body: JSON.stringify(bomParams),
       });
+
+      if (!bomResponse.ok) {
+        console.error("BOM generation failed:", await bomResponse.text());
+      }
 
       // Перейти в BOM (минуя диалог!)
       router.push(`/bom?orderId=${order.id}`);
