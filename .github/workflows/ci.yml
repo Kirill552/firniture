@@ -25,7 +25,6 @@ jobs:
         run: black --check .
 
   frontend-build:
-    if: ${{ hashFiles('web/package.json') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
