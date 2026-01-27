@@ -1,50 +1,18 @@
 'use client'
 
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import { Loader2 } from "lucide-react"
-import { apiClient } from "@/lib/api-client"
+import { useEffect } from "react"
 
 /**
- * Страница создания нового заказа.
- * Автоматически создаёт заказ через API и редиректит на загрузку ТЗ.
+ * Редирект на новый Vision-first флоу.
+ * Старый флоу удалён — теперь всё через /new.
  */
-export default function NewOrderPage() {
+export default function NewOrderRedirect() {
   const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const createOrder = async () => {
-      try {
-        const data = await apiClient.createOrder({})
-        router.replace(`/orders/new/tz-upload?orderId=${data.id}`)
-      } catch (err) {
-        console.error("Failed to create order:", err)
-        setError('Не удалось создать заказ. Попробуйте ещё раз.')
-      }
-    }
-
-    createOrder()
+    router.replace('/new')
   }, [router])
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
-        <div className="text-destructive mb-4">{error}</div>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-primary hover:underline"
-        >
-          Повторить
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-      <p className="text-muted-foreground">Создаём заказ...</p>
-    </div>
-  )
+  return null
 }

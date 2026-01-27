@@ -178,7 +178,7 @@ const OrdersPageInner = () => {
         </div>
         <div className="flex items-center gap-2">
           <DateRangeFilter value={dateRange} onChange={setDateRange} />
-          <Link href="/orders/new/tz-upload">
+          <Link href="/new">
             <Button>
               <Plus className="h-4 w-4 mr-2" />
               Новый заказ
