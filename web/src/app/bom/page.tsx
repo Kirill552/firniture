@@ -20,6 +20,8 @@ import {
   MiniStepper,
   type FileStatus,
 } from "@/components/bom"
+import { CostSummary } from "@/components/bom/cost-summary"
+import { PaywallCard } from "@/components/bom/paywall-card"
 import type { FullBOM, BOMPanel, BOMHardware, BOMFastener, BOMEdgeBand } from "@/types/api"
 
 // Тип статуса сохранения
@@ -982,60 +984,26 @@ export default function BomPage() {
               showCombineSuggestion={true}
             />
 
-            {/* Файлы для станка */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium">Файлы для станка</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <FileGenerationCard
-                  icon={FileCode}
-                  label="DXF Раскладка"
-                  status={getFileStatus(isGeneratingDxf, dxfError, dxfDownloadUrl)}
-                  downloadUrl={dxfDownloadUrl}
-                  error={dxfError}
-                  onGenerate={handleGenerateDxf}
-                  onRegenerate={handleGenerateDxf}
-                />
-                <FileGenerationCard
-                  icon={FileText}
-                  label="PDF Карта раскроя"
-                  status={getFileStatus(isGeneratingPdf, pdfError, pdfDownloadUrl)}
-                  downloadUrl={pdfDownloadUrl}
-                  error={pdfError}
-                  onGenerate={handleGeneratePdf}
-                  onRegenerate={handleGeneratePdf}
-                />
-                <FileGenerationCard
-                  icon={Settings}
-                  label={`G-code раскрой CNC (${machineProfile ?? "профиль не выбран"})`}
-                  status={
-                    !dxfDownloadUrl && !isGeneratingDxf
-                      ? "blocked"
-                      : getFileStatus(isGeneratingGcode, gcodeError, gcodeDownloadUrl)
-                  }
-                  downloadUrl={gcodeDownloadUrl}
-                  error={gcodeError}
-                  blockedReason="Сначала создайте DXF"
-                  onGenerate={handleGenerateGcode}
-                  onRegenerate={handleGenerateGcode}
-                />
-                <FileGenerationCard
-                  icon={CircleDot}
-                  label={`G-code присадка (${machineProfile ?? "профиль не выбран"})`}
-                  status={getFileStatus(isGeneratingDrilling, drillingError, drillingDownloadUrl)}
-                  downloadUrl={drillingDownloadUrl}
-                  error={drillingError}
-                  onGenerate={handleGenerateDrilling}
-                  onRegenerate={handleGenerateDrilling}
-                />
-              </CardContent>
-            </Card>
+            {/* Себестоимость */}
+            {effectiveOrderId && <CostSummary orderId={effectiveOrderId} />}
 
-            {/* Mini Stepper */}
-            <div className="flex justify-center pt-2">
+            {/* Paywall вместо бесплатной генерации */}
+            {effectiveOrderId && (
+              <PaywallCard
+                orderId={effectiveOrderId}
+                dxfDownloadUrl={dxfDownloadUrl}
+                pdfDownloadUrl={pdfDownloadUrl}
+                onGenerateDxf={handleGenerateDxf}
+                onGeneratePdf={handleGeneratePdf}
+                isGeneratingDxf={isGeneratingDxf}
+                isGeneratingPdf={isGeneratingPdf}
+              />
+            )}
+
+            {/* Mini Stepper (скрываем, так как шаги изменились) */}
+            {/* <div className="flex justify-center pt-2">
               <MiniStepper steps={productionSteps} />
-            </div>
+            </div> */}
           </>
         }
       />

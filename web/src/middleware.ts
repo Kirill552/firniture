@@ -9,6 +9,7 @@ const publicPaths = [
   '/login',
   '/login/verify',
   '/signup',  // legacy, редирект на /login
+  '/new',     // Vision-first freemium (без авторизации)
 ]
 
 /**
@@ -17,8 +18,9 @@ const publicPaths = [
 function isPublicPath(pathname: string): boolean {
   return publicPaths.some(path => {
     if (path === pathname) return true
-    // Поддержка вложенных путей для /login/*
+    // Поддержка вложенных путей для /login/* и /new/*
     if (path === '/login' && pathname.startsWith('/login/')) return true
+    if (path === '/new' && pathname.startsWith('/new/')) return true
     return false
   })
 }

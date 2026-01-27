@@ -11,7 +11,6 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Literal
 
 
 class DrillingSide(str, Enum):
@@ -72,7 +71,7 @@ class PanelDrilling:
 # Генератор G-code присадки
 # =============================================================================
 
-from api.gcode_generator import MACHINE_PROFILES, MachineProfile
+from api.gcode_generator import MACHINE_PROFILES
 
 
 def _transliterate(text: str) -> str:

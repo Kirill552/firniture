@@ -22,8 +22,9 @@ from .constants import (
     DEFAULT_SHEET_WIDTH_MM,
 )
 from .database import SessionLocal
-from .models import Artifact, CAMJob, JobStatusEnum, Panel as DBPanel, ProductConfig
-from .queues import DRILLING_QUEUE, DLQ_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
+from .models import Artifact, CAMJob, JobStatusEnum, ProductConfig
+from .models import Panel as DBPanel
+from .queues import DLQ_QUEUE, DRILLING_QUEUE, DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, enqueue, get_redis
 
 try:
     import ezdxf  # type: ignore
@@ -42,11 +43,11 @@ except Exception:  # pragma: no cover
 
 try:
     from .drilling_gcode import (
-        generate_drilling_zip,
-        PanelDrilling,
         DrillHole,
         DrillingSide,
         HardwareType,
+        PanelDrilling,
+        generate_drilling_zip,
     )
     DRILLING_GENERATOR_AVAILABLE = True
 except Exception:

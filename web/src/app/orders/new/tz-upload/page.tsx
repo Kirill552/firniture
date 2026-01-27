@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Upload, ImageIcon, Check, AlertTriangle, Pencil, X } from "lucide-react"
-import { FileDropzone } from '@/components/upload/file-dropzone'
+import { FileDropzone } from '@/components/vision/file-dropzone'
 import { apiClient } from '@/lib/api-client'
 import type { ExtractedFurnitureParams, ImageExtractResponse } from '@/types/api'
 
@@ -386,13 +386,8 @@ export default function TzUploadPage() {
             <div className="space-y-3">
               <Label>Загрузить фото или эскиз</Label>
               <FileDropzone
-                onFiles={handleFiles}
-                onReject={(reasons) => console.warn('Отклонено:', reasons)}
-                accept={['.png', '.jpg', '.jpeg', '.webp', '.pdf']}
-                maxFiles={1}
-                maxSize={10 * 1024 * 1024}
-                description="Поддерживаются: JPG, PNG, WebP, PDF (до 2 стр.)"
-                disabled={isAnalyzing}
+                onFileSelect={(file) => handleFiles([file])}
+                isLoading={isAnalyzing}
               />
             </div>
 

@@ -98,9 +98,9 @@ export default function LandingPage() {
               Для технологов мебельных производств
             </p>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
-              Фото эскиза → G-code
+              Фото эскиза → файлы для станка
               <br />
-              <span className="text-muted-foreground">за 5 минут</span>
+              <span className="text-muted-foreground">за 30 секунд</span>
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
               ИИ-технолог извлекает параметры из чертежа, подбирает фурнитуру
@@ -115,7 +115,7 @@ export default function LandingPage() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link href="/login">
+            <Link href="/new">
               <Button size="lg" className="text-base px-8 h-12 group">
                 Попробовать бесплатно
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
@@ -123,7 +123,7 @@ export default function LandingPage() {
             </Link>
             <Link href="/login">
               <Button variant="outline" size="lg" className="text-base px-8 h-12">
-                У меня есть аккаунт
+                Войти
               </Button>
             </Link>
           </motion.div>
@@ -287,7 +287,7 @@ export default function LandingPage() {
             <p className="text-muted-foreground mb-8">
               Регистрация бесплатная. Первые 10 заказов — без ограничений.
             </p>
-            <Link href="/login">
+            <Link href="/new">
               <Button size="lg" className="text-base px-8 h-12 group">
                 Начать бесплатно
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />

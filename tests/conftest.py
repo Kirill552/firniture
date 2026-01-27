@@ -120,3 +120,21 @@ def bom_request() -> dict[str, Any]:
         "door_count": 2,
         "shelf_count": 1,
     }
+
+
+@pytest_asyncio.fixture
+async def async_client(authenticated_client: AsyncClient) -> AsyncGenerator[AsyncClient, None]:
+    """Alias для authenticated_client для совместимости с тестами."""
+    yield authenticated_client
+
+
+@pytest_asyncio.fixture
+async def created_order(async_client: AsyncClient) -> AsyncGenerator[dict[str, Any], None]:
+    """Создаёт тестовый заказ и возвращает его данные."""
+    order_data = {
+        "name": "Тестовый заказ",
+        "description": "Заказ для тестирования",
+    }
+    response = await async_client.post("/api/v1/orders", json=order_data)
+    assert response.status_code == 200, f"Failed to create order: {response.text}"
+    yield response.json()

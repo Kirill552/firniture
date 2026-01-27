@@ -27,8 +27,7 @@ from . import crud, models
 from .auth import get_current_user, get_current_user_optional
 from .database import get_db
 from .dxf_generator import Panel as DXFPanel
-from .dxf_generator import PlacedPanel
-from .dxf_generator import optimize_layout_best
+from .dxf_generator import PlacedPanel, optimize_layout_best
 from .models import (
     Artifact,
     CAMJob,
@@ -46,6 +45,8 @@ from .schemas import (
     CalculatePanelsResponse,
     CAMJobListItem,
     CAMJobsListResponse,
+    CostBreakdownItem,
+    CostEstimateResponse,
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
@@ -2500,3 +2501,167 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
             "error": str(e),
             "tool_calls": tool_calls_log
         }
+
+
+# ============================================================================
+# Cost Estimation
+# ============================================================================
+
+@router.get("/orders/{order_id}/cost", response_model=CostEstimateResponse)
+async def calculate_order_cost(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Рассчитать себестоимость заказа.
+    
+    Учитывает:
+    - Материалы (ЛДСП, МДФ) по площади
+    - Кромку по длине
+    - Фурнитуру поштучно
+    - Операции (распил, кромление, присадка)
+    """
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not order.products:
+        return CostEstimateResponse(
+            total_cost=0,
+            breakdown=[],
+            materials_cost=0,
+            hardware_cost=0,
+            operations_cost=0,
+        )
+
+    product = order.products[0]
+    
+    # Получаем панели
+    panels_result = await db.execute(
+        select(Panel).where(Panel.product_id == product.id)
+    )
+    panels = panels_result.scalars().all()
+    
+    params = product.params or {}
+    hardware = params.get("hardware", [])
+    fasteners = params.get("fasteners", [])
+    edge_bands = params.get("edge_bands", [])
+    
+    breakdown = []
+    
+    # 1. Материалы (ЛДСП)
+    # Цена за лист 2800x2070 (5.8 м2) ~ 3500 руб -> ~600 руб/м2
+    MATERIAL_PRICE_M2 = 600.0 
+    
+    total_area_m2 = sum((p.width_mm * p.height_mm) / 1_000_000 for p in panels)
+    # Учитываем обрезки (+20%)
+    sheet_area_needed = total_area_m2 * 1.2
+    
+    breakdown.append(CostBreakdownItem(
+        name=f"ЛДСП {product.material or '16мм'}",
+        quantity=round(sheet_area_needed, 2),
+        unit="м²",
+        unit_price=MATERIAL_PRICE_M2,
+        total_price=round(sheet_area_needed * MATERIAL_PRICE_M2, 2)
+    ))
+    
+    # 2. Кромка
+    # Цена 25 руб/м (2мм) и 8 руб/м (0.4мм)
+    for band in edge_bands:
+        breakdown.append(CostBreakdownItem(
+            name=f"Кромка {band.get('type')}",
+            quantity=band.get("length_m", 0),
+            unit="м",
+            unit_price=band.get("unit_price", 10),
+            total_price=round(band.get("length_m", 0) * band.get("unit_price", 10), 2)
+        ))
+        
+    # 3. Фурнитура
+    # Примерные цены
+    HARDWARE_PRICES = {
+        "hinge": 120.0, # Петля с доводчиком
+        "slide": 450.0, # Направляющие скрытого монтажа
+        "handle": 150.0, # Ручка
+        "leg": 30.0, # Опора
+        "suspension": 80.0, # Навес
+        "lift": 3500.0, # Aventos
+        "connector": 2.0, # Конфирмат
+        "other": 10.0,
+    }
+    
+    for item in hardware:
+        hw_type = item.get("type", "other")
+        price = HARDWARE_PRICES.get(hw_type, 50.0)
+        qty = item.get("quantity", item.get("qty", 0))
+        
+        breakdown.append(CostBreakdownItem(
+            name=item.get("name", "Фурнитура"),
+            quantity=qty,
+            unit="шт",
+            unit_price=price,
+            total_price=qty * price
+        ))
+        
+    for item in fasteners:
+        price = item.get("unit_price", 1.0)
+        qty = item.get("quantity", 0)
+        breakdown.append(CostBreakdownItem(
+            name=item.get("name", "Крепёж"),
+            quantity=qty,
+            unit="шт",
+            unit_price=price,
+            total_price=qty * price
+        ))
+        
+    # 4. Операции
+    # Распил: 30 руб/м погонный реза
+    # Кромление: 40 руб/м
+    # Присадка: 10 руб/отверстие
+    
+    # Оценка длины реза (периметр * 1.5)
+    cut_length_m = sum((p.width_mm + p.height_mm) * 2 / 1000 for p in panels)
+    breakdown.append(CostBreakdownItem(
+        name="Распил ЛДСП",
+        quantity=round(cut_length_m, 1),
+        unit="м",
+        unit_price=30.0,
+        total_price=round(cut_length_m * 30.0, 2)
+    ))
+    
+    # Кромление (сумма длин кромки)
+    edge_length_m = sum(b.get("length_m", 0) for b in edge_bands)
+    breakdown.append(CostBreakdownItem(
+        name="Кромление",
+        quantity=round(edge_length_m, 1),
+        unit="м",
+        unit_price=40.0,
+        total_price=round(edge_length_m * 40.0, 2)
+    ))
+    
+    # Сборка и присадка (оценка)
+    parts_count = len(panels)
+    breakdown.append(CostBreakdownItem(
+        name="Присадка (сверление)",
+        quantity=parts_count,
+        unit="дет",
+        unit_price=50.0,
+        total_price=parts_count * 50.0
+    ))
+
+    # Суммируем
+    materials_cost = sum(i.total_price for i in breakdown if "ЛДСП" in i.name or "Кромка" in i.name)
+    hardware_cost = sum(i.total_price for i in breakdown if "Петля" in i.name or "Направляющие" in i.name or "Ручка" in i.name or "Фурнитура" in i.name or "Крепёж" in i.name or "Опора" in i.name)
+    operations_cost = sum(i.total_price for i in breakdown if "Распил" in i.name or "Кромление" in i.name or "Присадка" in i.name)
+    
+    total_cost = materials_cost + hardware_cost + operations_cost
+
+    return CostEstimateResponse(
+        total_cost=round(total_cost, 2),
+        currency="RUB",
+        breakdown=breakdown,
+        materials_cost=round(materials_cost, 2),
+        hardware_cost=round(hardware_cost, 2),
+        operations_cost=round(operations_cost, 2),
+    )
+

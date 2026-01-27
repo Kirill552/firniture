@@ -828,3 +828,27 @@ class DrillingGcodeResponse(BaseModel):
         default_factory=list,
         description="Список ожидаемых файлов в архиве"
     )
+
+
+# =============================================================================
+# Cost Estimation
+# =============================================================================
+
+class CostBreakdownItem(BaseModel):
+    """Детализация стоимости."""
+    name: str = Field(..., description="Название позиции")
+    quantity: float = Field(..., description="Количество")
+    unit: str = Field(..., description="Ед. изм.")
+    unit_price: float = Field(..., description="Цена за единицу")
+    total_price: float = Field(..., description="Итоговая цена")
+
+
+class CostEstimateResponse(BaseModel):
+    """Ответ с расчётом себестоимости."""
+    total_cost: float = Field(..., description="Общая себестоимость")
+    currency: str = Field("RUB", description="Валюта")
+    breakdown: list[CostBreakdownItem] = Field(..., description="Детализация")
+    materials_cost: float = Field(..., description="Стоимость материалов")
+    hardware_cost: float = Field(..., description="Стоимость фурнитуры")
+    operations_cost: float = Field(..., description="Стоимость операций (распил, кромление)")
+
