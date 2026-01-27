@@ -213,6 +213,24 @@ async def create_order(
     )
 
 
+@router.post("/orders/anonymous", response_model=OrderSchema)
+async def create_anonymous_order(
+    order: OrderCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Создать анонимный заказ (freemium флоу).
+
+    Не требует авторизации. Заказ не привязан к фабрике.
+    """
+    return await crud.create_order(
+        db=db,
+        order=order,
+        factory_id=None,
+        created_by_id=None
+    )
+
+
 @router.get("/orders", response_model=list[OrderSchema])
 async def list_orders(
     limit: int = 50,

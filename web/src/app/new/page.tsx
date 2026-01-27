@@ -33,7 +33,7 @@ export default function NewOrderPage() {
 
     try {
       // Создать заказ
-      const orderResponse = await fetch("/api/v1/orders", {
+      const orderResponse = await fetch("/api/v1/orders/anonymous", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
