@@ -33,6 +33,7 @@ from .models import (
     CAMJob,
     Factory,
     JobStatusEnum,
+    Order,
     Panel,
     ProductConfig,
     User,
@@ -1365,7 +1366,7 @@ async def generate_bom_endpoint(
         from sqlalchemy import select
 
         # Ищем заказ
-        order = await crud.get_order(db, req.order_id)
+        order = await db.get(Order, req.order_id)
         if order:
             # Ищем или создаём ProductConfig
             product_result = await db.execute(
