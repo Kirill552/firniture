@@ -32,8 +32,19 @@ export function CostSummary({ orderId }: { orderId: string }) {
 
   useEffect(() => {
     fetch(`/api/v1/orders/${orderId}/cost`)
-      .then((res) => res.json())
-      .then(setData)
+      .then((res) => {
+        if (!res.ok) {
+          // 401 или другие ошибки — просто не показываем компонент
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setData(data);
+      })
+      .catch(() => {
+        // Сетевая ошибка — игнорируем
+      })
       .finally(() => setIsLoading(false));
   }, [orderId]);
 
