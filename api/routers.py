@@ -1378,6 +1378,9 @@ async def generate_bom_endpoint(
                 product = ProductConfig(
                     order_id=req.order_id,
                     name=f"{req.cabinet_type.value} {req.width_mm}x{req.height_mm}x{req.depth_mm}",
+                    width_mm=req.width_mm,
+                    height_mm=req.height_mm,
+                    depth_mm=req.depth_mm,
                     material=req.material,
                     thickness_mm=thickness,
                     params={
