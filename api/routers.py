@@ -1342,6 +1342,16 @@ async def generate_bom_endpoint(
             source="calculated",
         ))
 
+    # Рассчитываем крепёж и кромку
+    fasteners = _calculate_fasteners(
+        panels_count=len(panel_result.panels),
+        door_count=req.door_count,
+        drawer_count=req.drawer_count,
+        shelf_count=req.shelf_count,
+    )
+    parsed_panels = [{"width_mm": p.width_mm, "height_mm": p.height_mm, "edge_front": p.edge_front, "edge_back": p.edge_back} for p in panel_result.panels]
+    edge_bands = _calculate_edge_bands(parsed_panels, "белый")
+
     # Формируем ответ
     panels = [
         CalculatedPanel(
@@ -1391,10 +1401,20 @@ async def generate_bom_endpoint(
                         "shelf_count": req.shelf_count,
                         "door_count": req.door_count,
                         "drawer_count": req.drawer_count,
+                        "hardware": [h.model_dump() for h in hardware_list],
+                        "fasteners": fasteners,
+                        "edge_bands": edge_bands,
                     },
                 )
                 db.add(product)
                 await db.flush()
+            else:
+                # Обновляем params
+                params = product.params or {}
+                params["hardware"] = [h.model_dump() for h in hardware_list]
+                params["fasteners"] = fasteners
+                params["edge_bands"] = edge_bands
+                product.params = params
 
             # Удаляем старые панели
             from sqlalchemy import delete as sql_delete
