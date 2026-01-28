@@ -1409,7 +1409,6 @@ async def generate_bom_endpoint(
                     height_mm=p.height_mm,
                     thickness_mm=p.thickness_mm,
                     material=req.material,
-                    quantity=p.quantity,
                 )
                 db.add(panel)
 
