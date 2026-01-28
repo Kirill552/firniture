@@ -419,10 +419,14 @@ async def extract_furniture_params_from_image(
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
+        # Используем confidence от GPT парсера (более релевантный),
+        # OCR confidence часто 0 для рукописных/нестандартных изображений
+        final_confidence = params.confidence if params.confidence > 0 else ocr_confidence
+
         return ImageExtractResponse(
             success=True,
             parameters=params,
-            ocr_confidence=ocr_confidence,
+            ocr_confidence=final_confidence,
             fallback_to_dialogue=needs_fallback,
             dialogue_prompt=dialogue_prompt,
             processing_time_ms=processing_time_ms,

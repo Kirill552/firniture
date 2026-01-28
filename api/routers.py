@@ -1360,6 +1360,57 @@ async def generate_bom_endpoint(
         for p in panel_result.panels
     ]
 
+    # Сохраняем в БД если указан order_id
+    if req.order_id:
+        from sqlalchemy import select
+
+        # Ищем заказ
+        order = await crud.get_order(db, req.order_id)
+        if order:
+            # Ищем или создаём ProductConfig
+            product_result = await db.execute(
+                select(ProductConfig).where(ProductConfig.order_id == req.order_id)
+            )
+            product = product_result.scalar_one_or_none()
+
+            if not product:
+                product = ProductConfig(
+                    order_id=req.order_id,
+                    name=f"{req.cabinet_type.value} {req.width_mm}x{req.height_mm}x{req.depth_mm}",
+                    material=req.material,
+                    thickness_mm=thickness,
+                    params={
+                        "cabinet_type": req.cabinet_type.value,
+                        "width_mm": req.width_mm,
+                        "height_mm": req.height_mm,
+                        "depth_mm": req.depth_mm,
+                        "shelf_count": req.shelf_count,
+                        "door_count": req.door_count,
+                        "drawer_count": req.drawer_count,
+                    },
+                )
+                db.add(product)
+                await db.flush()
+
+            # Удаляем старые панели
+            from sqlalchemy import delete as sql_delete
+            await db.execute(sql_delete(Panel).where(Panel.product_id == product.id))
+
+            # Создаём новые панели
+            for p in panel_result.panels:
+                panel = Panel(
+                    product_id=product.id,
+                    name=p.name,
+                    width_mm=p.width_mm,
+                    height_mm=p.height_mm,
+                    thickness_mm=p.thickness_mm,
+                    material=req.material,
+                    quantity=p.quantity,
+                )
+                db.add(panel)
+
+            await db.commit()
+
     return GenerateBOMResponse(
         success=True,
         order_id=req.order_id,
