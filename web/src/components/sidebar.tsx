@@ -13,28 +13,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, FileText, Package, Database, Wrench, Link2, Settings } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { FileText, Wrench, Link2, Settings, Plus } from "lucide-react"
 
 const sidebarNavItems = [
-  {
-    title: "Обзор",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-  },
   {
     title: "Заказы",
     url: "/orders",
     icon: FileText,
-  },
-  {
-    title: "Спецификация",
-    url: "/bom",
-    icon: Package,
-  },
-  {
-    title: "Фурнитура",
-    url: "/hardware",
-    icon: Database,
   },
   {
     title: "Файлы для станка",
@@ -59,7 +45,7 @@ export function AppSidebar() {
   return (
     <Sidebar className="pt-14">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link href="/dashboard" className="flex items-center gap-3 px-3 py-4">
+        <Link href="/orders" className="flex items-center gap-3 px-3 py-4">
           {/* Логотип — стилизованная буква М */}
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
             М
@@ -69,6 +55,15 @@ export function AppSidebar() {
             <span className="text-xs text-muted-foreground">AI для технолога</span>
           </div>
         </Link>
+        {/* CTA: Новый заказ */}
+        <div className="px-3 pb-4">
+          <Button asChild className="w-full">
+            <Link href="/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Новый заказ
+            </Link>
+          </Button>
+        </div>
       </SidebarHeader>
       <SidebarContent className="px-2 py-4">
         <SidebarGroup>
