@@ -39,7 +39,7 @@ export class ErrorBoundary extends React.Component<
           </p>
           <div className="flex gap-2">
             <Button onClick={() => window.location.reload()}>Обновить страницу</Button>
-            <Button variant="outline" onClick={() => window.location.href = "/dashboard"}>
+            <Button variant="outline" onClick={() => window.location.href = "/orders"}>
               На главную
             </Button>
           </div>

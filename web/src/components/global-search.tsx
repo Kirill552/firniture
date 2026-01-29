@@ -29,7 +29,7 @@ const mockSearchResults: SearchResult[] = [
     id: "1",
     title: "Создать новый заказ",
     description: "Начать процесс создания нового заказа мебели через wizard",
-    url: "/orders/new",
+    url: "/new",
     type: "page",
     category: "Заказы",
     keywords: ["создать", "новый", "заказ", "мебель", "wizard"],
@@ -96,7 +96,7 @@ const mockSearchResults: SearchResult[] = [
     id: "7",
     title: "История заказов",
     description: "Архив всех выполненных заказов с расширенной фильтрацией",
-    url: "/history",
+    url: "/orders",
     type: "page",
     category: "Отчеты",
     keywords: ["история", "архив", "заказы", "отчеты", "фильтр"],
@@ -119,7 +119,7 @@ const mockSearchResults: SearchResult[] = [
     id: "10",
     title: "Подбор фурнитуры",
     description: "AI-powered подбор фурнитуры с анализом совместимости",
-    url: "/hardware",
+    url: "/bom",
     type: "page",
     category: "Каталог",
     keywords: ["фурнитура", "подбор", "ai", "искусственный", "интеллект"],
@@ -259,10 +259,10 @@ export function GlobalSearch() {
   }
 
   const popularPages = [
-    { title: "Создать заказ", url: "/orders/new", icon: FileText, description: "Новый заказ мебели" },
+    { title: "Создать заказ", url: "/new", icon: FileText, description: "Новый заказ мебели" },
     { title: "Спецификации", url: "/bom", icon: Package, description: "BOM материалов" },
     { title: "CAM обработка", url: "/cam", icon: Wrench, description: "Генерация G-code" },
-    { title: "История", url: "/history", icon: History, description: "Архив заказов" }
+    { title: "История", url: "/orders", icon: History, description: "Архив заказов" }
   ]
 
   return (

@@ -77,9 +77,9 @@ export function ErrorFallback({ error, reset }: ErrorFallbackProps) {
             Попробовать снова
           </Button>
           
-          <Button 
-            variant="outline" 
-            onClick={() => window.location.href = '/dashboard'}
+          <Button
+            variant="outline"
+            onClick={() => window.location.href = '/orders'}
             className="inline-flex items-center gap-2"
           >
             <Home className="w-4 h-4" />
