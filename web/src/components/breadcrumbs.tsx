@@ -46,7 +46,7 @@ export interface BreadcrumbsProps {
   rootHref?: string
 }
 
-export function Breadcrumbs({ className, rootHref = "/dashboard" }: BreadcrumbsProps) {
+export function Breadcrumbs({ className, rootHref = "/orders" }: BreadcrumbsProps) {
   const pathname = usePathname()
   const segments = React.useMemo(() => {
     const parts = pathname.split("/").filter(Boolean)

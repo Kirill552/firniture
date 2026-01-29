@@ -35,9 +35,9 @@ function VerifyContent() {
         setUserName(response.user.email)
         setState("success")
 
-        // Редирект на dashboard через 2 секунды
+        // Редирект на orders через 2 секунды
         setTimeout(() => {
-          router.push("/dashboard")
+          router.push("/orders")
         }, 2000)
       } catch (err: unknown) {
         setState("error")

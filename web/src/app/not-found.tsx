@@ -18,8 +18,8 @@ export default function NotFound() {
         </div>
         
         <div className="space-x-4">
-          <Link 
-            href="/dashboard" 
+          <Link
+            href="/orders"
             className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             <Home className="w-4 h-4 mr-2" />
