@@ -852,3 +852,77 @@ class CostEstimateResponse(BaseModel):
     hardware_cost: float = Field(..., description="Стоимость фурнитуры")
     operations_cost: float = Field(..., description="Стоимость операций (распил, кромление)")
 
+
+# ============================================================================
+# Smart Hardware Rules v1.0 — присадка
+# ============================================================================
+
+class DrillPointSchema(BaseModel):
+    """Точка сверления для UI и DXF."""
+    x: float = Field(..., description="X координата от левого края панели (мм)")
+    y: float = Field(..., description="Y координата от нижнего края панели (мм)")
+    diameter: float = Field(..., description="Диаметр отверстия (мм)")
+    depth: float = Field(..., description="Глубина сверления (мм)")
+    layer: str = Field(..., description="DXF слой (DRILL_V_35, DRILL_V_5, DRILL_H_4)")
+    hardware_id: str = Field("", description="ID связанной фурнитуры для highlight")
+    hardware_type: Literal["hinge_cup", "hinge_mount", "slide"] = Field(
+        "hinge_cup", description="Тип фурнитуры"
+    )
+    notes: str = Field("", description="Комментарий")
+
+
+class HardwarePresetsSchema(BaseModel):
+    """Выбранные пресеты фурнитуры."""
+    hinge_template: str = Field(
+        "hinge_35mm_overlay",
+        description="ID шаблона петли"
+    )
+    slide_template: str = Field(
+        "slide_ball_h45",
+        description="ID шаблона направляющих"
+    )
+
+
+class BOMWithDrillingResponse(BaseModel):
+    """BOM с координатами присадки."""
+    panels: list[dict] = Field(..., description="Список панелей")
+    hardware: list[dict] = Field(..., description="Список фурнитуры")
+    fasteners: list[dict] = Field(default_factory=list, description="Крепёж")
+    edge_bands: list[dict] = Field(default_factory=list, description="Кромка")
+    drill_points: list[DrillPointSchema] = Field(
+        default_factory=list,
+        description="Координаты присадки для превью"
+    )
+    presets: HardwarePresetsSchema = Field(
+        default_factory=HardwarePresetsSchema,
+        description="Текущие пресеты фурнитуры"
+    )
+
+
+class UpdatePresetsRequest(BaseModel):
+    """Запрос на обновление пресетов фурнитуры."""
+    hinge_template: str | None = None
+    slide_template: str | None = None
+
+
+class HingeTemplateInfo(BaseModel):
+    """Информация о шаблоне петли для UI."""
+    id: str
+    name: str
+    type: str
+    cup_diameter_mm: float
+
+
+class SlideTemplateInfo(BaseModel):
+    """Информация о шаблоне направляющих для UI."""
+    id: str
+    name: str
+    type: str
+    load_capacity_kg: float
+    profile_height_mm: float
+
+
+class TemplatesListResponse(BaseModel):
+    """Список доступных шаблонов."""
+    hinges: list[HingeTemplateInfo]
+    slides: list[SlideTemplateInfo]

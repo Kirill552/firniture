@@ -36,6 +36,10 @@ LAYER_COLORS = {
     "DRILLING": 5,     # синий — присадка (сверление)
     "TEXT": 3,         # зелёный — текстовые метки
     "SHEET": 8,        # серый — граница листа
+    # Новые слои для Smart Hardware Rules v1.0
+    "DRILL_V_35": 5,   # синий — вертикальное сверление ø35 (чашка петли)
+    "DRILL_V_5": 4,    # циан — вертикальное сверление ø5 (крепёж петли)
+    "DRILL_H_4": 3,    # зелёный — горизонтальное сверление ø4 (направляющие)
 }
 
 
@@ -159,6 +163,7 @@ def draw_panel(
         hx = hole.get("x", 0)
         hy = hole.get("y", 0)
         diameter = hole.get("diameter", 5)
+        layer = hole.get("layer", "DRILLING")
 
         # Координаты отверстия относительно панели
         if rotated:
@@ -171,8 +176,20 @@ def draw_panel(
         msp.add_circle(
             center=(abs_x, abs_y),
             radius=diameter / 2,
-            dxfattribs={"layer": "DRILLING"}
+            dxfattribs={"layer": layer}
         )
+
+        # Аннотация с размерами (для оператора)
+        depth = hole.get("depth", 12)
+        if diameter >= 10:  # Только для крупных отверстий
+            msp.add_text(
+                f"ø{diameter:.0f}×{depth:.0f}",
+                dxfattribs={
+                    "layer": "TEXT",
+                    "height": 4,
+                    "insert": (abs_x + diameter / 2 + 2, abs_y),
+                }
+            )
 
     # 4. Текстовая метка (TEXT)
     text_height = min(w, h) * 0.05  # 5% от меньшей стороны

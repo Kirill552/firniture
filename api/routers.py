@@ -11,6 +11,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.ai_tools import execute_tool_call, get_tools_schema
+from api.drilling_templates import list_hinge_templates, list_slide_templates
 from api.mocks.dialogue_mocks import are_yc_keys_available, generate_mock_dialogue_response
 from api.vision_extraction import (
     extract_furniture_params_from_image,
@@ -67,6 +68,9 @@ from .schemas import (
     PDFCuttingMapRequest,
     PlacedPanelInfo,
     ProductConfigResponse,
+    TemplatesListResponse,
+    HingeTemplateInfo,
+    SlideTemplateInfo,
 )
 from .schemas import Order as OrderSchema
 
@@ -2756,4 +2760,21 @@ async def calculate_order_cost(
         hardware_cost=round(hardware_cost, 2),
         operations_cost=round(operations_cost, 2),
     )
+
+
+# ============================================================================
+# Smart Hardware Rules v1.0 — шаблоны
+# ============================================================================
+
+@router.get("/hardware/templates", response_model=TemplatesListResponse)
+async def get_hardware_templates():
+    """
+    Получить список доступных шаблонов фурнитуры.
+
+    Возвращает шаблоны петель и направляющих для выбора в UI.
+    """
+    hinges = [HingeTemplateInfo(**t) for t in list_hinge_templates()]
+    slides = [SlideTemplateInfo(**t) for t in list_slide_templates()]
+
+    return TemplatesListResponse(hinges=hinges, slides=slides)
 
