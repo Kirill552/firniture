@@ -28,7 +28,7 @@ export function AppBar() {
           {/* Правая часть — действия */}
           <div className="flex items-center gap-3">
             <Button asChild variant="default" size="sm">
-              <Link href="/orders/new">
+              <Link href="/new">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Новый заказ
               </Link>
