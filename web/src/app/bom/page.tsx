@@ -18,6 +18,9 @@ import {
   DualPanelLayout,
   FileGenerationCard,
   MiniStepper,
+  DrillPreview,
+  HardwarePresets,
+  ConfirmationCheckbox,
   type FileStatus,
 } from "@/components/bom"
 import { CostSummary } from "@/components/bom/cost-summary"
@@ -54,7 +57,7 @@ function EmptyBomState() {
           <a href="/orders">Список заказов</a>
         </Button>
         <Button asChild>
-          <a href="/orders/new">Создать заказ</a>
+          <a href="/new">Создать заказ</a>
         </Button>
       </div>
     </div>
@@ -107,6 +110,14 @@ export default function BomPage() {
   const [machineProfile, setMachineProfile] = useState<string | null>(null)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [isFirstTimeProfile, setIsFirstTimeProfile] = useState(false)
+
+  // Smart Hardware Rules state
+  const [confirmed, setConfirmed] = useState(false)
+  const [presets, setPresets] = useState({
+    hinge_template: "hinge_35mm_overlay",
+    slide_template: "slide_ball_h45",
+  })
+  const [hoveredHardwareId, setHoveredHardwareId] = useState<string | null>(null)
 
   // Factory settings (sheet size, thickness, etc.)
   const [sheetWidth, setSheetWidth] = useState<number | null>(null)
@@ -810,6 +821,17 @@ export default function BomPage() {
     })
   }
 
+  // Smart Hardware Rules handlers
+  const handleHingeChange = (templateId: string) => {
+    setPresets((prev) => ({ ...prev, hinge_template: templateId }))
+    setConfirmed(false) // Сбросить подтверждение при изменении
+  }
+
+  const handleSlideChange = (templateId: string) => {
+    setPresets((prev) => ({ ...prev, slide_template: templateId }))
+    setConfirmed(false) // Сбросить подтверждение при изменении
+  }
+
   // Дефолтные значения из constants.py
   const DEFAULT_SHEET_WIDTH_MM = 2800
   const DEFAULT_SHEET_HEIGHT_MM = 2070
@@ -984,8 +1006,42 @@ export default function BomPage() {
               showCombineSuggestion={true}
             />
 
+            {/* Превью присадки */}
+            {bom.panels.length > 0 && (
+              <DrillPreview
+                panelWidth={bom.panels[0]?.width_mm || 600}
+                panelHeight={bom.panels[0]?.height_mm || 720}
+                drillPoints={(bom as FullBOM & { drill_points?: Array<{
+                  x: number
+                  y: number
+                  diameter: number
+                  depth: number
+                  layer: string
+                  hardware_id: string
+                  hardware_type: "hinge_cup" | "hinge_mount" | "slide"
+                  notes: string
+                }> }).drill_points || []}
+                highlightedHardwareId={hoveredHardwareId || undefined}
+                onPointHover={(point) => setHoveredHardwareId(point?.hardware_id || null)}
+              />
+            )}
+
+            {/* Выбор типа фурнитуры */}
+            <HardwarePresets
+              hingeTemplate={presets.hinge_template}
+              slideTemplate={presets.slide_template}
+              onHingeChange={handleHingeChange}
+              onSlideChange={handleSlideChange}
+            />
+
             {/* Себестоимость */}
             {effectiveOrderId && <CostSummary orderId={effectiveOrderId} />}
+
+            {/* Подтверждение спецификации */}
+            <ConfirmationCheckbox
+              checked={confirmed}
+              onCheckedChange={setConfirmed}
+            />
 
             {/* Paywall вместо бесплатной генерации */}
             {effectiveOrderId && (

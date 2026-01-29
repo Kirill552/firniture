@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.ai_tools import execute_tool_call, get_tools_schema
 from api.drilling_templates import list_hinge_templates, list_slide_templates
+from api.drilling_calculator import (
+    calculate_drilling_for_facade,
+    calculate_drilling_for_side_panel,
+    DrillPoint,
+)
 from api.mocks.dialogue_mocks import are_yc_keys_available, generate_mock_dialogue_response
 from api.vision_extraction import (
     extract_furniture_params_from_image,
@@ -621,6 +626,62 @@ async def get_order_bom(
     # Формируем ответ
     params = product.params or {}
 
+    # Рассчитать drill_points для первого фасада (если есть двери)
+    drill_points = []
+    door_count = params.get("door_count") or params.get("doors", 0)
+    drawer_count = params.get("drawer_count") or params.get("drawers", 0)
+
+    if door_count > 0:
+        # Ищем фасад среди панелей
+        facade_panel = next(
+            (p for p in panels if "фасад" in p.name.lower() or "дверь" in p.name.lower()),
+            None
+        )
+        if facade_panel:
+            facade_drilling = calculate_drilling_for_facade(
+                width_mm=facade_panel.width_mm,
+                height_mm=facade_panel.height_mm,
+            )
+            drill_points.extend([
+                {
+                    "x": pt.x,
+                    "y": pt.y,
+                    "diameter": pt.diameter,
+                    "depth": pt.depth,
+                    "layer": pt.layer,
+                    "hardware_id": pt.hardware_id,
+                    "hardware_type": pt.hardware_type,
+                    "notes": pt.notes,
+                }
+                for pt in facade_drilling.drill_points
+            ])
+
+    if drawer_count > 0:
+        # Ищем боковину среди панелей
+        side_panel = next(
+            (p for p in panels if "боковина" in p.name.lower()),
+            None
+        )
+        if side_panel:
+            side_drilling = calculate_drilling_for_side_panel(
+                height_mm=side_panel.height_mm,
+                depth_mm=side_panel.width_mm,  # Для боковины width = depth
+                drawer_count=drawer_count,
+            )
+            drill_points.extend([
+                {
+                    "x": pt.x,
+                    "y": pt.y,
+                    "diameter": pt.diameter,
+                    "depth": pt.depth,
+                    "layer": pt.layer,
+                    "hardware_id": pt.hardware_id,
+                    "hardware_type": pt.hardware_type,
+                    "notes": pt.notes,
+                }
+                for pt in side_drilling.drill_points
+            ])
+
     return {
         "order_id": str(order_id),
         "product_config_id": str(product.id),
@@ -652,9 +713,14 @@ async def get_order_bom(
         "fasteners": params.get("fasteners", []),
         "edge_bands": params.get("edge_bands", []),
         "summary": params.get("summary", {}),
-        "door_count": params.get("door_count") or params.get("doors", 0),
-        "drawer_count": params.get("drawer_count") or params.get("drawers", 0),
+        "door_count": door_count,
+        "drawer_count": drawer_count,
         "shelf_count": params.get("shelf_count") or params.get("shelves", 0),
+        "drill_points": drill_points,
+        "presets": {
+            "hinge_template": "hinge_35mm_overlay",
+            "slide_template": "slide_ball_h45",
+        },
     }
 
 
