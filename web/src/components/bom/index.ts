@@ -1,10 +1,3 @@
-export { BOMHeader } from "./bom-header"
-export { PanelsTable } from "./panels-table"
-export { HardwareTable } from "./hardware-table"
-export { EdgeBandTable } from "./edge-band-table"
-export { SheetLayoutPreview } from "./sheet-layout-preview"
-// Новые компоненты
-export { CollapsibleSection } from "./collapsible-section"
-export { FileGenerationCard, type FileStatus } from "./file-generation-card"
-export { MiniStepper } from "./mini-stepper"
-export { DualPanelLayout } from "./dual-panel-layout"
+export * from "./DrillPreview";
+export * from "./HardwarePresets";
+export * from "./ConfirmationCheckbox";
