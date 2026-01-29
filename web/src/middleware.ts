@@ -28,6 +28,16 @@ function isPublicPath(pathname: string): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Редиректы удалённых страниц → /orders
+  if (['/dashboard', '/history', '/hardware'].includes(pathname)) {
+    return NextResponse.redirect(new URL('/orders', request.url))
+  }
+
+  // Старый вход → новый с табом
+  if (pathname === '/orders/new') {
+    return NextResponse.redirect(new URL('/new?tab=manual', request.url))
+  }
+
   // Пропускаем статику и API
   if (
     pathname.startsWith('/_next') ||
