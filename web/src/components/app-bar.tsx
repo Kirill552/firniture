@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
-import { Settings, LogOut, PlusCircle } from "lucide-react"
+import { Settings, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuth } from "@/components/auth-provider"
 
@@ -27,13 +27,6 @@ export function AppBar() {
 
           {/* Правая часть — действия */}
           <div className="flex items-center gap-3">
-            <Button asChild variant="default" size="sm">
-              <Link href="/new">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Новый заказ
-              </Link>
-            </Button>
-
             <ThemeToggle />
 
             <DropdownMenu>
