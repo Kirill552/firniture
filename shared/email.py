@@ -48,8 +48,8 @@ class EmailClient:
         """
         magic_url = f"{self.frontend_url}/login/verify?token={token}"
 
-        subject = "Регистрация в Мебель-ИИ" if is_registration else "Вход в Мебель-ИИ"
-        action_text = "Завершить регистрацию" if is_registration else "Войти в Мебель-ИИ"
+        subject = "Регистрация в АвтоРаскрой" if is_registration else "Вход в АвтоРаскрой"
+        action_text = "Завершить регистрацию" if is_registration else "Войти в АвтоРаскрой"
 
         html = f"""
 <!DOCTYPE html>
@@ -81,7 +81,7 @@ class EmailClient:
     <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
     <p style="color: #aaa; font-size: 12px;">
-        Мебель-ИИ — AI-платформа для мебельных фабрик
+        АвтоРаскрой — AI-платформа для мебельных фабрик
     </p>
 </body>
 </html>
@@ -104,9 +104,9 @@ class EmailClient:
                         "idempotencyKey": idempotency_key,
                         "mail": {
                             "to": {"email": email, "name": user_name or email},
-                            "from": {"email": self.email_from, "name": "Мебель-ИИ"},
+                            "from": {"email": self.email_from, "name": "АвтоРаскрой"},
                             "subject": subject,
-                            "previewTitle": "Нажмите кнопку для входа в Мебель-ИИ",
+                            "previewTitle": "Нажмите кнопку для входа в АвтоРаскрой",
                             "html": html
                         }
                     }

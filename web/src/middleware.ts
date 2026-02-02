@@ -10,6 +10,7 @@ const publicPaths = [
   '/login/verify',
   '/signup',  // legacy, редирект на /login
   '/new',     // Vision-first freemium (без авторизации)
+  '/welcome', // Онбординг для новых пользователей
 ]
 
 /**

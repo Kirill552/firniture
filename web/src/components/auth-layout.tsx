@@ -15,7 +15,7 @@ interface AuthLayoutProps {
 export default function AuthLayout({ children }: AuthLayoutProps) {
   const pathname = usePathname()
 
-  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup']
+  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup', '/welcome']
 
   const isPublic = publicPaths.some(path => {
     if (path === pathname) return true
@@ -23,7 +23,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
     return false
   })
 
-  // Публичные страницы без AuthProvider
+  // Публичные страницы без AuthProvider (но /welcome требует проверку онбординга)
   if (isPublic) {
     return <>{children}</>
   }

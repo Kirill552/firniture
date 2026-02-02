@@ -228,7 +228,7 @@ def generate_drilling_zip(
 
         readme_lines.extend([
             "",
-            "Сгенерировано: Мебель-ИИ (https://mebel-ai.ru)",
+            "Сгенерировано: АвтоРаскрой (https://avtoraskroy.ru)",
         ])
 
         zf.writestr("README.txt", "\n".join(readme_lines).encode('utf-8'))

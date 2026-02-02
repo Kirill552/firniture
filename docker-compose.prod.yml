@@ -65,7 +65,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       RUSENDER_API_KEY: ${RUSENDER_API_KEY:-}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@mebel-ai.ru}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@avtoraskroy.ru}
     depends_on:
       postgres:
         condition: service_healthy

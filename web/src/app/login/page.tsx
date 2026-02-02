@@ -98,7 +98,7 @@ export default function LoginPage() {
             {step === "enter-email" && (
               <form onSubmit={handleEmailSubmit}>
                 <CardHeader>
-                  <CardTitle>Вход в Мебель-ИИ</CardTitle>
+                  <CardTitle>Вход в АвтоРаскрой</CardTitle>
                   <CardDescription>
                     Введите email — мы отправим ссылку для входа
                   </CardDescription>

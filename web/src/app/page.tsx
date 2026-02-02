@@ -72,9 +72,9 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
-              М
+              А
             </div>
-            <span className="font-semibold">Мебель-ИИ</span>
+            <span className="font-semibold">АвтоРаскрой</span>
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
@@ -302,18 +302,18 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="h-6 w-6 rounded bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs">
-              М
+              А
             </div>
             <span className="text-sm text-muted-foreground">
-              Мебель-ИИ © 2026
+              АвтоРаскрой © 2026
             </span>
           </div>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
             <Link href="/pricing" className="hover:text-foreground transition-colors">
               Тарифы
             </Link>
-            <a href="mailto:support@mebel-ai.ru" className="hover:text-foreground transition-colors">
-              support@mebel-ai.ru
+            <a href="mailto:support@avtoraskroy.ru" className="hover:text-foreground transition-colors">
+              support@avtoraskroy.ru
             </a>
           </div>
         </div>

@@ -405,7 +405,7 @@ def _draw_footer(page: fitz.Page, cfg: PDFConfig) -> None:
 
     page.insert_text(
         fitz.Point(cfg.margin, footer_y),
-        "Сгенерировано: Мебель-ИИ",
+        "Сгенерировано: АвтоРаскрой",
         fontsize=cfg.font_size_dimension,
         fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,
@@ -413,7 +413,7 @@ def _draw_footer(page: fitz.Page, cfg: PDFConfig) -> None:
 
     page.insert_text(
         fitz.Point(cfg.page_width - cfg.margin - 80, footer_y),
-        "mebel-ai.ru",
+        "avtoraskroy.ru",
         fontsize=cfg.font_size_dimension,
         fontname=cfg.font_cyrillic,
         color=cfg.color_dimension,

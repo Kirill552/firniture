@@ -17,8 +17,8 @@ const onest = Onest({
 })
 
 export const metadata: Metadata = {
-  title: "Мебель-ИИ",
-  description: "Облачный AI-SaaS для мебельных фабрик",
+  title: "АвтоРаскрой",
+  description: "Умный раскрой и присадка для мебельных фабрик",
 };
 
 export default function RootLayout({

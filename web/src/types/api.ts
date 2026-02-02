@@ -1,5 +1,5 @@
 /**
- * TypeScript типы для API проекта Мебель-ИИ
+ * TypeScript типы для API проекта АвтоРаскрой
  * Автоматически сгенерированы на основе Pydantic схем (api/schemas.py) и SQLAlchemy моделей (api/models.py)
  */
 

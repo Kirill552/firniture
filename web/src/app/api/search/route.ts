@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Yandex API key not configured' }, { status: 500 })
     }
 
-    const prompt = `Ты - AI-поисковик в системе Мебель-ИИ. Обработай запрос: "${query}". Найди релевантные заказы, фурнитуру или другие элементы. Ответь на русском, в формате JSON: {"results": [{"title": "Название", "description": "Описание", "url": "/path"}]}`
+    const prompt = `Ты - AI-поисковик в системе АвтоРаскрой. Обработай запрос: "${query}". Найди релевантные заказы, фурнитуру или другие элементы. Ответь на русском, в формате JSON: {"results": [{"title": "Название", "description": "Описание", "url": "/path"}]}`
 
     const response = await fetch('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
       method: 'POST',

@@ -46,13 +46,13 @@ export function AppSidebar() {
     <Sidebar className="pt-14">
       <SidebarHeader className="border-b border-sidebar-border">
         <Link href="/orders" className="flex items-center gap-3 px-3 py-4">
-          {/* Логотип — стилизованная буква М */}
+          {/* Логотип — стилизованная буква А */}
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
-            М
+            А
           </div>
           <div className="flex flex-col">
-            <span className="font-semibold text-sm">Мебель-ИИ</span>
-            <span className="text-xs text-muted-foreground">AI для технолога</span>
+            <span className="font-semibold text-sm">АвтоРаскрой</span>
+            <span className="text-xs text-muted-foreground">Умный раскрой</span>
           </div>
         </Link>
         {/* CTA: Новый заказ */}

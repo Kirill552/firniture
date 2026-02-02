@@ -21,7 +21,7 @@ const AuthContext = createContext<AuthContextType>({
 /**
  * Публичные пути, не требующие авторизации
  */
-const publicPaths = ['/', '/login', '/login/verify', '/signup']
+const publicPaths = ['/', '/login', '/login/verify', '/signup', '/welcome']
 
 function isPublicPath(pathname: string): boolean {
   return publicPaths.some(path => {
@@ -29,6 +29,14 @@ function isPublicPath(pathname: string): boolean {
     if (path === '/login' && pathname.startsWith('/login/')) return true
     return false
   })
+}
+
+/**
+ * Проверяет, нужен ли онбординг
+ */
+function needsOnboarding(): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem('onboarding_completed') !== 'true'
 }
 
 interface AuthProviderProps {
@@ -57,6 +65,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Редирект неавторизованных с защищённых страниц
     if (!isLoading && !user && !isPublicPath(pathname)) {
       router.push('/login')
+      return
+    }
+
+    // Редирект на онбординг для новых пользователей
+    // (только если залогинены и не на /welcome)
+    if (!isLoading && user && pathname !== '/welcome' && needsOnboarding()) {
+      router.push('/welcome')
     }
   }, [isLoading, user, pathname, router])
 

@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # RuSender (email)
     RUSENDER_API_KEY: str = ""  # Пустой = mock режим
-    EMAIL_FROM: str = "noreply@mebel-ai.ru"
+    EMAIL_FROM: str = "noreply@avtoraskroy.ru"
 
     class Config:
         env_file = ".env"
