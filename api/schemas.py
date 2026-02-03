@@ -7,6 +7,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+
+class FieldSource(str, Enum):
+    """Источник значения поля."""
+    OCR = "ocr"           # Найдено на изображении
+    INFERRED = "inferred" # Выведено из контекста
+    DEFAULT = "default"   # Подставлено значение по умолчанию
+    USER = "user"         # Введено пользователем
+    AI = "ai"             # Уточнено через AI-чат
+
 from api.constants import (
     DEFAULT_CUT_DEPTH,
     DEFAULT_EDGE_THICKNESS_MM,
@@ -261,6 +270,18 @@ class ImageExtractResponse(BaseModel):
         None, description="Тип ошибки для программной обработки"
     )
     module_count: int | None = Field(None, description="Количество модулей на изображении (если определено)")
+
+    # Источники полей (NEW)
+    field_sources: dict[str, FieldSource] | None = Field(
+        None, description="Источник каждого поля: ocr/inferred/default"
+    )
+    fields_need_review: list[str] = Field(
+        default_factory=list, description="Поля, требующие проверки пользователем"
+    )
+    recognized_count: int = Field(0, description="Количество распознанных полей (не default)")
+    suggested_prompt: str | None = Field(
+        None, description="Предлагаемый промпт для AI-уточнения"
+    )
 
 
 # ============================================================================
