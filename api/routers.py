@@ -637,24 +637,32 @@ async def get_order_bom(
             (p for p in panels if "фасад" in p.name.lower() or "дверь" in p.name.lower()),
             None
         )
+        # Если фасад не найден — рассчитываем по размерам шкафа
         if facade_panel:
-            facade_drilling = calculate_drilling_for_facade(
-                width_mm=facade_panel.width_mm,
-                height_mm=facade_panel.height_mm,
-            )
-            drill_points.extend([
-                {
-                    "x": pt.x,
-                    "y": pt.y,
-                    "diameter": pt.diameter,
-                    "depth": pt.depth,
-                    "layer": pt.layer,
-                    "hardware_id": pt.hardware_id,
-                    "hardware_type": pt.hardware_type,
-                    "notes": pt.notes,
-                }
-                for pt in facade_drilling.drill_points
-            ])
+            facade_width = facade_panel.width_mm
+            facade_height = facade_panel.height_mm
+        else:
+            # Размер фасада = размер шкафа минус зазоры (по 2мм с каждой стороны)
+            facade_width = (product.width_mm - 4) / door_count if door_count > 1 else product.width_mm - 4
+            facade_height = product.height_mm - 4
+
+        facade_drilling = calculate_drilling_for_facade(
+            width_mm=facade_width,
+            height_mm=facade_height,
+        )
+        drill_points.extend([
+            {
+                "x": pt.x,
+                "y": pt.y,
+                "diameter": pt.diameter,
+                "depth": pt.depth,
+                "layer": pt.layer,
+                "hardware_id": pt.hardware_id,
+                "hardware_type": pt.hardware_type,
+                "notes": pt.notes,
+            }
+            for pt in facade_drilling.drill_points
+        ])
 
     if drawer_count > 0:
         # Ищем боковину среди панелей
@@ -662,25 +670,32 @@ async def get_order_bom(
             (p for p in panels if "боковина" in p.name.lower()),
             None
         )
+        # Если боковина не найдена — рассчитываем по размерам шкафа
         if side_panel:
-            side_drilling = calculate_drilling_for_side_panel(
-                height_mm=side_panel.height_mm,
-                depth_mm=side_panel.width_mm,  # Для боковины width = depth
-                drawer_count=drawer_count,
-            )
-            drill_points.extend([
-                {
-                    "x": pt.x,
-                    "y": pt.y,
-                    "diameter": pt.diameter,
-                    "depth": pt.depth,
-                    "layer": pt.layer,
-                    "hardware_id": pt.hardware_id,
-                    "hardware_type": pt.hardware_type,
-                    "notes": pt.notes,
-                }
-                for pt in side_drilling.drill_points
-            ])
+            side_height = side_panel.height_mm
+            side_depth = side_panel.width_mm  # Для боковины width = depth
+        else:
+            side_height = product.height_mm
+            side_depth = product.depth_mm
+
+        side_drilling = calculate_drilling_for_side_panel(
+            height_mm=side_height,
+            depth_mm=side_depth,
+            drawer_count=drawer_count,
+        )
+        drill_points.extend([
+            {
+                "x": pt.x,
+                "y": pt.y,
+                "diameter": pt.diameter,
+                "depth": pt.depth,
+                "layer": pt.layer,
+                "hardware_id": pt.hardware_id,
+                "hardware_type": pt.hardware_type,
+                "notes": pt.notes,
+            }
+            for pt in side_drilling.drill_points
+        ])
 
     return {
         "order_id": str(order_id),

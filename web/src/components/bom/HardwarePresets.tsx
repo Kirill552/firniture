@@ -106,7 +106,7 @@ export function HardwarePresets({
             <SelectTrigger id="slide-select">
               <SelectValue placeholder="Выберите тип" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" sideOffset={4}>
               {slideTemplates.map((template) => (
                 <SelectItem key={template.id} value={template.id}>
                   {template.name}
@@ -136,7 +136,7 @@ export function HardwarePresets({
             <SelectTrigger id="hinge-select">
               <SelectValue placeholder="Выберите тип" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" sideOffset={4}>
               {hingeTemplates.map((template) => (
                 <SelectItem key={template.id} value={template.id}>
                   {template.name}

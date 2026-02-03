@@ -1003,7 +1003,6 @@ export default function BomPage() {
               panels={bom.panels}
               sheetWidth={effectiveSheetWidth}
               sheetHeight={effectiveSheetHeight}
-              showCombineSuggestion={true}
             />
 
             {/* Превью присадки */}

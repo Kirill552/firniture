@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertTriangle, Lightbulb, Layers, Loader2 } from "lucide-react"
+import { AlertTriangle, Layers, Loader2, Sparkles } from "lucide-react"
 import type { BOMPanel, PlacedPanelInfo } from "@/types/api"
 import { useLayoutPreview } from "@/hooks/use-api"
 
@@ -12,7 +12,6 @@ interface SheetLayoutPreviewProps {
   sheetWidth?: number // мм
   sheetHeight?: number // мм
   gap?: number // мм — зазор на пропил
-  showCombineSuggestion?: boolean
 }
 
 // Генерируем цвет для панели (пастельные тона)
@@ -32,7 +31,6 @@ export function SheetLayoutPreview({
   sheetWidth = 2800,
   sheetHeight = 2070,
   gap = 4,
-  showCombineSuggestion = true,
 }: SheetLayoutPreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -84,10 +82,6 @@ export function SheetLayoutPreview({
   const scale = Math.min(scaleX, scaleY) * 0.9
   const displayWidth = sheetWidth * scale
   const displayHeight = sheetHeight * scale
-
-  // Статус использования
-  const isLowUtilization = utilization < 50
-  const isVeryLowUtilization = utilization < 30
 
   return (
     <Card>
@@ -178,18 +172,8 @@ export function SheetLayoutPreview({
                 <div className="font-medium">{sheetArea.toFixed(2)} м²</div>
               </div>
               <div>
-                <div className="text-muted-foreground">Использование</div>
-                <div
-                  className={`font-medium ${
-                    isVeryLowUtilization
-                      ? "text-red-600"
-                      : isLowUtilization
-                        ? "text-amber-600"
-                        : "text-green-600"
-                  }`}
-                >
-                  {utilization.toFixed(1)}%
-                </div>
+                <div className="text-muted-foreground">Заполнение</div>
+                <div className="font-medium">{utilization.toFixed(1)}%</div>
               </div>
               <div>
                 <div className="text-muted-foreground">Размещено</div>
@@ -240,35 +224,14 @@ export function SheetLayoutPreview({
           </div>
         </div>
 
-        {/* Предупреждение о низком использовании */}
-        {showCombineSuggestion && isLowUtilization && panels.length > 0 && !layoutMutation.isPending && (
-          <Alert variant={isVeryLowUtilization ? "destructive" : "default"}>
-            {isVeryLowUtilization ? (
-              <AlertTriangle className="h-4 w-4" />
-            ) : (
-              <Lightbulb className="h-4 w-4" />
-            )}
-            <AlertTitle>
-              {isVeryLowUtilization
-                ? "Очень низкое использование листа"
-                : "Низкое использование листа"}
-            </AlertTitle>
-            <AlertDescription>
-              {isVeryLowUtilization ? (
-                <>
-                  Используется только <strong>{utilization.toFixed(0)}%</strong>{" "}
-                  листа. Рекомендуем объединить этот заказ с другими похожими
-                  заказами для экономии материала.
-                </>
-              ) : (
-                <>
-                  Используется <strong>{utilization.toFixed(0)}%</strong> листа.
-                  Если есть другие заказы из того же материала, можно объединить
-                  раскрой для экономии.
-                </>
-              )}
-            </AlertDescription>
-          </Alert>
+        {/* Информация о пакетном раскрое */}
+        {panels.length > 0 && !layoutMutation.isPending && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground border rounded-md p-3 bg-muted/30">
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span>
+              Пакетный раскрой нескольких заказов — <strong>скоро</strong>. Объединяйте заказы для экономии материала.
+            </span>
+          </div>
         )}
       </CardContent>
     </Card>

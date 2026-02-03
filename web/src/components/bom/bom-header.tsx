@@ -156,7 +156,7 @@ export function BOMHeader({
                   <SelectTrigger className="h-7 w-20 text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={4}>
                     {MATERIAL_TYPES.map((mat) => (
                       <SelectItem key={mat} value={mat}>
                         {mat}
@@ -171,7 +171,7 @@ export function BOMHeader({
                   <SelectTrigger className="h-7 w-16 text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={4}>
                     {THICKNESS_OPTIONS.map((t) => (
                       <SelectItem key={t} value={String(t)}>
                         {t}мм
@@ -233,7 +233,7 @@ export function BOMHeader({
                     <SelectTrigger className="h-8 w-24">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={4}>
                       {MATERIAL_TYPES.map((mat) => (
                         <SelectItem key={mat} value={mat}>
                           {mat}
@@ -257,7 +257,7 @@ export function BOMHeader({
                     <SelectTrigger className="h-8 w-20">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={4}>
                       {THICKNESS_OPTIONS.map((t) => (
                         <SelectItem key={t} value={String(t)}>
                           {t} мм

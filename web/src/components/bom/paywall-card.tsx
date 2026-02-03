@@ -42,9 +42,10 @@ export function PaywallCard({
     if (onGenerateDxf && !dxfDownloadUrl) {
       await onGenerateDxf();
     }
-    if (onGeneratePdf && !pdfDownloadUrl) {
-      await onGeneratePdf();
-    }
+    // PDF карта раскроя временно отключена (пакетный раскрой — скоро)
+    // if (onGeneratePdf && !pdfDownloadUrl) {
+    //   await onGeneratePdf();
+    // }
   };
 
   const handleDownloadDxf = () => {
@@ -75,7 +76,7 @@ export function PaywallCard({
             Вы можете скачать файлы для производства прямо сейчас
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid gap-4">
           <Button
             className="w-full"
             variant="outline"
@@ -89,6 +90,7 @@ export function PaywallCard({
             )}
             {isGeneratingDxf ? "Генерация..." : dxfDownloadUrl ? "Скачать DXF" : "Создать DXF"}
           </Button>
+          {/* PDF карта раскроя временно отключена (пакетный раскрой — скоро)
           <Button
             className="w-full"
             variant="outline"
@@ -102,6 +104,7 @@ export function PaywallCard({
             )}
             {isGeneratingPdf ? "Генерация..." : pdfDownloadUrl ? "Скачать PDF карту" : "Создать PDF"}
           </Button>
+          */}
         </CardContent>
       </Card>
     );
@@ -129,7 +132,7 @@ export function PaywallCard({
           </div>
           <div className="flex items-center gap-2 text-sm">
             <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <span>PDF карты присадки с координатами</span>
+            <span>Координаты присадки в DXF</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <CheckCircle2 className="h-4 w-4 text-green-500" />
