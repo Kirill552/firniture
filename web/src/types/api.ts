@@ -31,6 +31,9 @@ export type ValidationApprovalStatus = 'completed' | 'failed'
 /** Тип артефакта (файла) */
 export type ArtifactType = 'DXF' | 'GCODE' | 'ZIP' | 'IMAGE' | 'PDF'
 
+/** Источник данных поля */
+export type FieldSource = 'ocr' | 'inferred' | 'default' | 'user' | 'ai'
+
 // ============================================================================
 // Базовые модели сущностей
 // ============================================================================
@@ -617,6 +620,9 @@ export interface OrderStatistics {
 // Vision OCR — извлечение параметров из изображений (P0)
 // ============================================================================
 
+/** Источник заполнения поля */
+export type FieldSource = 'ocr' | 'inferred' | 'default' | 'user' | 'ai'
+
 /** Категория мебели */
 export type FurnitureCategory =
   | 'навесной_шкаф'
@@ -700,6 +706,16 @@ export interface ImageExtractResponse {
   success: boolean
   /** Извлечённые параметры */
   parameters?: ExtractedFurnitureParams | null
+
+  /** Источники заполнения полей (маппинг field_name → FieldSource) */
+  field_sources?: Record<string, FieldSource> | null
+  /** Поля, требующие проверки пользователем */
+  fields_need_review: string[]
+  /** Количество распознанных полей из OCR */
+  recognized_count: number
+  /** Подсказка для AI-диалога (если нужна) */
+  suggested_prompt?: string | null
+
   /** Нужен ли переход к диалогу */
   fallback_to_dialogue: boolean
   /** Промпт для диалога (если fallback) */
@@ -711,9 +727,9 @@ export interface ImageExtractResponse {
   /** Ошибка (если есть) */
   error?: string | null
   /** Тип ошибки */
-  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed'
+  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed' | null
   /** Количество модулей (если обнаружено несколько) */
-  module_count?: number
+  module_count?: number | null
 }
 
 // ============================================================================
@@ -879,4 +895,32 @@ export interface PDFCuttingMapRequest {
   sheet_height_mm?: number
   gap_mm?: number
   order_info?: string
+}
+
+// ============================================================================
+// OrderCreator — состояния и типы для создания заказа
+// ============================================================================
+
+/** Режимы работы OrderCreator */
+export type OrderCreatorMode = 'upload' | 'processing' | 'review' | 'clarify' | 'manual'
+
+/** Параметры заказа для OrderCreator */
+export interface OrderCreatorParams {
+  cabinet_type: string
+  width_mm: number
+  height_mm: number
+  depth_mm: number
+  material: string
+  thickness_mm: number
+  door_count: number
+  drawer_count: number
+  shelf_count: number
+}
+
+/** Сообщение в чате */
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
 }
