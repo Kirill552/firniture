@@ -15,8 +15,6 @@ from typing import Literal
 from api.drilling_templates import (
     HINGE_TEMPLATES,
     SLIDE_TEMPLATES,
-    HingeTemplate,
-    SlideTemplate,
     get_hinge_template,
     get_slide_template,
 )

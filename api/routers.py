@@ -1,5 +1,4 @@
 # Settings endpoints added 2026-01-16
-import json
 import logging
 import os
 import uuid
@@ -11,12 +10,11 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.ai_tools import execute_tool_call, get_tools_schema
-from api.drilling_templates import list_hinge_templates, list_slide_templates
 from api.drilling_calculator import (
     calculate_drilling_for_facade,
     calculate_drilling_for_side_panel,
-    DrillPoint,
 )
+from api.drilling_templates import list_hinge_templates, list_slide_templates
 from api.mocks.dialogue_mocks import are_yc_keys_available, generate_mock_dialogue_response
 from api.vision_extraction import (
     extract_furniture_params_from_image,
@@ -64,6 +62,7 @@ from .schemas import (
     GenerateBOMRequest,
     GenerateBOMResponse,
     HardwareRecommendation,
+    HingeTemplateInfo,
     ImageExtractRequest,
     ImageExtractResponse,
     LayoutPreviewRequest,
@@ -73,9 +72,8 @@ from .schemas import (
     PDFCuttingMapRequest,
     PlacedPanelInfo,
     ProductConfigResponse,
-    TemplatesListResponse,
-    HingeTemplateInfo,
     SlideTemplateInfo,
+    TemplatesListResponse,
 )
 from .schemas import Order as OrderSchema
 
