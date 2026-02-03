@@ -620,9 +620,6 @@ export interface OrderStatistics {
 // Vision OCR — извлечение параметров из изображений (P0)
 // ============================================================================
 
-/** Источник заполнения поля */
-export type FieldSource = 'ocr' | 'inferred' | 'default' | 'user' | 'ai'
-
 /** Категория мебели */
 export type FurnitureCategory =
   | 'навесной_шкаф'
