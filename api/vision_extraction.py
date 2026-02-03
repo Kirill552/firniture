@@ -39,7 +39,10 @@ MIN_CONFIDENCE_THRESHOLD = 0.6
 # Промпт для GPT для парсинга текста OCR в структурированные параметры
 FURNITURE_EXTRACTION_PROMPT = """Ты — эксперт по мебельному производству. Проанализируй текст, извлечённый из изображения/эскиза мебели, и извлеки параметры изделия.
 
-ВАЖНО: Извлекай только то, что явно указано в тексте. Не додумывай. Если параметр не указан — оставь null.
+ВАЖНО: Для каждого параметра укажи источник:
+- "ocr" — нашёл текст/цифру на изображении
+- "inferred" — вывел из контекста (форма, пропорции, тип)
+- "default" — не нашёл, использую стандартное значение
 
 ## Текст из изображения:
 {ocr_text}
@@ -47,39 +50,40 @@ FURNITURE_EXTRACTION_PROMPT = """Ты — эксперт по мебельном
 ## Извлеки параметры в формате JSON:
 
 ```json
-{{
-  "furniture_type": {{
+{{{{
+  "furniture_type": {{{{
     "category": "навесной_шкаф | напольный_шкаф | тумба | пенал | столешница | фасад | полка | ящик | другое",
     "subcategory": "опционально, более точное описание",
-    "description": "краткое описание изделия"
-  }},
-  "dimensions": {{
+    "description": "краткое описание изделия",
+    "source": "ocr | inferred | default"
+  }}}},
+  "dimensions": {{{{
     "width_mm": число или null,
+    "width_source": "ocr | inferred | default",
     "height_mm": число или null,
+    "height_source": "ocr | inferred | default",
     "depth_mm": число или null,
-    "thickness_mm": число или null
-  }},
-  "body_material": {{
+    "depth_source": "ocr | inferred | default",
+    "thickness_mm": число или null,
+    "thickness_source": "ocr | inferred | default"
+  }}}},
+  "body_material": {{{{
     "type": "ЛДСП | МДФ | массив | фанера | ДВП | стекло | металл | другое | null",
     "color": "цвет или null",
-    "texture": "текстура или null",
-    "brand": "бренд или null"
-  }},
-  "facade_material": {{
-    "type": "тип или null",
-    "color": "цвет или null",
-    "texture": "текстура или null",
-    "brand": "бренд или null"
-  }},
+    "source": "ocr | inferred | default"
+  }}}},
   "door_count": число или null,
+  "door_count_source": "ocr | inferred | default",
   "drawer_count": число или null,
+  "drawer_count_source": "ocr | inferred | default",
   "shelf_count": число или null,
-  "has_legs": true | false | null,
-  "confidence": число от 0 до 1 (насколько ты уверен в извлечённых данных),
-  "needs_clarification": true если данных недостаточно,
-  "clarification_questions": ["вопрос1", "вопрос2"] если needs_clarification=true
-}}
+  "shelf_count_source": "ocr | inferred | default",
+  "confidence": число от 0 до 1
+}}}}
 ```
+
+Если >3 полей = "default", добавь поле:
+"suggested_prompt": "Вижу [что видно]. Уточните [что нужно]?"
 
 Отвечай ТОЛЬКО валидным JSON без дополнительного текста.
 """
@@ -177,17 +181,21 @@ async def analyze_module_count(
 async def parse_ocr_text_to_params(
     ocr_text: str,
     settings: YandexCloudSettings,
-) -> ExtractedFurnitureParams:
+) -> tuple[ExtractedFurnitureParams, dict[str, str], list[str], int, str | None]:
     """
     Парсит текст OCR в структурированные параметры через GPT.
+
+    Returns:
+        (params, field_sources, fields_need_review, recognized_count, suggested_prompt)
     """
     if not ocr_text or len(ocr_text.strip()) < 5:
-        return ExtractedFurnitureParams(
+        params = ExtractedFurnitureParams(
             confidence=0.0,
             needs_clarification=True,
             clarification_questions=["Текст на изображении не распознан. Опишите изделие текстом."],
             raw_text=ocr_text,
         )
+        return params, {}, [], 0, None
 
     prompt = FURNITURE_EXTRACTION_PROMPT.format(ocr_text=ocr_text)
 
@@ -219,6 +227,46 @@ async def parse_ocr_text_to_params(
             text = "\n".join(json_lines)
 
         data = json.loads(text)
+
+        # Собираем источники полей
+        field_sources = {}
+        default_count = 0
+
+        # Тип мебели
+        if data.get("furniture_type"):
+            ft = data["furniture_type"]
+            source = ft.get("source", "default")
+            field_sources["furniture_type"] = source
+            if source == "default":
+                default_count += 1
+
+        # Размеры
+        if data.get("dimensions"):
+            d = data["dimensions"]
+            for field in ["width", "height", "depth", "thickness"]:
+                source = d.get(f"{field}_source", "default")
+                field_sources[f"{field}_mm"] = source
+                if source == "default":
+                    default_count += 1
+
+        # Материал
+        if data.get("body_material"):
+            source = data["body_material"].get("source", "default")
+            field_sources["material"] = source
+            if source == "default":
+                default_count += 1
+
+        # Количества
+        for field in ["door_count", "drawer_count", "shelf_count"]:
+            source = data.get(f"{field}_source", "default")
+            field_sources[field] = source
+            if source == "default":
+                default_count += 1
+
+        # Определяем поля для review
+        fields_need_review = [k for k, v in field_sources.items() if v == "default"]
+        recognized_count = len(field_sources) - default_count
+        suggested_prompt = data.get("suggested_prompt")
 
         # Конструируем объект
         furniture_type = None
@@ -260,7 +308,7 @@ async def parse_ocr_text_to_params(
                 brand=m.get("brand"),
             )
 
-        return ExtractedFurnitureParams(
+        params = ExtractedFurnitureParams(
             furniture_type=furniture_type,
             dimensions=dimensions,
             body_material=body_material,
@@ -271,18 +319,21 @@ async def parse_ocr_text_to_params(
             has_legs=data.get("has_legs"),
             raw_text=ocr_text,
             confidence=data.get("confidence", 0.5),
-            needs_clarification=data.get("needs_clarification", False),
+            needs_clarification=default_count > 3,
             clarification_questions=data.get("clarification_questions") or [],
         )
 
+        return params, field_sources, fields_need_review, recognized_count, suggested_prompt
+
     except json.JSONDecodeError as e:
         log.error(f"Failed to parse GPT response as JSON: {e}")
-        return ExtractedFurnitureParams(
+        params = ExtractedFurnitureParams(
             confidence=0.0,
             needs_clarification=True,
             clarification_questions=["Не удалось распознать параметры. Опишите изделие подробнее."],
             raw_text=ocr_text,
         )
+        return params, {}, [], 0, None
 
 
 async def extract_furniture_params_from_image(
@@ -393,7 +444,7 @@ async def extract_furniture_params_from_image(
 
         # Шаг 2: Парсинг через GPT
         log.info("[Vision] Parsing OCR text with GPT...")
-        params = await parse_ocr_text_to_params(
+        params, field_sources, fields_need_review, recognized_count, suggested_prompt = await parse_ocr_text_to_params(
             ocr_text=ocr_text,
             settings=settings,
         )
@@ -426,6 +477,10 @@ async def extract_furniture_params_from_image(
         return ImageExtractResponse(
             success=True,
             parameters=params,
+            field_sources=field_sources,
+            fields_need_review=fields_need_review,
+            recognized_count=recognized_count,
+            suggested_prompt=suggested_prompt,
             ocr_confidence=final_confidence,
             fallback_to_dialogue=needs_fallback,
             dialogue_prompt=dialogue_prompt,
