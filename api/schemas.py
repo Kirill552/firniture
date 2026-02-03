@@ -165,6 +165,7 @@ class DialogueTurnRequest(BaseModel):
     order_id: UUID
     messages: list[DialogueMessageCreate]
     extracted_context: str | None = None  # Контекст из Vision OCR (размеры, материал и т.д.)
+    current_params: dict | None = None  # Текущие параметры для inline chat
 
 
 class Export1CRequest(BaseModel):
