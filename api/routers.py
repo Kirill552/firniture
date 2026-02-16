@@ -14,7 +14,7 @@ from api.drilling_calculator import (
     calculate_drilling_for_side_panel,
 )
 from api.drilling_templates import list_hinge_templates, list_slide_templates
-from api.mocks.dialogue_mocks import are_yc_keys_available, generate_mock_dialogue_response
+from api.mocks.dialogue_mocks import are_ai_keys_available, generate_mock_dialogue_response
 from api.vision_extraction import (
     extract_furniture_params_from_image,
     extract_furniture_params_mock,
@@ -1741,7 +1741,7 @@ async def extract_from_image(req: ImageExtractRequest) -> ImageExtractResponse:
     в диалог с ИИ-технологом для уточнения параметров.
     """
     # Проверяем наличие Yandex Cloud ключей
-    use_mock = not are_yc_keys_available()
+    use_mock = not are_ai_keys_available()
 
     if use_mock:
         log.warning("[Vision OCR] Mock mode: YC keys not found")
@@ -2454,7 +2454,7 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
         raise HTTPException(status_code=404, detail="Order not found")
 
     # Проверяем наличие Yandex Cloud ключей
-    use_mock_mode = not are_yc_keys_available()
+    use_mock_mode = not are_ai_keys_available()
 
     if use_mock_mode:
         log.warning(f"[MOCK MODE] YC keys not found. Using mock dialogue responses for order {req.order_id}")
@@ -2564,7 +2564,7 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
         raise HTTPException(status_code=404, detail="Order not found")
 
     # Проверяем наличие Yandex Cloud ключей
-    if not are_yc_keys_available():
+    if not are_ai_keys_available():
         log.warning(f"[MOCK MODE] YC keys not found for order {req.order_id}")
         return {
             "success": False,

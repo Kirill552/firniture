@@ -122,7 +122,8 @@ async def generate_mock_dialogue_response(
     order_id: int,
     user_message: str,
     is_first_message: bool = False,
-    extracted_context: str | None = None
+    extracted_context: str | None = None,
+    current_params: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Генерирует mock ответ ИИ-технолога с потоковой отдачей (streaming).
@@ -174,6 +175,16 @@ async def generate_mock_dialogue_response(
             state.get_next_stage()
             response_text = state.get_current_response()
 
+    # Inline режим: если переданы текущие параметры, пытаемся вытащить обновления из текста пользователя
+    # и вернуть их в ожидаемом системой формате.
+    if current_params is not None and user_message:
+        patch = _extract_param_patch_from_text(user_message)
+        if patch:
+            import json
+            response_text += "\n\n[PARAM_UPDATE]\n"
+            response_text += json.dumps(patch, ensure_ascii=True)
+            response_text += "\n[/PARAM_UPDATE]\n"
+
     # Имитация streaming: отдаём текст по словам с небольшой задержкой
     words = response_text.split()
     for i, word in enumerate(words):
@@ -185,6 +196,70 @@ async def generate_mock_dialogue_response(
         await asyncio.sleep(random.uniform(0.01, 0.05))
 
     log.info(f"[MOCK MODE] Response generated for order {order_id}: {len(words)} words")
+
+
+def _extract_param_patch_from_text(text: str) -> dict:
+    """Примитивный парсер для mock-режима: вынимает параметры из сообщения пользователя."""
+    import re
+
+    patch: dict = {}
+    t = text.lower()
+
+    # Габариты: 600x720x560, 600×720×560, 600х720х560
+    m = re.search(r"(\d{2,4})\s*[xх×]\s*(\d{2,4})\s*[xх×]\s*(\d{2,4})", t)
+    if m:
+        patch["width_mm"] = int(m.group(1))
+        patch["height_mm"] = int(m.group(2))
+        patch["depth_mm"] = int(m.group(3))
+
+    # Размеры по словам
+    m = re.search(r"ширин[аы]\s*(\d{2,4})", t)
+    if m:
+        patch["width_mm"] = int(m.group(1))
+    m = re.search(r"высот[аы]\s*(\d{2,4})", t)
+    if m:
+        patch["height_mm"] = int(m.group(1))
+    m = re.search(r"глубин[аы]\s*(\d{2,4})", t)
+    if m:
+        patch["depth_mm"] = int(m.group(1))
+
+    # Толщина
+    m = re.search(r"толщин[аы]\s*(\d{1,2})", t)
+    if m:
+        patch["thickness_mm"] = int(m.group(1))
+
+    # Количества
+    m = re.search(r"(\d+)\s*(двер|створ)", t)
+    if m:
+        patch["door_count"] = int(m.group(1))
+    m = re.search(r"(\d+)\s*(ящик)", t)
+    if m:
+        patch["drawer_count"] = int(m.group(1))
+    m = re.search(r"(\d+)\s*(полк)", t)
+    if m:
+        patch["shelf_count"] = int(m.group(1))
+
+    # Тип изделия
+    if "мойк" in t:
+        patch["cabinet_type"] = "base_sink"
+    elif "пенал" in t:
+        patch["cabinet_type"] = "tall"
+    elif "навес" in t or "настен" in t:
+        patch["cabinet_type"] = "wall"
+    elif "ящик" in t:
+        patch["cabinet_type"] = "drawer"
+    elif "наполь" in t or "тумб" in t:
+        patch["cabinet_type"] = "base"
+
+    # Материал
+    if "лдсп" in t:
+        patch["material"] = "ЛДСП"
+    elif "мдф" in t:
+        patch["material"] = "МДФ"
+    elif "фанер" in t:
+        patch["material"] = "Фанера"
+
+    return patch
 
 
 async def mock_function_call_response(function_name: str, **kwargs) -> dict:
@@ -253,10 +328,14 @@ async def mock_function_call_response(function_name: str, **kwargs) -> dict:
         return {"error": f"Unknown function: {function_name}"}
 
 
-# Вспомогательная функция для проверки наличия YC ключей
-def are_yc_keys_available() -> bool:
-    """Проверяет, доступны ли Yandex Cloud API ключи."""
+# Вспомогательная функция для проверки наличия ключей AI-провайдера
+def are_ai_keys_available() -> bool:
+    """Проверяет наличие ключей AI-провайдера."""
     import os
+    # OpenRouter
+    if os.getenv("AI_API_KEY", "").strip():
+        return True
+    # Yandex fallback
     yc_folder_id = os.getenv("YC_FOLDER_ID", "").strip()
     yc_api_key = os.getenv("YC_API_KEY", "").strip()
     return bool(yc_folder_id and yc_api_key)

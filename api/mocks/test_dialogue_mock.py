@@ -17,7 +17,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from api.mocks.dialogue_mocks import (
-    are_yc_keys_available,
+    are_ai_keys_available,
     generate_mock_dialogue_response,
     mock_function_call_response,
 )
@@ -136,15 +136,15 @@ async def test_function_calling():
 async def test_yc_keys_check():
     """Тест проверки наличия YC ключей."""
     print("=" * 80)
-    print("ТЕСТ 4: Проверка YC ключей")
+    print("ТЕСТ 4: Проверка ключей AI-провайдера")
     print("=" * 80)
 
-    keys_available = are_yc_keys_available()
-    print(f"\nYC ключи доступны: {keys_available}")
+    keys_available = are_ai_keys_available()
+    print(f"\nКлючи AI-провайдера доступны: {keys_available}")
 
     if keys_available:
-        print("[!] YC ключи найдены — API будет работать в PRODUCTION режиме")
-        print("[i] Для тестирования mock режима удалите/закомментируйте YC_FOLDER_ID и YC_API_KEY из .env")
+        print("[!] Ключи AI найдены — API будет работать в PRODUCTION режиме")
+        print("[i] Для тестирования mock режима удалите/закомментируйте AI_API_KEY (или YC_FOLDER_ID и YC_API_KEY) из .env")
     else:
         print("[OK] YC ключи не найдены — API будет работать в MOCK режиме")
 
