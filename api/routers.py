@@ -1585,7 +1585,7 @@ async def search_hardware(
     """
     Поиск фурнитуры по текстовому запросу (RAG).
 
-    Использует векторный поиск через FRIDA embeddings + pgvector.
+    Использует векторный поиск через API embeddings (OpenRouter) + pgvector.
     Возвращает релевантные позиции из каталога Boyard (1305 позиций).
 
     ## Примеры запросов:
@@ -1740,11 +1740,11 @@ async def extract_from_image(req: ImageExtractRequest) -> ImageExtractResponse:
     При `fallback_to_dialogue: true` рекомендуется перенаправить пользователя
     в диалог с ИИ-технологом для уточнения параметров.
     """
-    # Проверяем наличие Yandex Cloud ключей
+    # Проверяем наличие AI API ключей
     use_mock = not are_ai_keys_available()
 
     if use_mock:
-        log.warning("[Vision OCR] Mock mode: YC keys not found")
+        log.warning("[Vision OCR] Mock mode: AI keys not found")
         return await extract_furniture_params_mock(req.image_base64, req.image_mime_type)
 
     log.info(f"[Vision OCR] Processing image, mime: {req.image_mime_type}, lang: {req.language_hint}")
@@ -2447,17 +2447,17 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
     """
     Принимает текущую историю диалога и возвращает потоковый ответ от ИИ-технолога.
 
-    Если YC_FOLDER_ID и YC_API_KEY не заданы — использует mock ответы для локальной разработки.
+    Если AI_API_KEY не задан — использует mock ответы для локальной разработки.
     """
     order = await crud.get_order_with_history(db, req.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Проверяем наличие Yandex Cloud ключей
+    # Проверяем наличие AI API ключей
     use_mock_mode = not are_ai_keys_available()
 
     if use_mock_mode:
-        log.warning(f"[MOCK MODE] YC keys not found. Using mock dialogue responses for order {req.order_id}")
+        log.warning(f"[MOCK MODE] AI keys not found. Using mock dialogue responses for order {req.order_id}")
 
     # Добавляем новые сообщения из запроса в БД
     current_turn = (order.dialogue_messages[-1].turn_number + 1) if order.dialogue_messages else 1
@@ -2493,8 +2493,8 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
 
         return StreamingResponse(mock_response_generator(), media_type="text/plain")
 
-    # PRODUCTION РЕЖИМ - используем YandexGPT через OpenAI-совместимый API
-    # 1. Собираем историю для YandexGPT
+    # PRODUCTION РЕЖИМ - используем ИИ-модель через OpenAI-совместимый API
+    # 1. Собираем историю для ИИ-модели
     system_prompt_text = TECHNOLOGIST_SYSTEM_PROMPT
 
     # OpenAI-совместимый формат: "content" вместо "text"
@@ -2563,12 +2563,12 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Проверяем наличие Yandex Cloud ключей
+    # Проверяем наличие AI API ключей
     if not are_ai_keys_available():
-        log.warning(f"[MOCK MODE] YC keys not found for order {req.order_id}")
+        log.warning(f"[MOCK MODE] AI keys not found for order {req.order_id}")
         return {
             "success": False,
-            "error": "YC_FOLDER_ID и YC_API_KEY не настроены",
+            "error": "AI_API_KEY не настроен (или YC_FOLDER_ID + YC_API_KEY для Yandex)",
             "mock_mode": True
         }
 

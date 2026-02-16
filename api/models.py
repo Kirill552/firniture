@@ -156,7 +156,7 @@ class HardwareItem(Base):
     version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     supplier_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="SET NULL"))
     
-    # Поля для векторного поиска (FRIDA 1536 dim)
+    # Поля для векторного поиска (1536 dim, OpenAI text-embedding-3-small)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     embedding_version: Mapped[str | None] = mapped_column(String(40), nullable=True)  # Версия модели эмбеддингов
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Хеш контента для проверки актуальности

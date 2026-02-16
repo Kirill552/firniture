@@ -55,6 +55,13 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Закрыть AI-клиент при остановке сервера."""
+    from shared.ai_client import get_ai_client
+    await get_ai_client().close()
+
+
 app.include_router(api_v1)
 app.include_router(dialogue_router)
 app.include_router(auth_router, prefix="/api/v1")

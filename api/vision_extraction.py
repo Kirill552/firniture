@@ -464,7 +464,7 @@ async def extract_furniture_params_mock(
     image_base64: str,
     mime_type: str = "image/jpeg",
 ) -> ImageExtractResponse:
-    """Mock функция для локального тестирования без Yandex Cloud."""
+    """Mock функция для локального тестирования без AI API ключей."""
     import asyncio
     import random
 

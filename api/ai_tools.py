@@ -7,7 +7,7 @@ AI-инструменты (Function Calling) для ИИ-технолога.
 - get_hardware_details: детальная информация о позиции по SKU
 - calculate_hardware_qty: расчёт количества фурнитуры
 
-Интеграция с YandexGPT через OpenAI-совместимый API.
+Интеграция с ИИ-моделью через OpenAI-совместимый API (OpenRouter).
 """
 
 from __future__ import annotations
@@ -671,5 +671,5 @@ async def execute_tool_call(
 
 
 def get_tools_schema() -> list[dict[str, Any]]:
-    """Получить схему всех инструментов для передачи в YandexGPT."""
+    """Получить схему всех инструментов для передачи в ИИ-модель."""
     return HARDWARE_TOOLS

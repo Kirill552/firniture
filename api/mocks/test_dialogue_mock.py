@@ -133,8 +133,8 @@ async def test_function_calling():
     print("[OK] Тест function calling пройден!\n")
 
 
-async def test_yc_keys_check():
-    """Тест проверки наличия YC ключей."""
+async def test_ai_keys_check():
+    """Тест проверки наличия AI ключей."""
     print("=" * 80)
     print("ТЕСТ 4: Проверка ключей AI-провайдера")
     print("=" * 80)
@@ -143,10 +143,10 @@ async def test_yc_keys_check():
     print(f"\nКлючи AI-провайдера доступны: {keys_available}")
 
     if keys_available:
-        print("[!] Ключи AI найдены — API будет работать в PRODUCTION режиме")
-        print("[i] Для тестирования mock режима удалите/закомментируйте AI_API_KEY (или YC_FOLDER_ID и YC_API_KEY) из .env")
+        print("[!] AI ключи найдены — API будет работать в PRODUCTION режиме")
+        print("[i] Для тестирования mock режима удалите/закомментируйте AI_API_KEY (или YC_FOLDER_ID + YC_API_KEY) из .env")
     else:
-        print("[OK] YC ключи не найдены — API будет работать в MOCK режиме")
+        print("[OK] AI ключи не найдены — API будет работать в MOCK режиме")
 
     print()
 
@@ -155,7 +155,7 @@ async def main():
     """Запуск всех тестов."""
     print("\n" + ">>> ЗАПУСК ТЕСТОВ MOCK ДИАЛОГА <<<".center(80) + "\n")
 
-    await test_yc_keys_check()
+    await test_ai_keys_check()
     await test_basic_dialogue()
     await test_button_responses()
     await test_function_calling()

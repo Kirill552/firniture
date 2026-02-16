@@ -8,41 +8,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 })
     }
 
-    const apiKey = process.env.YANDEX_API_KEY
+    const apiKey = process.env.AI_API_KEY
+    const baseUrl = process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1'
+    const model = process.env.AI_CHAT_MODEL || 'deepseek/deepseek-chat-v3-0324'
+
     if (!apiKey) {
-      return NextResponse.json({ error: 'Yandex API key not configured' }, { status: 500 })
+      return NextResponse.json({ error: 'AI_API_KEY не настроен' }, { status: 500 })
     }
 
     const prompt = `Ты - AI-поисковик в системе АвтоРаскрой. Обработай запрос: "${query}". Найди релевантные заказы, фурнитуру или другие элементы. Ответь на русском, в формате JSON: {"results": [{"title": "Название", "description": "Описание", "url": "/path"}]}`
 
-    const response = await fetch('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Api-Key ${apiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        modelUri: 'gpt://api.cloud.yandex.net/foundation-models/yandexgpt-lite',
-        completionOptions: {
-          stream: false,
-          temperature: 0.6,
-          maxTokens: 1000,
-        },
+        model,
+        temperature: 0.6,
+        max_tokens: 1000,
         messages: [
           {
             role: 'user',
-            text: prompt,
+            content: prompt,
           },
         ],
       }),
     })
 
     if (!response.ok) {
-      throw new Error(`Yandex API error: ${response.statusText}`)
+      throw new Error(`AI API error: ${response.statusText}`)
     }
 
     const data = await response.json()
-    const aiResponse = data.result[0]?.message?.text || 'No results'
+    const aiResponse = data.choices?.[0]?.message?.content || 'No results'
 
     // Парсим JSON из ответа AI
     let results = []

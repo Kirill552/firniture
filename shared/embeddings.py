@@ -25,7 +25,7 @@ EMBED_VERSION = "openai-3-small-v1"
 # Fallback (детерминированный вектор)
 # ============================================================================
 
-def _fallback_embedding(text: str, dim: int = 768) -> list[float]:
+def _fallback_embedding(text: str, dim: int = 1536) -> list[float]:
     """Детерминированный вектор на основе SHA256 (для тестов без API)."""
     h = hashlib.sha256(text.encode("utf-8")).digest()
     vals: list[float] = []

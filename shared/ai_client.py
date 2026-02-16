@@ -169,8 +169,8 @@ class AIClient:
         payload = {
             "model": resolved,
             "messages": messages,
-            "temperature": temperature or self.settings.ai_temperature,
-            "max_tokens": max_tokens or self.settings.ai_max_tokens,
+            "temperature": temperature if temperature is not None else self.settings.ai_temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self.settings.ai_max_tokens,
             "stream": False,
         }
         url = f"{self._base_url()}/chat/completions"
@@ -201,8 +201,8 @@ class AIClient:
         payload: dict[str, Any] = {
             "model": resolved,
             "messages": messages,
-            "temperature": temperature or self.settings.ai_temperature,
-            "max_tokens": max_tokens or self.settings.ai_max_tokens,
+            "temperature": temperature if temperature is not None else self.settings.ai_temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self.settings.ai_max_tokens,
             "stream": False,
         }
         if tools:
