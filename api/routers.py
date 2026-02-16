@@ -1,6 +1,5 @@
 # Settings endpoints added 2026-01-16
 import logging
-import os
 import uuid
 from uuid import UUID
 
@@ -21,11 +20,7 @@ from api.vision_extraction import (
     extract_furniture_params_mock,
 )
 from shared.storage import ObjectStorage
-from shared.yandex_ai import (
-    GPTResponseWithTools,
-    YandexCloudSettings,
-    create_openai_client,
-)
+from shared.ai_client import GPTResponseWithTools, get_ai_client
 
 from . import crud, models
 from .auth import get_current_user, get_current_user_optional
@@ -1324,7 +1319,20 @@ async def generate_bom_endpoint(
         if factory:
             factory_settings = factory.settings or {}
 
-    thickness = factory_settings.get("thickness_mm", SETTINGS_DEFAULTS["thickness_mm"])
+    # Толщина: запрос > настройки фабрики > дефолты
+    thickness = req.thickness_mm
+    if thickness is None:
+        thickness = factory_settings.get("thickness_mm")
+    if thickness is None:
+        thickness = SETTINGS_DEFAULTS["thickness_mm"]
+
+    cabinet_type_label_ru = {
+        "wall": "Навесной шкаф",
+        "base": "Напольная тумба",
+        "base_sink": "Тумба под мойку",
+        "drawer": "Тумба с ящиками",
+        "tall": "Пенал",
+    }.get(req.cabinet_type.value, req.cabinet_type.value)
 
     # 1. Расчёт панелей
     try:
@@ -1480,7 +1488,7 @@ async def generate_bom_endpoint(
             if not product:
                 product = ProductConfig(
                     order_id=req.order_id,
-                    name=f"{req.cabinet_type.value} {req.width_mm}x{req.height_mm}x{req.depth_mm}",
+                    name=f"{cabinet_type_label_ru} {req.width_mm}×{req.height_mm}×{req.depth_mm}",
                     width_mm=req.width_mm,
                     height_mm=req.height_mm,
                     depth_mm=req.depth_mm,
@@ -1502,8 +1510,23 @@ async def generate_bom_endpoint(
                 db.add(product)
                 await db.flush()
             else:
+                # Обновляем базовые поля изделия и params, чтобы BOM был консистентным при повторной генерации.
+                product.name = f"{cabinet_type_label_ru} {req.width_mm}×{req.height_mm}×{req.depth_mm}"
+                product.width_mm = req.width_mm
+                product.height_mm = req.height_mm
+                product.depth_mm = req.depth_mm
+                product.material = req.material
+                product.thickness_mm = thickness
+
                 # Обновляем params
                 params = product.params or {}
+                params["cabinet_type"] = req.cabinet_type.value
+                params["width_mm"] = req.width_mm
+                params["height_mm"] = req.height_mm
+                params["depth_mm"] = req.depth_mm
+                params["shelf_count"] = req.shelf_count
+                params["door_count"] = req.door_count
+                params["drawer_count"] = req.drawer_count
                 params["hardware"] = [h.model_dump() for h in hardware_list]
                 params["fasteners"] = fasteners
                 params["edge_bands"] = edge_bands
@@ -2454,7 +2477,8 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
                     order_id=order.id,
                     user_message=user_message_text,
                     is_first_message=is_first_message,
-                    extracted_context=req.extracted_context
+                    extracted_context=req.extracted_context,
+                    current_params=req.current_params,
                 ):
                     full_response += chunk
                     yield chunk
@@ -2498,25 +2522,19 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
     if user_message_text:
         messages.append({"role": "user", "content": user_message_text})
 
-    # 2. Готовимся к стримингу ответа через OpenAI-совместимый API
-    yc_settings = YandexCloudSettings(
-        yc_folder_id=os.getenv("YC_FOLDER_ID", ""),
-        yc_api_key=os.getenv("YC_API_KEY", "")
-    )
+    # 2. Готовимся к стримингу ответа через AIClient
+    client = get_ai_client()
 
     async def response_generator():
         full_response = ""
         try:
-            log.info(f"[PRODUCTION MODE] Using YandexGPT (OpenAI API) for order {req.order_id}")
-            async with create_openai_client(yc_settings) as client:
-                async for chunk in client.stream_chat_completion(
-                    messages,
-                    temperature=0.4,  # Немного выше для более естественных ответов
-                    top_p=0.9,
-                    frequency_penalty=0.3,  # Уменьшаем повторения
-                ):
-                    full_response += chunk
-                    yield chunk
+            log.info(f"[PRODUCTION MODE] Using AIClient for order {req.order_id}")
+            async for chunk in client.stream_chat_completion(
+                messages,
+                temperature=0.4,
+            ):
+                full_response += chunk
+                yield chunk
 
             # 3. Сохраняем полный ответ ассистента в БД
             await crud.create_dialogue_message(db, order.id, current_turn, "assistant", full_response)
@@ -2603,10 +2621,7 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
         messages.append({"role": "user", "content": user_message_text})
 
     # Инициализируем клиент
-    yc_settings = YandexCloudSettings(
-        yc_folder_id=os.getenv("YC_FOLDER_ID", ""),
-        yc_api_key=os.getenv("YC_API_KEY", "")
-    )
+    client = get_ai_client()
 
     tools = get_tools_schema()
     max_iterations = 5  # Максимум итераций для предотвращения бесконечного цикла
@@ -2614,67 +2629,66 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
     final_response = None
 
     try:
-        async with create_openai_client(yc_settings) as client:
-            for iteration in range(max_iterations):
-                log.info(f"[Function Calling] Iteration {iteration + 1}, messages: {len(messages)}")
+        for iteration in range(max_iterations):
+            log.info(f"[Function Calling] Iteration {iteration + 1}, messages: {len(messages)}")
 
-                # Вызываем модель с инструментами
-                response: GPTResponseWithTools = await client.chat_completion_with_tools(
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    temperature=0.4,
+            # Вызываем модель с инструментами
+            response: GPTResponseWithTools = await client.chat_completion_with_tools(
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.4,
+            )
+
+            # Если модель не вызвала инструменты - это финальный ответ
+            if not response.tool_calls:
+                final_response = response.text
+                break
+
+            # Добавляем ответ ассистента с tool_calls в историю
+            assistant_message = {
+                "role": "assistant",
+                "content": response.text or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False)
+                        }
+                    }
+                    for tc in response.tool_calls
+                ]
+            }
+            messages.append(assistant_message)
+
+            # Выполняем каждый вызов инструмента
+            for tool_call in response.tool_calls:
+                log.info(f"[Function Calling] Executing tool: {tool_call.name}")
+
+                tool_result = await execute_tool_call(
+                    tool_name=tool_call.name,
+                    arguments=tool_call.arguments
                 )
 
-                # Если модель не вызвала инструменты - это финальный ответ
-                if not response.tool_calls:
-                    final_response = response.text
-                    break
+                tool_calls_log.append({
+                    "tool": tool_call.name,
+                    "arguments": tool_call.arguments,
+                    "result": tool_result
+                })
 
-                # Добавляем ответ ассистента с tool_calls в историю
-                assistant_message = {
-                    "role": "assistant",
-                    "content": response.text or "",
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments, ensure_ascii=False)
-                            }
-                        }
-                        for tc in response.tool_calls
-                    ]
-                }
-                messages.append(assistant_message)
+                # Добавляем результат в историю
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(tool_result, ensure_ascii=False)
+                })
 
-                # Выполняем каждый вызов инструмента
-                for tool_call in response.tool_calls:
-                    log.info(f"[Function Calling] Executing tool: {tool_call.name}")
-
-                    tool_result = await execute_tool_call(
-                        tool_name=tool_call.name,
-                        arguments=tool_call.arguments
-                    )
-
-                    tool_calls_log.append({
-                        "tool": tool_call.name,
-                        "arguments": tool_call.arguments,
-                        "result": tool_result
-                    })
-
-                    # Добавляем результат в историю
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps(tool_result, ensure_ascii=False)
-                    })
-
-            else:
-                # Превышено максимальное количество итераций
-                log.warning(f"[Function Calling] Max iterations reached for order {req.order_id}")
-                final_response = "Извините, не удалось получить ответ. Попробуйте переформулировать вопрос."
+        else:
+            # Превышено максимальное количество итераций
+            log.warning(f"[Function Calling] Max iterations reached for order {req.order_id}")
+            final_response = "Извините, не удалось получить ответ. Попробуйте переформулировать вопрос."
 
         # Сохраняем финальный ответ в БД
         if final_response:
