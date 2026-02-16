@@ -2,7 +2,7 @@
 Модуль извлечения параметров мебели из изображений.
 
 Процесс:
-1. Vision OCR: Изображение → текст
+1. Vision модель: Изображение → текст (один шаг вместо OCR + GPT)
 2. GPT: Текст → структурированные параметры (JSON)
 3. Валидация и fallback на диалог при низкой уверенности
 """
@@ -12,15 +12,10 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import os
 import time
 
-from shared.yandex_ai import (
-    OCRResponse,
-    YandexCloudSettings,
-    create_openai_client,
-    create_vision_client,
-)
+from shared.ai_client import get_ai_client
+from shared.ai_settings import AISettings
 
 from .pdf_utils import MAX_PDF_SIZE_BYTES, PDFValidationError, pdf_to_images
 from .schemas import (
@@ -106,30 +101,25 @@ MODULE_COUNT_PROMPT = """Проанализируй изображение и о
 
 async def extract_text_from_image(
     image_bytes: bytes,
-    settings: YandexCloudSettings,
     language_codes: list[str] = None,
 ) -> tuple[str, float]:
     """
-    Извлекает текст из изображения через Yandex Vision OCR.
+    Извлекает текст из изображения через vision модель.
 
     Returns:
-        Tuple[str, float]: (извлечённый текст, средняя уверенность)
+        Tuple[str, float]: (извлечённый текст, уверенность)
     """
-    if language_codes is None:
-        language_codes = ["ru", "en"]
-
-    async with create_vision_client(settings) as client:
-        response: OCRResponse = await client.extract_text_from_image(
-            image_bytes=image_bytes,
-            language_codes=language_codes,
-        )
-
-    return response.text, response.confidence
+    image_base64 = base64.b64encode(image_bytes).decode()
+    client = get_ai_client()
+    response = await client.vision_extract(
+        image_base64=image_base64,
+        prompt="Извлеки весь текст с этого изображения. Верни только текст, без комментариев.",
+    )
+    return response.text, 0.8  # Vision модели не возвращают confidence
 
 
 async def analyze_module_count(
     image_bytes: bytes,
-    settings: YandexCloudSettings,
 ) -> tuple[bool, int, list[str], str]:
     """
     Анализирует изображение и определяет количество модулей.
@@ -137,27 +127,12 @@ async def analyze_module_count(
     Returns:
         (is_single_module, module_count, module_types, reason)
     """
-    import base64
-
     image_base64 = base64.b64encode(image_bytes).decode()
-
-    async with create_openai_client(settings) as client:
-        response = await client.chat_completion(
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": MODULE_COUNT_PROMPT},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
-                        }
-                    ]
-                }
-            ],
-            temperature=0.1,
-            max_tokens=500,
-        )
+    client = get_ai_client()
+    response = await client.vision_extract(
+        image_base64=image_base64,
+        prompt=MODULE_COUNT_PROMPT,
+    )
 
     try:
         text = response.text.strip()
@@ -180,7 +155,6 @@ async def analyze_module_count(
 
 async def parse_ocr_text_to_params(
     ocr_text: str,
-    settings: YandexCloudSettings,
 ) -> tuple[ExtractedFurnitureParams, dict[str, str], list[str], int, str | None]:
     """
     Парсит текст OCR в структурированные параметры через GPT.
@@ -199,15 +173,15 @@ async def parse_ocr_text_to_params(
 
     prompt = FURNITURE_EXTRACTION_PROMPT.format(ocr_text=ocr_text)
 
-    async with create_openai_client(settings) as client:
-        response = await client.chat_completion(
-            messages=[
-                {"role": "system", "content": "Ты — парсер структурированных данных. Отвечай только JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.1,  # Низкая температура для детерминизма
-            max_tokens=1500,
-        )
+    client = get_ai_client()
+    response = await client.chat_completion(
+        messages=[
+            {"role": "system", "content": "Ты — парсер структурированных данных. Отвечай только JSON."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.1,  # Низкая температура для детерминизма
+        max_tokens=1500,
+    )
 
     # Парсим JSON из ответа
     try:
@@ -339,7 +313,6 @@ async def parse_ocr_text_to_params(
 async def extract_furniture_params_from_image(
     image_base64: str,
     mime_type: str = "image/jpeg",
-    settings: YandexCloudSettings | None = None,
     language_hint: str = "ru",
 ) -> ImageExtractResponse:
     """
@@ -347,7 +320,6 @@ async def extract_furniture_params_from_image(
 
     Args:
         image_base64: Изображение в base64
-        settings: Настройки Yandex Cloud (если None — загружаются из env)
         language_hint: Язык для OCR ("ru", "en", "auto")
 
     Returns:
@@ -355,23 +327,15 @@ async def extract_furniture_params_from_image(
     """
     start_time = time.time()
 
-    # Загружаем настройки если не переданы
-    if settings is None:
-        folder_id = os.getenv("YC_FOLDER_ID", "")
-        api_key = os.getenv("YC_API_KEY", "")
-
-        if not folder_id or not api_key:
-            return ImageExtractResponse(
-                success=False,
-                error="YC_FOLDER_ID и YC_API_KEY не настроены",
-                fallback_to_dialogue=True,
-                dialogue_prompt="Опишите мебельное изделие, которое нужно изготовить.",
-                processing_time_ms=int((time.time() - start_time) * 1000),
-            )
-
-        settings = YandexCloudSettings(
-            yc_folder_id=folder_id,
-            yc_api_key=api_key,
+    # Проверяем наличие AI-ключей
+    settings = AISettings()
+    if not settings.ai_api_key and not (settings.yc_folder_id and settings.yc_api_key):
+        return ImageExtractResponse(
+            success=False,
+            error="AI_API_KEY не настроен",
+            fallback_to_dialogue=True,
+            dialogue_prompt="Опишите мебельное изделие, которое нужно изготовить.",
+            processing_time_ms=int((time.time() - start_time) * 1000),
         )
 
     try:
@@ -415,7 +379,6 @@ async def extract_furniture_params_from_image(
         log.info("[Vision] Checking module count...")
         is_single, module_count, module_types, reason = await analyze_module_count(
             image_bytes=image_bytes,
-            settings=settings,
         )
 
         if not is_single or module_count > 1:
@@ -437,7 +400,6 @@ async def extract_furniture_params_from_image(
         log.info("[Vision] Starting OCR extraction...")
         ocr_text, ocr_confidence = await extract_text_from_image(
             image_bytes=image_bytes,
-            settings=settings,
             language_codes=language_codes,
         )
         log.info(f"[Vision] OCR complete. Text length: {len(ocr_text)}, confidence: {ocr_confidence:.2f}")
@@ -446,7 +408,6 @@ async def extract_furniture_params_from_image(
         log.info("[Vision] Parsing OCR text with GPT...")
         params, field_sources, fields_need_review, recognized_count, suggested_prompt = await parse_ocr_text_to_params(
             ocr_text=ocr_text,
-            settings=settings,
         )
         log.info(f"[Vision] Parsing complete. Confidence: {params.confidence:.2f}")
 
@@ -548,9 +509,27 @@ async def extract_furniture_params_mock(
         needs_clarification=False,
     )
 
+    field_sources = {
+        "furniture_type": "ocr",
+        "width_mm": "ocr",
+        "height_mm": "ocr",
+        "depth_mm": "ocr",
+        "thickness_mm": "ocr",
+        "material": "ocr",
+        "door_count": "ocr",
+        "drawer_count": "default",
+        "shelf_count": "ocr",
+    }
+    fields_need_review = [k for k, v in field_sources.items() if v == "default"]
+    recognized_count = len(field_sources) - len(fields_need_review)
+
     return ImageExtractResponse(
         success=True,
         parameters=mock_params,
+        field_sources=field_sources,
+        fields_need_review=fields_need_review,
+        recognized_count=recognized_count,
+        suggested_prompt="Проверь параметры и уточни недостающее (тип, размеры, материал, количество дверей/полок).",
         ocr_confidence=0.9,
         fallback_to_dialogue=False,
         processing_time_ms=500,
