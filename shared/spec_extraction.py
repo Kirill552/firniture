@@ -1,22 +1,19 @@
 """
-Сервис извлечения параметров из ТЗ для мебель-ИИ.
+Сервис извлечения параметров из ТЗ для АвтоРаскрой.
 
-Интеграция с YandexGPT и Vision OCR для анализа текста, изображений и эскизов.
+Интеграция с AIClient для анализа текста, изображений и эскизов.
 Извлекает технические параметры мебели с уровнем уверенности.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from dataclasses import dataclass
 from typing import Any
 
-from shared.yandex_ai import (
-    YandexCloudSettings,
-    create_gpt_client,
-    create_vision_client,
-)
+from shared.ai_client import get_ai_client
 
 log = logging.getLogger(__name__)
 
@@ -43,99 +40,104 @@ class SpecExtractionResult:
 
 class SpecExtractionService:
     """Сервис извлечения параметров из ТЗ."""
-    
-    def __init__(self, yc_settings: YandexCloudSettings):
-        self.yc_settings = yc_settings
-    
+
+    def __init__(self) -> None:
+        # Клиент — singleton, получаем через get_ai_client()
+        self.client = get_ai_client()
+
     async def extract_from_text(self, text: str) -> SpecExtractionResult:
         """Извлечь параметры из текстового ТЗ."""
         import time
         start_time = time.time()
-        
-        async with create_gpt_client(self.yc_settings) as gpt_client:
-            prompt = self._build_text_extraction_prompt(text)
-            
-            log.info("Отправка запроса к YandexGPT для извлечения параметров")
-            response = await gpt_client.generate_text(
-                prompt=prompt,
-                temperature=0.1,  # Низкая температура для структурированного ответа
-                max_tokens=2000
-            )
-            
-            log.info(f"YandexGPT ответ получен, токены: {response.usage}")
-            
-            # Парсим структурированный ответ
-            parameters = self._parse_gpt_parameters_response(response.text)
-            
-            processing_time = time.time() - start_time
-            
-            # Общая уверенность = среднее по параметрам
-            overall_confidence = (
-                sum(p.confidence for p in parameters) / len(parameters)
-                if parameters else 0.0
-            )
-            
-            return SpecExtractionResult(
-                product_config_id=f"pc_{int(time.time())}",
-                parameters=parameters,
-                confidence_overall=overall_confidence,
-                processing_time_seconds=processing_time,
-                source_type="text"
-            )
-    
+
+        prompt = self._build_text_extraction_prompt(text)
+
+        log.info("Отправка запроса к AI для извлечения параметров")
+        response = await self.client.chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,  # Низкая температура для структурированного ответа
+            max_tokens=2000,
+        )
+
+        log.info(f"AI ответ получен, токены: {response.usage}")
+
+        # Парсим структурированный ответ
+        parameters = self._parse_gpt_parameters_response(response.text)
+
+        processing_time = time.time() - start_time
+
+        # Общая уверенность = среднее по параметрам
+        overall_confidence = (
+            sum(p.confidence for p in parameters) / len(parameters)
+            if parameters else 0.0
+        )
+
+        return SpecExtractionResult(
+            product_config_id=f"pc_{int(time.time())}",
+            parameters=parameters,
+            confidence_overall=overall_confidence,
+            processing_time_seconds=processing_time,
+            source_type="text"
+        )
+
     async def extract_from_image(self, image_bytes: bytes) -> SpecExtractionResult:
         """Извлечь параметры из изображения/эскиза."""
         import time
         start_time = time.time()
-        
-        # Сначала OCR для извлечения текста
-        async with create_vision_client(self.yc_settings) as vision_client:
-            log.info("Распознавание текста с изображения через Vision OCR")
-            ocr_result = await vision_client.extract_text_from_image(image_bytes)
-            
-            log.info(f"OCR завершён, уверенность: {ocr_result.confidence:.2f}")
-            
-            if not ocr_result.text.strip():
-                # Нет текста на изображении, возвращаем пустой результат
-                return SpecExtractionResult(
-                    product_config_id=f"pc_{int(time.time())}",
-                    parameters=[],
-                    confidence_overall=0.0,
-                    processing_time_seconds=time.time() - start_time,
-                    source_type="image"
-                )
-        
-        # Затем анализ извлечённого текста
-        async with create_gpt_client(self.yc_settings) as gpt_client:
-            prompt = self._build_image_extraction_prompt(ocr_result.text, ocr_result.confidence)
-            
-            log.info("Анализ извлечённого текста через YandexGPT")
-            response = await gpt_client.generate_text(
-                prompt=prompt,
-                temperature=0.1,
-                max_tokens=2000
-            )
-            
-            parameters = self._parse_gpt_parameters_response(response.text)
-            
-            # Корректируем уверенность на основе качества OCR
-            for param in parameters:
-                param.confidence *= ocr_result.confidence
-            
-            processing_time = time.time() - start_time
-            overall_confidence = (
-                sum(p.confidence for p in parameters) / len(parameters)
-                if parameters else 0.0
-            )
-            
+
+        # Кодируем изображение в base64 для vision API
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        log.info("Распознавание изображения через Vision API")
+        vision_response = await self.client.vision_extract(
+            image_base64=image_base64,
+            prompt="Извлеки весь текст с этого изображения/эскиза мебели. "
+                   "Укажи размеры, материалы, тип мебели и прочие технические данные.",
+        )
+
+        ocr_text = vision_response.text.strip()
+        log.info(f"Vision ответ получен, длина текста: {len(ocr_text)}")
+
+        if not ocr_text:
+            # Нет текста на изображении, возвращаем пустой результат
             return SpecExtractionResult(
                 product_config_id=f"pc_{int(time.time())}",
-                parameters=parameters,
-                confidence_overall=overall_confidence,
-                processing_time_seconds=processing_time,
+                parameters=[],
+                confidence_overall=0.0,
+                processing_time_seconds=time.time() - start_time,
                 source_type="image"
             )
-    
+
+        # Анализ извлечённого текста через chat completion
+        prompt = self._build_image_extraction_prompt(ocr_text, ocr_confidence=0.8)
+
+        log.info("Анализ извлечённого текста через AI")
+        response = await self.client.chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=2000,
+        )
+
+        parameters = self._parse_gpt_parameters_response(response.text)
+
+        # Корректируем уверенность (vision менее точен, чем прямой текст)
+        for param in parameters:
+            param.confidence *= 0.8
+
+        processing_time = time.time() - start_time
+        overall_confidence = (
+            sum(p.confidence for p in parameters) / len(parameters)
+            if parameters else 0.0
+        )
+
+        return SpecExtractionResult(
+            product_config_id=f"pc_{int(time.time())}",
+            parameters=parameters,
+            confidence_overall=overall_confidence,
+            processing_time_seconds=processing_time,
+            source_type="image"
+        )
+
     def _build_text_extraction_prompt(self, text: str) -> str:
         """Создать промпт для извлечения параметров из текста."""
         return f"""
@@ -172,7 +174,7 @@ class SpecExtractionService:
       "unit": "мм"
     }},
     {{
-      "name": "высота", 
+      "name": "высота",
       "value": 2400,
       "confidence": 0.85,
       "unit": "мм",
@@ -189,7 +191,7 @@ class SpecExtractionService:
 - Для неточных значений добавляй "question"
 - НЕ придумывай данные
 """
-    
+
     def _build_image_extraction_prompt(self, ocr_text: str, ocr_confidence: float) -> str:
         """Создать промпт для анализа текста с изображения."""
         return f"""
@@ -208,7 +210,7 @@ class SpecExtractionService:
   "parameters": [
     {{
       "name": "parameter_name",
-      "value": "parameter_value", 
+      "value": "parameter_value",
       "confidence": 0.XX,
       "unit": "мм" // или null
     }}
@@ -221,9 +223,9 @@ class SpecExtractionService:
 - Если в тексте числа неразборчивы — добавляй "question"
 - Фокусируйся только на чётких технических данных
 """
-    
+
     def _parse_gpt_parameters_response(self, response_text: str) -> list[ExtractedParameter]:
-        """Парсинг ответа YandexGPT в структуру параметров."""
+        """Парсинг ответа AI в структуру параметров."""
         try:
             # Ищем JSON блок в ответе
             import re
@@ -233,10 +235,10 @@ class SpecExtractionService:
             else:
                 # Пробуем парсить весь ответ как JSON
                 json_str = response_text.strip()
-            
+
             data = json.loads(json_str)
             parameters = []
-            
+
             for param_data in data.get("parameters", []):
                 param = ExtractedParameter(
                     name=param_data["name"],
@@ -246,14 +248,14 @@ class SpecExtractionService:
                     question=param_data.get("question")
                 )
                 parameters.append(param)
-            
+
             log.info(f"Извлечено {len(parameters)} параметров")
             return parameters
-            
+
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            log.error(f"Ошибка парсинга ответа YandexGPT: {e}")
+            log.error(f"Ошибка парсинга ответа AI: {e}")
             log.debug(f"Ответ: {response_text}")
-            
+
             # Возвращаем дефолтный параметр для отладки
             return [ExtractedParameter(
                 name="ошибка_парсинга",
@@ -264,6 +266,6 @@ class SpecExtractionService:
 
 
 # Удобная фабрика
-def create_spec_extraction_service(yc_settings: YandexCloudSettings) -> SpecExtractionService:
+def create_spec_extraction_service() -> SpecExtractionService:
     """Создать сервис извлечения спецификаций."""
-    return SpecExtractionService(yc_settings)
+    return SpecExtractionService()

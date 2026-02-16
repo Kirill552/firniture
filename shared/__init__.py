@@ -1,35 +1,19 @@
 """Shared utilities package."""
 
-from shared.yandex_ai import (
-    EmbeddingResponse,
+from shared.ai_client import (
+    AIClient,
     GPTResponse,
     GPTResponseWithTools,
-    OCRResponse,
     ToolCall,
-    YandexCloudSettings,
-    YandexEmbeddingsClient,
-    YandexGPTClient,
-    YandexOpenAIClient,
-    YandexVisionClient,
-    create_embeddings_client,
-    create_gpt_client,
-    create_openai_client,
-    create_vision_client,
+    get_ai_client,
 )
+from shared.ai_settings import AISettings
 
 __all__ = [
-    "YandexCloudSettings",
-    "YandexEmbeddingsClient",
-    "YandexGPTClient",
-    "YandexOpenAIClient",
-    "YandexVisionClient",
-    "ToolCall",
-    "GPTResponseWithTools",
+    "AIClient",
+    "AISettings",
     "GPTResponse",
-    "EmbeddingResponse",
-    "OCRResponse",
-    "create_embeddings_client",
-    "create_gpt_client",
-    "create_openai_client",
-    "create_vision_client",
+    "GPTResponseWithTools",
+    "ToolCall",
+    "get_ai_client",
 ]
