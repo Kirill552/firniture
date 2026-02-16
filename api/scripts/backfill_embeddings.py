@@ -1,7 +1,7 @@
 """
 Скрипт для создания embeddings для всех позиций фурнитуры.
 
-Использует FRIDA (ai-forever/FRIDA) — лучшую модель для русского языка.
+Использует AIClient для генерации embeddings через API.
 Batch-генерация для максимальной скорости.
 
 Использование:
@@ -19,11 +19,9 @@ from api.database import SessionLocal
 from api.models import HardwareItem
 from shared.embeddings import (
     EMBED_VERSION,
-    EMBEDDING_PROVIDER,
     _content_fingerprint,
     concat_hardware_item_text,
-    embed_batch_frida,
-    embed_text,
+    embed_batch,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -40,10 +38,10 @@ async def main(
 
     Args:
         limit: Максимальное количество позиций (None = все)
-        batch_size: Размер батча для FRIDA (по умолчанию 64)
+        batch_size: Размер батча (по умолчанию 64)
         force: Перегенерировать все, даже актуальные
     """
-    logger.info(f"Запуск создания embeddings (провайдер: {EMBEDDING_PROVIDER})...")
+    logger.info("Запуск создания embeddings через AI API...")
     logger.info(f"Версия модели: {EMBED_VERSION}")
 
     async with SessionLocal() as session:
@@ -85,58 +83,37 @@ async def main(
             logger.info("Все embeddings актуальны!")
             return
 
-        # Генерация embeddings
-        if EMBEDDING_PROVIDER == "frida":
-            # Batch-генерация для FRIDA — намного быстрее
-            logger.info(f"Batch-генерация FRIDA (batch_size={batch_size})...")
+        # Batch-генерация через API
+        logger.info(f"Batch-генерация через API (batch_size={batch_size})...")
 
-            for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i : i + batch_size]
-                batch_items = items_to_process[i : i + batch_size]
-                batch_fingerprints = fingerprints[i : i + batch_size]
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i : i + batch_size]
+            batch_items = items_to_process[i : i + batch_size]
+            batch_fingerprints = fingerprints[i : i + batch_size]
 
-                logger.info(
-                    f"Обработка батча {i // batch_size + 1}/"
-                    f"{(len(texts) + batch_size - 1) // batch_size} "
-                    f"({len(batch_texts)} позиций)..."
-                )
+            logger.info(
+                f"Обработка батча {i // batch_size + 1}/"
+                f"{(len(texts) + batch_size - 1) // batch_size} "
+                f"({len(batch_texts)} позиций)..."
+            )
 
-                try:
-                    embeddings = embed_batch_frida(batch_texts)
+            try:
+                embeddings = await embed_batch(batch_texts)
 
-                    for item, emb, fingerprint in zip(
-                        batch_items, embeddings, batch_fingerprints, strict=True
-                    ):
-                        item.embedding = emb  # type: ignore[assignment]
-                        item.embedding_version = EMBED_VERSION
-                        item.content_hash = fingerprint
-                        item.indexed_at = datetime.now(UTC)
-
-                    await session.flush()
-                    logger.info("Батч обработан успешно")
-
-                except Exception as e:
-                    logger.error(f"Ошибка батча: {e}")
-                    # Продолжаем со следующим батчем
-
-        else:
-            # По одному для Yandex API
-            logger.info("Последовательная генерация (Yandex API)...")
-
-            for item, text, fingerprint in zip(
-                items_to_process, texts, fingerprints, strict=True
-            ):
-                logger.info(f"Обработка: {item.sku} - {item.name}")
-
-                try:
-                    emb = await embed_text(text)
+                for item, emb, fingerprint in zip(
+                    batch_items, embeddings, batch_fingerprints, strict=True
+                ):
                     item.embedding = emb  # type: ignore[assignment]
                     item.embedding_version = EMBED_VERSION
                     item.content_hash = fingerprint
                     item.indexed_at = datetime.now(UTC)
-                    await session.flush()
-                except Exception as e:
-                    logger.error(f"Ошибка для {item.sku}: {e}")
+
+                await session.flush()
+                logger.info("Батч обработан успешно")
+
+            except Exception as e:
+                logger.error(f"Ошибка батча: {e}")
+                # Продолжаем со следующим батчем
 
         await session.commit()
         logger.info(f"Готово! Обработано: {len(items_to_process)}")
@@ -146,7 +123,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Создание embeddings для фурнитуры")
     parser.add_argument("--limit", type=int, default=None, help="Лимит позиций")
     parser.add_argument(
-        "--batch-size", type=int, default=64, help="Размер батча для FRIDA"
+        "--batch-size", type=int, default=64, help="Размер батча"
     )
     parser.add_argument(
         "--force", action="store_true", help="Перегенерировать все embeddings"
