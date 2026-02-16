@@ -22,6 +22,7 @@ from shared.embeddings import (
     _content_fingerprint,
     concat_hardware_item_text,
     embed_batch,
+    embed_text,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -84,7 +85,7 @@ async def main(
             return
 
         # Batch-генерация через API
-        logger.info(f"Batch-генерация через API (batch_size={batch_size})...")
+        logger.info(f"Batch-генерация embeddings (batch_size={batch_size})...")
 
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i : i + batch_size]
@@ -103,7 +104,7 @@ async def main(
                 for item, emb, fingerprint in zip(
                     batch_items, embeddings, batch_fingerprints, strict=True
                 ):
-                    item.embedding = emb  # type: ignore[assignment]
+                    item.embedding = emb
                     item.embedding_version = EMBED_VERSION
                     item.content_hash = fingerprint
                     item.indexed_at = datetime.now(UTC)
