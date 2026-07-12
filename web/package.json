@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "playwright test --project=chromium",
+    "test:unit": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",
@@ -31,11 +36,11 @@
     "cmdk": "^1.1.1",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.543.0",
-    "next": "15.5.2",
+    "next": "15.5.12",
     "next-themes": "^0.4.6",
-    "react": "19.1.0",
+    "react": "19.2.4",
     "react-blurhash": "^0.3.0",
-    "react-dom": "19.1.0",
+    "react-dom": "19.2.4",
     "react-dropzone": "^14.3.8",
     "recharts": "^3.2.0",
     "tailwind-merge": "^3.3.1",
@@ -45,13 +50,15 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@tanstack/react-query-devtools": "^5.87.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.2",
-    "typescript": "^5"
+    "eslint-config-next": "15.5.12",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

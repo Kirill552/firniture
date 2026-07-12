@@ -1,6 +1,9 @@
 import io
+import json
 import logging
+import os
 import sys
+import time
 
 # Фикс кодировки для Windows консоли (cp1251 -> utf-8)
 if sys.platform == "win32":
@@ -23,30 +26,137 @@ from dotenv import load_dotenv
 # Загружаем .env ДО импорта остальных модулей
 load_dotenv()
 
-from fastapi import FastAPI
+log = logging.getLogger(__name__)
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+from api.observability import create_event, event_to_dict
+from api.runtime_settings import _parse_cors_origins, validate_runtime_settings
 
 from .auth import router as auth_router
 from .routers import dialogue_router
 from .routers import router as api_v1
+from .routes.manufacturing import router as manufacturing_router
 
 app = FastAPI(title="Furniture AI API", version="0.1.0")
 
-log = logging.getLogger(__name__)
+# ── Observability context: release/environment from env ───────────
+_RELEASE = os.environ.get("APP_RELEASE", "dev")
+_ENVIRONMENT = os.environ.get("APP_ENVIRONMENT", "dev")
+_OBS_CONTEXT: dict[str, str] = {
+    "release": _RELEASE,
+    "environment": _ENVIRONMENT,
+}
 
-# CORS для фронтенда (локалка + прод)
+_obs_logger = logging.getLogger("observability.events")
+
+
+def _configure_observability_logger() -> None:
+    """Гарантировать доставку structured events в настроенный logging sink."""
+    _obs_logger.disabled = False
+    _obs_logger.setLevel(logging.INFO)
+    _obs_logger.propagate = True
+
+
+def _emit_event(
+    event_type: str,
+    data: dict,
+    *,
+    severity: str = "info",
+    context: dict | None = None,
+) -> None:
+    """Create a redacted structured event and log it via the structured logger.
+
+    Merges runtime environment/release context.  The event is safe for
+    any downstream sink (Sentry, structlog, plain logs).
+    """
+    _configure_observability_logger()
+    merged_ctx = {**_OBS_CONTEXT}
+    if context:
+        merged_ctx.update(context)
+    event = create_event(
+        event_type=event_type,
+        data=data,
+        severity=severity,
+        context=merged_ctx,
+    )
+    _obs_logger.info("%s", json.dumps(event_to_dict(event), ensure_ascii=False))
+
+
+# ── CORS: from env, local defaults for mock mode ────────────────
+_cors_raw = os.environ.get("CORS_ORIGINS", "")
+_cors_origins = _parse_cors_origins(_cors_raw) if _cors_raw else [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+log.info("CORS origins: %s", _cors_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://46.17.250.109",
-        "http://46.17.250.109:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Observability middleware: structured request events ───────────
+@app.middleware("http")
+async def _observability_middleware(request: Request, call_next):
+    """Log structured redacted event for every HTTP request."""
+    method = request.method
+    path = request.url.path
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+        elapsed_ms = round((time.monotonic() - start) * 1000, 1)
+        _emit_event(
+            "api.request",
+            {
+                "method": method,
+                "path": path,
+                "status_code": response.status_code,
+                "elapsed_ms": elapsed_ms,
+            },
+            severity="warning" if response.status_code >= 400 else "info",
+        )
+        return response
+    except Exception as exc:
+        elapsed_ms = round((time.monotonic() - start) * 1000, 1)
+        _emit_event(
+            "api.request.exception",
+            {
+                "method": method,
+                "path": path,
+                "error": type(exc).__name__,
+                "elapsed_ms": elapsed_ms,
+            },
+            severity="error",
+        )
+        raise
+
+
+# ── Startup validation: fail closed for production ───────────────
+@app.on_event("startup")
+async def _validate_runtime():
+    """Validate env at startup boundary. Fail closed for production."""
+    result = validate_runtime_settings()
+    if not result.ok:
+        _emit_event(
+            "app.startup.failed",
+            {"errors": list(result.errors)},
+            severity="error",
+        )
+        log.error("Runtime validation failed — refusing to start:")
+        for err in result.errors:
+            log.error("  • %s", err)
+        log.error(
+            "Set MOCK_MODE=true to bypass (dev/test only). "
+            "See .env.example for production values."
+        )
+        sys.exit(1)
+    _emit_event("app.startup.success", {"version": app.version})
 
 
 @app.get("/health")
@@ -58,6 +168,7 @@ def health() -> dict:
 @app.on_event("shutdown")
 async def shutdown_event():
     """Закрыть AI-клиент при остановке сервера."""
+    _emit_event("app.shutdown", {})
     from shared.ai_client import get_ai_client
     await get_ai_client().close()
 
@@ -65,3 +176,4 @@ async def shutdown_event():
 app.include_router(api_v1)
 app.include_router(dialogue_router)
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(manufacturing_router)

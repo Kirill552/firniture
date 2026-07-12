@@ -22,7 +22,6 @@ from shared.embeddings import (
     _content_fingerprint,
     concat_hardware_item_text,
     embed_batch,
-    embed_text,
 )
 
 logging.basicConfig(level=logging.INFO)

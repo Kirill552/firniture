@@ -322,7 +322,7 @@ export function GlobalSearch() {
                     className="py-6 text-center"
                   >
                     <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">Нет результатов для "{value}"</p>
+                    <p className="text-sm text-muted-foreground">Нет результатов для &quot;{value}&quot;</p>
                     <p className="text-xs text-muted-foreground mt-1">Попробуйте другие ключевые слова</p>
                   </motion.div>
                 </CommandEmpty>

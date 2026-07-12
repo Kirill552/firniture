@@ -16,7 +16,7 @@ type HardwareItem = {
   sku: string;
   name: string;
   description: string;
-  [key: string]: any; // Allow other properties
+  [key: string]: unknown; // Allow other properties
 };
 
 interface HardwareComparisonModalProps {

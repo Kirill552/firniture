@@ -11,6 +11,7 @@ interface FileDropzoneProps {
   isLoading?: boolean;
   accept?: Record<string, string[]>;
   maxSize?: number;
+  "data-testid"?: string;
 }
 
 export function FileDropzone({
@@ -18,6 +19,7 @@ export function FileDropzone({
   isLoading = false,
   accept = { "image/*": [".jpeg", ".jpg", ".png", ".webp"], "application/pdf": [".pdf"] },
   maxSize = 10 * 1024 * 1024, // 10MB
+  "data-testid": testId,
 }: FileDropzoneProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function FileDropzone({
   return (
     <div
       {...getRootProps()}
+      data-testid={testId}
       className={cn(
         "relative cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-all",
         isDragActive && "border-primary bg-primary/5",
@@ -66,7 +69,7 @@ export function FileDropzone({
         !isDragActive && "border-muted-foreground/25 hover:border-primary/50"
       )}
     >
-      <input {...getInputProps()} />
+      <input {...getInputProps()} data-testid={testId ? `${testId}-input` : undefined} />
 
       {isLoading ? (
         <div className="flex flex-col items-center gap-4">

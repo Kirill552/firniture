@@ -1078,7 +1078,7 @@ export default function BomPage() {
           <span className="text-amber-800 dark:text-amber-200 text-sm">
             Габариты изменены — нужен пересчёт
           </span>
-          <Button size="sm" onClick={handleRecalculate} disabled={isRecalculating}>
+          <Button size="sm" onClick={handleRecalculate} disabled={isRecalculating} data-testid="bom-recalculate-button">
             {isRecalculating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Пересчитать
           </Button>

@@ -5,9 +5,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.access_control import enforce_factory_access
 from api.ai_tools import execute_tool_call, get_tools_schema
 from api.drilling_calculator import (
     calculate_drilling_for_facade,
@@ -15,12 +16,13 @@ from api.drilling_calculator import (
 )
 from api.drilling_templates import list_hinge_templates, list_slide_templates
 from api.mocks.dialogue_mocks import are_ai_keys_available, generate_mock_dialogue_response
+from api.routes.manufacturing import assert_order_export_gate
 from api.vision_extraction import (
     extract_furniture_params_from_image,
     extract_furniture_params_mock,
 )
-from shared.storage import ObjectStorage
 from shared.ai_client import GPTResponseWithTools, get_ai_client
+from shared.storage import ObjectStorage
 
 from . import crud, models
 from .auth import get_current_user, get_current_user_optional
@@ -204,6 +206,11 @@ router = APIRouter(prefix="/api/v1")
 dialogue_router = APIRouter(prefix="/api/v1/dialogue", tags=["Dialogue"])
 
 
+def _user_factory_id(current_user: User | None) -> UUID | None:
+    """Извлечь factory_id пользователя, если есть авторизация."""
+    return current_user.factory_id if current_user else None
+
+
 @router.post("/orders", response_model=OrderSchema)
 async def create_order(
     order: OrderCreate,
@@ -271,11 +278,13 @@ async def list_orders(
 async def get_order_with_products_endpoint(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Получить заказ с продуктами для отображения на BOM странице."""
     order = await crud.get_order_with_products(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     return OrderWithProductsResponse(
         id=str(order.id),
@@ -387,6 +396,7 @@ async def finalize_order_endpoint(
     order_id: UUID,
     spec: dict = Body(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Финализация заказа после диалога с ИИ-технологом.
@@ -400,6 +410,7 @@ async def finalize_order_endpoint(
     order = await crud.get_order_with_history(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     # Извлекаем размеры из разных форматов
     if "dimensions" in spec:
@@ -597,6 +608,7 @@ async def finalize_order_endpoint(
 async def get_order_bom(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Получить полную спецификацию (BOM) заказа.
@@ -612,6 +624,7 @@ async def get_order_bom(
     order = await crud.get_order_with_products(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if not order.products:
         raise HTTPException(status_code=404, detail="No product config found for this order")
@@ -747,6 +760,7 @@ async def update_order_bom(
     order_id: UUID,
     updates: dict = Body(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Обновить спецификацию (BOM) заказа.
@@ -761,6 +775,7 @@ async def update_order_bom(
     order = await crud.get_order_with_products(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if not order.products:
         raise HTTPException(status_code=404, detail="No product config found")
@@ -842,11 +857,13 @@ async def add_panel_to_bom(
     order_id: UUID,
     panel_data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Добавить панель в BOM."""
     order = await crud.get_order_with_products(db, order_id)
     if not order or not order.products:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     product = order.products[0]
 
@@ -870,6 +887,7 @@ async def delete_panel_from_bom(
     order_id: UUID,
     panel_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Удалить панель из BOM."""
     from sqlalchemy import select
@@ -878,6 +896,7 @@ async def delete_panel_from_bom(
     order = await crud.get_order_with_products(db, order_id)
     if not order or not order.products:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     product = order.products[0]
 
@@ -898,6 +917,7 @@ async def delete_panel_from_bom(
 async def recalculate_bom(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Пересчитать BOM на основе текущих габаритов и параметров.
@@ -916,6 +936,7 @@ async def recalculate_bom(
     order = await crud.get_order_with_products(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if not order.products:
         raise HTTPException(status_code=404, detail="No product config found")
@@ -1059,7 +1080,7 @@ async def recalculate_bom(
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Получить статистику заказов для dashboard.
@@ -1070,8 +1091,7 @@ async def get_dashboard_stats(
     - completed: Выполнен
     - total: Всего заказов
     """
-    factory_id = current_user.factory_id if current_user else None
-    stats = await crud.get_dashboard_stats(db, factory_id)
+    stats = await crud.get_dashboard_stats(db, current_user.factory_id)
     return stats
 
 
@@ -1479,6 +1499,7 @@ async def generate_bom_endpoint(
         # Ищем заказ
         order = await db.get(Order, req.order_id)
         if order:
+            enforce_factory_access(order.factory_id, _user_factory_id(current_user))
             # Ищем или создаём ProductConfig
             product_result = await db.execute(
                 select(ProductConfig).where(ProductConfig.order_id == req.order_id)
@@ -1549,6 +1570,8 @@ async def generate_bom_endpoint(
                 db.add(panel)
 
             await db.commit()
+        else:
+            raise HTTPException(status_code=404, detail="Order not found")
 
     return GenerateBOMResponse(
         success=True,
@@ -1624,7 +1647,11 @@ async def search_hardware(
 # ============================================================================
 
 @router.post("/integrations/1c/export", response_model=Export1CResponse)
-async def export_1c(req: Export1CRequest, db: AsyncSession = Depends(get_db)) -> Export1CResponse:
+async def export_1c(
+    req: Export1CRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Export1CResponse:
     """
     Экспорт заказа в формате для 1С.
 
@@ -1643,6 +1670,7 @@ async def export_1c(req: Export1CRequest, db: AsyncSession = Depends(get_db)) ->
     order = await crud.get_order_with_products(db, req.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     # Получаем BOM items если есть
     bom_result = await db.execute(
@@ -1805,6 +1833,17 @@ async def create_dxf_job(
     Задача ставится в очередь и обрабатывается worker'ом.
     Проверяйте статус через GET /cam/jobs/{job_id}.
     """
+    if req.order_id is None:
+        raise HTTPException(status_code=400, detail="order_id обязателен для генерации DXF")
+
+    order = await crud.get_order_with_products(db, req.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
+
+    # Task 8: gate PDF/DXF — 409 без утверждённой ревизии технологом
+    await assert_order_export_gate(db, req.order_id)
+
     # Получаем настройки фабрики
     factory = await db.get(Factory, current_user.factory_id)
     factory_settings = factory.settings if factory else {}
@@ -1871,6 +1910,7 @@ async def list_cam_jobs(
     offset: int = 0,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> CAMJobsListResponse:
     """
     Получить список CAM задач.
@@ -1880,7 +1920,12 @@ async def list_cam_jobs(
     - offset: смещение для пагинации
     - status: фильтр по статусу (Created, Processing, Completed, Failed)
     """
-    query = select(CAMJob).order_by(CAMJob.created_at.desc())
+    query = (
+        select(CAMJob)
+        .join(Order, CAMJob.order_id == Order.id)
+        .where(Order.factory_id == current_user.factory_id)
+        .order_by(CAMJob.created_at.desc())
+    )
 
     if status:
         query = query.where(CAMJob.status == status)
@@ -1891,11 +1936,16 @@ async def list_cam_jobs(
     jobs = result.scalars().all()
 
     # Общее количество
-    count_query = select(CAMJob)
+    count_query = (
+        select(func.count(CAMJob.id))
+        .select_from(CAMJob)
+        .join(Order, CAMJob.order_id == Order.id)
+        .where(Order.factory_id == current_user.factory_id)
+    )
     if status:
         count_query = count_query.where(CAMJob.status == status)
     count_result = await db.execute(count_query)
-    total = len(count_result.scalars().all())
+    total = int(count_result.scalar_one() or 0)
 
     return CAMJobsListResponse(
         jobs=[
@@ -1914,7 +1964,11 @@ async def list_cam_jobs(
 
 
 @router.get("/cam/jobs/{job_id}", response_model=CAMJobStatus)
-async def get_cam_job_status(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> CAMJobStatus:
+async def get_cam_job_status(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CAMJobStatus:
     """
     Получить статус CAM задачи.
 
@@ -1929,6 +1983,13 @@ async def get_cam_job_status(job_id: uuid.UUID, db: AsyncSession = Depends(get_d
     job = await db.get(CAMJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="CAM job not found")
+    if not job.order_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к задаче CAM")
+
+    order = await db.get(Order, job.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     # Извлекаем информацию о раскладке из контекста (если есть)
     layout_info = job.context.get("layout_result", {}) if job.context else {}
@@ -1948,7 +2009,11 @@ async def get_cam_job_status(job_id: uuid.UUID, db: AsyncSession = Depends(get_d
 
 
 @router.get("/cam/jobs/{job_id}/download", response_model=ArtifactDownload)
-async def download_cam_artifact(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> ArtifactDownload:
+async def download_cam_artifact(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ArtifactDownload:
     """
     Получить ссылку для скачивания результата CAM задачи.
 
@@ -1957,6 +2022,13 @@ async def download_cam_artifact(job_id: uuid.UUID, db: AsyncSession = Depends(ge
     job = await db.get(CAMJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="CAM job not found")
+    if not job.order_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к задаче CAM")
+
+    order = await db.get(Order, job.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if job.status != JobStatusEnum.Completed:
         raise HTTPException(
@@ -1990,7 +2062,11 @@ async def download_cam_artifact(job_id: uuid.UUID, db: AsyncSession = Depends(ge
 
 
 @router.get("/cam/jobs/{job_id}/file")
-async def stream_cam_file(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def stream_cam_file(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Скачать файл CAM задачи напрямую через API (без presigned URL).
 
@@ -2002,6 +2078,13 @@ async def stream_cam_file(job_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     job = await db.get(CAMJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="CAM job not found")
+    if not job.order_id:
+        raise HTTPException(status_code=403, detail="Нет доступа к задаче CAM")
+
+    order = await db.get(Order, job.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if job.status != JobStatusEnum.Completed:
         raise HTTPException(
@@ -2098,6 +2181,26 @@ async def create_gcode_job(
     if dxf_artifact.type != "DXF":
         raise HTTPException(status_code=400, detail=f"Artifact is not DXF type: {dxf_artifact.type}")
 
+    source_job_result = await db.execute(
+        select(CAMJob)
+        .where(CAMJob.artifact_id == req.dxf_artifact_id, CAMJob.job_kind == "DXF")
+        .order_by(CAMJob.updated_at.desc())
+        .limit(1)
+    )
+    source_dxf_job = source_job_result.scalar_one_or_none()
+    if not source_dxf_job or not source_dxf_job.order_id:
+        raise HTTPException(status_code=403, detail="DXF артефакт не привязан к заказу")
+
+    source_order = await db.get(Order, source_dxf_job.order_id)
+    if not source_order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(source_order.factory_id, current_user.factory_id)
+
+    if req.order_id and req.order_id != source_dxf_job.order_id:
+        raise HTTPException(status_code=400, detail="order_id не соответствует источнику DXF")
+
+    target_order_id = source_dxf_job.order_id
+
     # Получаем настройки фабрики
     factory = await db.get(Factory, current_user.factory_id)
     factory_settings = factory.settings if factory else {}
@@ -2150,7 +2253,7 @@ async def create_gcode_job(
 
     stmt = insert(CAMJob).values(
         id=job_id,
-        order_id=req.order_id,
+        order_id=target_order_id,
         job_kind="GCODE",
         status=JobStatusEnum.Created,
         context=context,
@@ -2193,9 +2296,7 @@ async def create_drilling_job(
     order = await crud.get_order_with_products(db, request.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
-
-    if order.factory_id != current_user.factory_id:
-        raise HTTPException(status_code=403, detail="Нет доступа к заказу")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
 
     # Получаем панели заказа через ProductConfig
     panels_query = await db.execute(
@@ -2443,7 +2544,11 @@ async def generate_cutting_map_pdf(
 
 
 @dialogue_router.post("/clarify")
-async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(get_db)) -> StreamingResponse:
+async def dialogue_clarify(
+    req: DialogueTurnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> StreamingResponse:
     """
     Принимает текущую историю диалога и возвращает потоковый ответ от ИИ-технолога.
 
@@ -2452,6 +2557,7 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
     order = await crud.get_order_with_history(db, req.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, _user_factory_id(current_user))
 
     # Проверяем наличие AI API ключей
     use_mock_mode = not are_ai_keys_available()
@@ -2547,7 +2653,11 @@ async def dialogue_clarify(req: DialogueTurnRequest, db: AsyncSession = Depends(
 
 
 @dialogue_router.post("/clarify-with-tools")
-async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession = Depends(get_db)):
+async def dialogue_clarify_with_tools(
+    req: DialogueTurnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     """
     Диалог с ИИ-технологом с поддержкой Function Calling.
 
@@ -2562,13 +2672,14 @@ async def dialogue_clarify_with_tools(req: DialogueTurnRequest, db: AsyncSession
     order = await crud.get_order_with_history(db, req.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, _user_factory_id(current_user))
 
     # Проверяем наличие AI API ключей
     if not are_ai_keys_available():
         log.warning(f"[MOCK MODE] AI keys not found for order {req.order_id}")
         return {
             "success": False,
-            "error": "AI_API_KEY не настроен (или YC_FOLDER_ID + YC_API_KEY для Yandex)",
+            "error": "AI_API_KEY не настроен",
             "mock_mode": True
         }
 

@@ -25,7 +25,10 @@ Thumbs.db
 .gemini/
 
 # Test artifacts
-tests/
+tests/output/
+tests/**/*.nc
+tests/**/*.zip
+tests/**/*.gcode
 etl_pipeline/
 
 # Documentation (local only, not in repo)
@@ -50,3 +53,9 @@ CLAUDE.md
 web/src/app/bom/page.tsx.backup
 debug_finalize.log
 backup_local.sql
+nul
+NUL
+
+# RuVector intelligence data
+.ruvector/
+.claude/statusline.sh

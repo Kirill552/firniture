@@ -1,0 +1,30 @@
+# Прокси production-домена АвтоРаскрой.
+http://avtoraskroy.ru:80 {
+    redir https://avtoraskroy.ru{uri} permanent
+}
+
+https://avtoraskroy.ru:443 {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        -Server
+    }
+
+    # Внешний /health — liveness API; готовность прокси контролирует Compose.
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    @api path /api /api/*
+    handle @api {
+        reverse_proxy api:8000
+    }
+
+    # Все остальные URL обслуживает web после проверки его readiness.
+    handle {
+        reverse_proxy web:3000
+    }
+}

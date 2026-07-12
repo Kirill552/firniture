@@ -13,6 +13,7 @@ from uuid import uuid4
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.observability import create_event, event_to_dict
 from shared.storage import ObjectStorage
 
 from .constants import (
@@ -36,7 +37,12 @@ except Exception:  # pragma: no cover - установим в контейнер
     DXF_GENERATOR_AVAILABLE = False
 
 try:
-    from .gcode_generator import MACHINE_PROFILES, MachineProfile, dxf_to_gcode
+    from .gcode_generator import (
+        MACHINE_PROFILES,
+        GCodeGenerator,
+        MachineProfile,
+        spec_to_gcode_paths,
+    )
     GCODE_GENERATOR_AVAILABLE = True
 except Exception:  # pragma: no cover
     GCODE_GENERATOR_AVAILABLE = False
@@ -56,6 +62,30 @@ except Exception:
 
 log = logging.getLogger("cam-worker")
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+_RELEASE = os.environ.get("APP_RELEASE", "dev")
+_ENVIRONMENT = os.environ.get("APP_ENVIRONMENT", "dev")
+_OBS_CONTEXT: dict[str, str] = {"release": _RELEASE, "environment": _ENVIRONMENT}
+_obs_logger = logging.getLogger("observability.events")
+
+
+def _emit_event(
+    event_type: str,
+    data: dict,
+    *,
+    severity: str = "info",
+    context: dict | None = None,
+) -> None:
+    """Structured redacted event for worker observability."""
+    merged_ctx = {**_OBS_CONTEXT}
+    if context:
+        merged_ctx.update(context)
+    event = create_event(
+        event_type=event_type,
+        data=data,
+        severity=severity,
+        context=merged_ctx,
+    )
+    _obs_logger.info("%s", json.dumps(event_to_dict(event), ensure_ascii=False))
 
 
 async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
@@ -158,30 +188,58 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
         await session.commit()
     elif payload.get("job_kind") == "GCODE":
         if not GCODE_GENERATOR_AVAILABLE:
-            raise RuntimeError("G-code generator not available (missing ezdxf)")
+            raise RuntimeError(
+                "Генератор G-code недоступен: не установлен ezdxf. "
+                "Миграция на типизированный путь (Task 9) не завершена — "
+                "установите зависимости или обратитесь к разработчику."
+            )
 
         context = payload.get("context", {})
-        dxf_artifact_id = context.get("dxf_artifact_id")
-        if not dxf_artifact_id:
-            raise ValueError("dxf_artifact_id not found in GCODE job context")
 
-        # Получаем DXF файл из хранилища
-        dxf_artifact = await session.get(Artifact, dxf_artifact_id)
-        if not dxf_artifact:
-            raise ValueError(f"DXF artifact {dxf_artifact_id} not found")
+        # Task 9: ManufacturingSpec — fail-closed если спецификация не передана
+        spec_data = context.get("manufacturing_spec")
+        if not spec_data:
+            raise ValueError(
+                "ManufacturingSpec не передан в контексте задачи GCODE. "
+                "Требуется versioned manufacturing_spec (spec_version >= 1.0) "
+                "списком панелей. Обратитесь к разработчику для интеграции "
+                "с ManufacturingSpec pipeline."
+            )
 
-        storage = ObjectStorage()
-        dxf_data = storage.get_object(dxf_artifact.storage_key)
+        # Десериализуем и валидируем спецификацию
+        from api.manufacturing.contracts import ManufacturingSpec
+        try:
+            spec = ManufacturingSpec.model_validate(spec_data)
+        except Exception as exc:
+            raise ValueError(
+                f"Невалидный ManufacturingSpec: {exc}"
+            ) from exc
 
-        # Получаем профиль станка
-        machine_profile = context.get("machine_profile", "weihong")
-        log.info(f"[GCODE] Generating G-code from DXF {dxf_artifact_id}, profile={machine_profile}")
+        # Получаем профиль станка — required, fail-closed если не передан
+        machine_profile = context.get("machine_profile")
+        if not machine_profile:
+            raise ValueError(
+                "machine_profile не передан в контексте задачи GCODE. "
+                "Требуется явный профиль станка (weihong/syntec/fanuc/dsp/homag) "
+                "в payload.context.machine_profile. "
+                "Миграция на типизированный путь (Task 9) требует "
+                "авторитетного machine_profile — молчаливый fallback запрещён."
+            )
 
         # Создаём кастомный профиль с переопределёнными параметрами
         base_profile = MACHINE_PROFILES.get(machine_profile)
         if not base_profile:
-            log.warning(f"Unknown profile {machine_profile}, using weihong")
-            base_profile = MACHINE_PROFILES["weihong"]
+            raise ValueError(
+                f"Неизвестный machine_profile '{machine_profile}'. "
+                f"Допустимые: {', '.join(sorted(MACHINE_PROFILES.keys()))}. "
+                "Обратитесь к разработчику для обновления профилей станков."
+            )
+
+        log.info(
+            f"[GCODE] Generating G-code from ManufacturingSpec "
+            f"(v{spec.spec_version}, {len(spec.panels)} panels), "
+            f"profile={machine_profile}"
+        )
 
         # Применяем переопределения из контекста
         custom_profile = MachineProfile(
@@ -208,17 +266,24 @@ async def process_job(session: AsyncSession, payload: dict[str, Any]) -> None:
             program_end=base_profile.program_end,
         )
 
-        # Генерируем G-code
-        gcode_text = dxf_to_gcode(
-            dxf_data=dxf_data,
-            custom_profile=custom_profile,
-            cut_depth=context.get("cut_depth"),
+        # Конвертируем ManufacturingSpec → G-code IR
+        # cut_depth из профиля/контекста применяется ко всем контурным путям
+        effective_cut_depth = context.get("cut_depth", custom_profile.cut_depth)
+        result = spec_to_gcode_paths(spec, cut_depth=effective_cut_depth)
+
+        generator = GCodeGenerator(custom_profile)
+        gcode_text = generator.generate_from_paths(
+            paths=result.paths,
+            holes=result.holes,
+            arcs=result.arcs,
+            slots=result.slots,
         )
         gcode_data = gcode_text.encode("utf-8")
 
         log.info(f"[GCODE] Generated {len(gcode_data)} bytes of G-code")
 
         # Сохраняем в хранилище
+        storage = ObjectStorage()
         key = f"gcode/{job_id}.gcode"
         storage.put_object(key, gcode_data, content_type="text/plain; charset=utf-8")
 
@@ -352,6 +417,7 @@ BACKOFF_FACTOR = 2
 async def run_worker(stop_event: asyncio.Event) -> None:
     r = get_redis()
     log.info("Worker started. Listening queues: %s, %s, %s, %s", DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, DRILLING_QUEUE)
+    _emit_event("worker.started", {"queues": [DXF_QUEUE, GCODE_QUEUE, ZIP_QUEUE, DRILLING_QUEUE]})
     while not stop_event.is_set():
         try:
             # Блокирующее ожидание события из любой очереди
@@ -386,6 +452,16 @@ async def run_worker(stop_event: asyncio.Event) -> None:
                 except Exception as e:
                     # На DLQ и пометить Failed
                     log.error(f"Failed job {job_id}: {e}")
+                    _emit_event(
+                        "worker.job.exception",
+                        {
+                            "job_id": job_id,
+                            "queue": queue,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e)[:500],
+                        },
+                        severity="error",
+                    )
                     job = await session.get(CAMJob, job_id)
                     if job and job.attempt < MAX_RETRIES:
                         # Retry with exponential backoff
@@ -409,13 +485,24 @@ async def run_worker(stop_event: asyncio.Event) -> None:
                         )
                         await session_typed.commit()
                         log.error("Job %s moved to DLQ after %s retries", job_id, MAX_RETRIES)
+                        _emit_event(
+                            "worker.job.dlq",
+                            {"job_id": job_id, "queue": queue, "retries": MAX_RETRIES},
+                            severity="error",
+                        )
         except asyncio.CancelledError:
             break
         except Exception as e:
             log.error("Loop error: %s", e)
+            _emit_event(
+                "worker.loop.error",
+                {"error_type": type(e).__name__, "error_message": str(e)[:500]},
+                severity="error",
+            )
             await asyncio.sleep(1)
 
     log.info("Worker stopped")
+    _emit_event("worker.stopped", {})
 
 
 def _install_signal_handlers(loop: asyncio.AbstractEventLoop, event: asyncio.Event) -> None:

@@ -33,11 +33,13 @@ class Settings(BaseSettings):
     # RuSender (email)
     RUSENDER_API_KEY: str = ""  # Пустой = mock режим
     EMAIL_FROM: str = "noreply@avtoraskroy.ru"
+    # Guest Capability Token (HMAC-SHA256 secret)
+    GUEST_CAPABILITY_SECRET: str = ""  # Empty = no guest tokens allowed (fail closed)
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
-        extra = "ignore"  # Игнорируем YC_* и другие переменные
+        extra = "ignore"  # Игнорируем лишние переменные окружения
 
 
 settings = Settings()

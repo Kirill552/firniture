@@ -40,6 +40,7 @@ export default function NewOrderPage() {
     fieldSources,
     error,
     isLoading,
+    isChatLoading,
     recognizedCount,
     suggestedPrompt,
     chatMessages,
@@ -51,7 +52,7 @@ export default function NewOrderPage() {
     closeClarify,
     updateFromAI,
     confirm,
-    addChatMessage,
+    sendChatMessage,
   } = useOrderCreator();
 
   return (
@@ -82,9 +83,9 @@ export default function NewOrderPage() {
             {/* Mode: Upload */}
             {mode === "upload" && (
               <>
-                <FileDropzone onFileSelect={analyzePhoto} isLoading={false} />
+                <FileDropzone onFileSelect={analyzePhoto} isLoading={false} data-testid="photo-upload-dropzone" />
                 <div className="mt-6 text-center">
-                  <Button variant="link" onClick={goToManual} className="gap-2">
+                  <Button variant="link" onClick={goToManual} className="gap-2" data-testid="manual-entry-button">
                     <Keyboard className="h-4 w-4" />
                     Ввести вручную
                   </Button>
@@ -115,19 +116,15 @@ export default function NewOrderPage() {
 
             {/* Mode: Clarify */}
             {mode === "clarify" && (
-              <div className="flex gap-6">
-                <div className="flex-1">
-                  <ParamsReviewCard
-                    params={params}
-                    fieldSources={fieldSources}
-                    recognizedCount={recognizedCount}
-                    onUpdateParam={updateParam}
-                    onConfirm={confirm}
-                    onOpenClarify={() => {}} // Уже открыт
-                    isLoading={isLoading}
-                  />
-                </div>
-              </div>
+              <ParamsReviewCard
+                params={params}
+                fieldSources={fieldSources}
+                recognizedCount={recognizedCount}
+                onUpdateParam={updateParam}
+                onConfirm={confirm}
+                onOpenClarify={() => {}} // Уже открыт
+                isLoading={isLoading}
+              />
             )}
 
             {/* Mode: Manual */}
@@ -155,30 +152,45 @@ export default function NewOrderPage() {
                       <Label>Ширина, мм</Label>
                       <Input
                         type="number"
-                        value={params.width_mm || ""}
-                        onChange={(e) => updateParam("width_mm", parseInt(e.target.value) || 0)}
+                        value={params.width_mm != null ? params.width_mm : ""}
+                        onChange={(e) => {
+                          const str = e.target.value;
+                          const n = str === "" ? undefined : parseInt(str);
+                          updateParam("width_mm", isNaN(n as number) ? undefined : n);
+                        }}
                         min={100}
                         max={3000}
+                        data-testid="input-width-mm"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Высота, мм</Label>
                       <Input
                         type="number"
-                        value={params.height_mm || ""}
-                        onChange={(e) => updateParam("height_mm", parseInt(e.target.value) || 0)}
+                        value={params.height_mm != null ? params.height_mm : ""}
+                        onChange={(e) => {
+                          const str = e.target.value;
+                          const n = str === "" ? undefined : parseInt(str);
+                          updateParam("height_mm", isNaN(n as number) ? undefined : n);
+                        }}
                         min={100}
                         max={3000}
+                        data-testid="input-height-mm"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Глубина, мм</Label>
                       <Input
                         type="number"
-                        value={params.depth_mm || ""}
-                        onChange={(e) => updateParam("depth_mm", parseInt(e.target.value) || 0)}
+                        value={params.depth_mm != null ? params.depth_mm : ""}
+                        onChange={(e) => {
+                          const str = e.target.value;
+                          const n = str === "" ? undefined : parseInt(str);
+                          updateParam("depth_mm", isNaN(n as number) ? undefined : n);
+                        }}
                         min={100}
                         max={1200}
+                        data-testid="input-depth-mm"
                       />
                     </div>
                   </div>
@@ -191,7 +203,7 @@ export default function NewOrderPage() {
                         value={params.material || "ЛДСП"}
                         onValueChange={(v) => updateParam("material", v)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-material">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -209,7 +221,7 @@ export default function NewOrderPage() {
                         value={String(params.thickness_mm || 16)}
                         onValueChange={(v) => updateParam("thickness_mm", parseInt(v))}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-thickness-mm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -226,8 +238,15 @@ export default function NewOrderPage() {
                   {/* Submit */}
                   <Button
                     onClick={confirm}
-                    disabled={isLoading || !params.cabinet_type}
+                    disabled={
+                      isLoading ||
+                      !params.cabinet_type ||
+                      !params.width_mm ||
+                      !params.height_mm ||
+                      !params.depth_mm
+                    }
                     className="w-full"
+                    data-testid="confirm-manual-button"
                   >
                     {isLoading ? (
                       <>
@@ -263,17 +282,11 @@ export default function NewOrderPage() {
               suggestedPrompt={suggestedPrompt}
               currentParams={params}
               orderId={orderId}
-              onSendMessage={(msg) => {
-                addChatMessage({
-                  id: Date.now().toString(),
-                  role: "user",
-                  content: msg,
-                  timestamp: new Date(),
-                });
-              }}
+              onSendMessage={sendChatMessage}
               onParamUpdate={updateFromAI}
               onClose={closeClarify}
               isOpen={true}
+              isLoading={isChatLoading}
             />
           )}
         </div>

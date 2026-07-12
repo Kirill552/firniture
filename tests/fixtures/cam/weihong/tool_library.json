@@ -1,0 +1,40 @@
+{
+  "tools": [
+    {
+      "tool_id": "D5_drill",
+      "t_number": 1,
+      "diameter_mm": 5.0,
+      "operation_family": "drill",
+      "spindle_id": 1,
+      "max_depth_mm": 40.0,
+      "rpm_min": 12000,
+      "rpm_max": 22000,
+      "feed_min": 200,
+      "feed_max": 4000
+    },
+    {
+      "tool_id": "D35_hinge",
+      "t_number": 2,
+      "diameter_mm": 35.0,
+      "operation_family": "drill",
+      "spindle_id": 1,
+      "max_depth_mm": 15.0,
+      "rpm_min": 8000,
+      "rpm_max": 16000,
+      "feed_min": 100,
+      "feed_max": 2000
+    },
+    {
+      "tool_id": "D4_slot",
+      "t_number": 3,
+      "diameter_mm": 4.0,
+      "operation_family": "slot",
+      "spindle_id": 1,
+      "max_depth_mm": 20.0,
+      "rpm_min": 14000,
+      "rpm_max": 22000,
+      "feed_min": 500,
+      "feed_max": 6000
+    }
+  ]
+}

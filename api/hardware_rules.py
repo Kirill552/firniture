@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -256,3 +257,30 @@ def estimate_door_weight(
     volume_m3 = (width_mm / 1000) * (height_mm / 1000) * (thickness_mm / 1000)
 
     return round(volume_m3 * density, 2)
+
+
+# Task 6: hardware provenance helpers (SKU / template / source)
+# Used by spec_builder to record catalog origin without loose strings only.
+
+def get_hardware_provenance(
+    hinge_type: str | None = None,
+    slide_type: str | None = None,
+) -> dict[str, Any]:
+    """Return structured provenance dict for hardware with sku/template/source."""
+    prov: dict[str, Any] = {}
+    if hinge_type:
+        prov["hinges"] = {
+            "sku": hinge_type,
+            "template": "hinge_35mm_overlay",
+            "source": "catalog",
+        }
+    if slide_type:
+        prov["slides"] = {
+            "sku": slide_type,
+            "template": "slide_ball_h45",
+            "source": "catalog",
+        }
+    if not prov:
+        return {}
+    prov["source"] = "catalog"  # top level marker
+    return prov

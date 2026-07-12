@@ -138,7 +138,7 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
         length: e.dataTransfer.items.length,
         item: (index: number) => e.dataTransfer.items[index]?.getAsFile() || null,
         [Symbol.iterator]: function* () { for (let i=0;i<this.length;i++) { const f = this.item(i); if (f) yield f } }
-      } as any
+      } as FileList
       const { rejected } = evaluateFiles(fileList)
       setDragAccept(rejected.length ? false : true)
     }
@@ -191,7 +191,7 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
         aria-hidden
         onChange={handleInputChange}
         accept={Array.isArray(accept) ? accept.join(',') : undefined}
-        {...(capture ? { capture: capture as any } : {})}
+        {...(capture ? { capture } : {})}
       />
       <motion.button
         type="button"

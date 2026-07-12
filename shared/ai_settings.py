@@ -1,12 +1,11 @@
-"""Настройки AI-провайдера."""
+"""Настройки AI для OpenRouter."""
 
 from pydantic_settings import BaseSettings
 
 
 class AISettings(BaseSettings):
-    """Настройки AI-провайдера. Переключение через AI_PROVIDER."""
+    """Настройки AI-клиента (OpenRouter)."""
 
-    ai_provider: str = "openrouter"  # openrouter | yandex
     ai_base_url: str = "https://openrouter.ai/api/v1"
     ai_api_key: str = ""
 
@@ -20,10 +19,6 @@ class AISettings(BaseSettings):
     ai_max_tokens: int = 2000
     ai_timeout_seconds: int = 60
     ai_max_retries: int = 3
-
-    # Yandex fallback
-    yc_folder_id: str = ""
-    yc_api_key: str = ""
 
     class Config:
         env_prefix = ""

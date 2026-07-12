@@ -26,6 +26,7 @@ from api.constants import (
     DEFAULT_BACK_SLOT_WIDTH_MM,
     DEFAULT_DRILLING_DEPTH,
 )
+from api.manufacturing.contracts import ManufacturingSpec
 
 try:
     import ezdxf
@@ -780,6 +781,69 @@ def extract_all_from_dxf(dxf_data: bytes) -> DXFExtractResult:
         arcs=arcs,
         slots=slots,
     )
+def spec_to_gcode_paths(
+    spec: ManufacturingSpec,
+    cut_depth: float,
+) -> DXFExtractResult:
+    """Convert a versioned ManufacturingSpec into G-code IR (paths, holes, slots).
+
+    Contour paths are rectangular panel outlines derived from panel dimensions.
+    Cut depth is applied uniformly to all contour paths.
+    Drill/slot operations are extracted from panel.operations.
+
+    Args:
+        spec: Validated ManufacturingSpec (spec_version required).
+        cut_depth: Cutting depth in mm for contour paths (overrides profile default).
+
+    Returns:
+        DXFExtractResult with paths, holes, arcs=[], slots populated.
+    """
+    from api.manufacturing.contracts import DrillOperation, SlotOperation
+
+    paths: list[GCodePath] = []
+    holes: list[DrillPoint] = []
+    slots: list[SlotPath] = []
+
+    for panel in spec.panels:
+        # Rectangular contour: (0,0) → (w,0) → (w,h) → (0,h) → close
+        contour_points = [
+            (0.0, 0.0),
+            (panel.width_mm, 0.0),
+            (panel.width_mm, panel.height_mm),
+            (0.0, panel.height_mm),
+        ]
+        paths.append(GCodePath(
+            points=contour_points,
+            is_closed=True,
+            depth=cut_depth,
+            operation="contour",
+        ))
+
+        # Extract operations
+        for op in panel.operations:
+            if isinstance(op, DrillOperation):
+                holes.append(DrillPoint(
+                    x=op.x_mm,
+                    y=op.y_mm,
+                    diameter=op.diameter_mm,
+                    depth=op.depth_mm,
+                ))
+            elif isinstance(op, SlotOperation):
+                # Slot as a line from (x, y) along length
+                slots.append(SlotPath(
+                    start=(op.x_mm, op.y_mm),
+                    end=(op.x_mm + op.length_mm, op.y_mm),
+                    width=op.width_mm,
+                    depth=op.depth_mm,
+                ))
+
+    return DXFExtractResult(
+        paths=paths,
+        holes=holes,
+        arcs=[],
+        slots=slots,
+    )
+
 
 
 def dxf_to_gcode(
@@ -789,8 +853,13 @@ def dxf_to_gcode(
     custom_profile: MachineProfile | None = None,
     drilling_only: bool = True,
 ) -> str:
-    """
-    Конвертирует DXF файл в G-code.
+    """Конвертирует DXF файл в G-code.
+
+    .. deprecated::
+        DXF→G-code production conversion deprecated (Task 9).
+        Use ``GCodeGenerator.generate_from_paths()`` with typed IR instead.
+        This function remains for backward compatibility and will be
+        removed in a future major version.
 
     Args:
         dxf_data: Содержимое DXF файла в bytes
@@ -798,40 +867,32 @@ def dxf_to_gcode(
         cut_depth: Глубина резки (переопределяет профиль)
         custom_profile: Пользовательский профиль станка
         drilling_only: Генерировать только присадку (сверление + пазы).
-                       По умолчанию True — контурная резка выполняется
-                       на форматнике по PDF карте раскроя.
 
     Returns:
         G-code программа в виде строки
-
-    Режимы работы:
-        drilling_only=True (по умолчанию):
-            - Сверление (DRILLING layer): G81/G82/G83
-            - Фрезеровка пазов под заднюю стенку (SLOT layer)
-            - Контуры и дуги ИГНОРИРУЮТСЯ (резка на форматнике)
-
-        drilling_only=False (для станков с нестингом):
-            - Контурная резка (CONTOUR layer) → G00/G01
-            - Круговая интерполяция (ARC entities) → G02/G03
-            - Фрезеровка пазов (SLOT layer)
-            - Сверление (DRILLING layer)
     """
+    import warnings
+
+    warnings.warn(
+        "dxf_to_gcode() is deprecated (Task 9 artifact separation). "
+        "Use GCodeGenerator.generate_from_paths() with typed IR commands.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     result = extract_all_from_dxf(dxf_data)
 
     profile = custom_profile if custom_profile else machine_profile
     generator = GCodeGenerator(profile)
 
     if drilling_only:
-        # Режим "только присадка" — для станков где раскрой делается на форматнике
-        # Генерируем только сверление и пазы, контуры игнорируем
         return generator.generate_from_paths(
-            paths=[],  # Контуры не нужны — резка на форматнике
+            paths=[],
             holes=result.holes,
-            arcs=[],  # Дуги относятся к контурам
-            slots=result.slots,  # Пазы под заднюю стенку нужны
+            arcs=[],
+            slots=result.slots,
         )
     else:
-        # Полный режим — для нестинг-станков (HOMAG и т.п.)
         if cut_depth is not None:
             for path in result.paths:
                 path.depth = cut_depth

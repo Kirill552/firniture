@@ -54,7 +54,10 @@ def _content_fingerprint(item: "HardwareItem") -> str:
 
 
 async def embed_text(text: str, model_type: str = "doc") -> list[float]:
-    """Получить embedding через AI API."""
+    """Получить embedding через AI API. Без ключа — синтетический детерминированный fallback (не production)."""
+    from shared.ai_settings import AISettings
+    if not AISettings().ai_api_key:
+        return _fallback_embedding(text)
     from shared.ai_client import get_ai_client
     client = get_ai_client()
     return await client.embed_text(text)
@@ -66,7 +69,10 @@ async def embed_query(text: str) -> list[float]:
 
 
 async def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Batch embedding через AI API."""
+    """Batch embedding через AI API. Без ключа — синтетический детерминированный fallback (не production)."""
+    from shared.ai_settings import AISettings
+    if not AISettings().ai_api_key:
+        return [_fallback_embedding(t) for t in texts]
     from shared.ai_client import get_ai_client
     client = get_ai_client()
     return await client.embed_batch(texts)

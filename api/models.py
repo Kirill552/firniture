@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum as _EnumShim
 from typing import Any
 from uuid import uuid4
 
@@ -87,6 +88,11 @@ class Order(Base):
     customer_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | ready | completed
+
+    # Manufacturing approval state (Task 8 pilot). Numeric revision + approved pointer + status.
+    manufacturing_revision: Mapped[int] = mapped_column(Integer, default=0)
+    approved_manufacturing_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    manufacturing_status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | validated | approved | rejected
 
     # Связи
     factory: Mapped[Factory | None] = relationship(back_populates="orders")
@@ -267,3 +273,44 @@ class ValidationItem(Base):
     proposed_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=ValidationStatusEnum.Pending)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class RevisionStatusEnum(str, _EnumShim):
+    """Статус ревизии спецификации."""
+    DRAFT = "draft"
+    NEEDS_REVIEW = "needs_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ManufacturingRevision(Base):
+    """Ревизия спецификации обработки — версионирование и provenance."""
+    __tablename__ = "manufacturing_revisions"
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    cam_job_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cam_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    order_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    spec: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=RevisionStatusEnum.DRAFT
+    )
+    needs_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    provenance: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_by: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+    cam_job: Mapped[CAMJob | None] = relationship()
+    order: Mapped[Order | None] = relationship()

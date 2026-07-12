@@ -14,13 +14,18 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from api.access_control import (
+    GuestIdentity,
+    claim_guest_order_access,
+    resolve_guest_identity_strict,
+)
 from api.database import get_db
 from api.models import Factory, MagicToken, User
 from api.settings import settings
@@ -29,6 +34,9 @@ from shared.email import send_magic_link
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 security = HTTPBearer(auto_error=False)
+
+# ── Guest Capability ─────────────────────────────────────────────────
+GUEST_CAPABILITY_HEADER = "X-Guest-Capability"
 
 
 # =============================================================================
@@ -364,4 +372,73 @@ async def get_me(user: User = Depends(get_current_user)):
             id=user.factory.id,
             name=user.factory.name
         )
+    )
+
+
+class ClaimRequest(BaseModel):
+    """Запрос claim гостевого заказа после логина."""
+    guest_capability_token: str = Field(..., min_length=10, max_length=512)
+
+
+class ClaimResponse(BaseModel):
+    """Ответ claim гостевого заказа."""
+    guest_identity: GuestIdentity
+    message: str
+
+
+# ── Guest Capability Dependency ─────────────────────────────────────
+
+
+async def resolve_guest_capability(
+    request: Request,
+) -> GuestIdentity | None:
+    """
+    FastAPI-зависимость: резолвинг гостевой идентичности из заголовка X-Guest-Capability.
+
+    Возвращает None, если заголовок отсутствует.
+    Вызывает HTTP 401 при невалидном/истёкшем/подменённом/UUID-only токене.
+    """
+    token_str = request.headers.get(GUEST_CAPABILITY_HEADER)
+    if not token_str:
+        return None
+    try:
+        identity = resolve_guest_identity_strict(
+            token_str, settings.GUEST_CAPABILITY_SECRET
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Невалидный токен гостевого доступа",
+        )
+    if identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Невалидный токен гостевого доступа",
+        )
+    return identity
+
+
+# ── Claim Endpoint ─────────────────────────────────────────────────
+
+
+@router.post("/claim-guest-order", response_model=ClaimResponse)
+async def claim_guest_order(
+    request: ClaimRequest,
+    user: User = Depends(get_current_user),
+):
+    """
+    Claim гостевого заказа после логина.
+
+    Валидация capability-токена и проверка привязки к фабрике:
+    Токен должен быть подписан, не истёкшим, не UUID-only.
+    Фабрика токена должна совпадать с фабрикой залогиненного пользователя.
+    """
+    guest_identity = claim_guest_order_access(
+        token_str=request.guest_capability_token,
+        secret=settings.GUEST_CAPABILITY_SECRET,
+        user_factory_id=user.factory_id,
+    )
+    return ClaimResponse(
+        guest_identity=guest_identity,
+        message="Гостевой заказ успешно привязан",
     )

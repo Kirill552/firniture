@@ -131,8 +131,9 @@ export function InlineChatPanel({
             onChange={(e) => setInput(e.target.value)}
             placeholder="Уточните параметры..."
             disabled={isLoading}
+            data-testid="clarify-chat-input"
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+          <Button type="submit" size="icon" disabled={isLoading || !input.trim()} data-testid="clarify-chat-send">
             <Send className="h-4 w-4" />
           </Button>
         </div>

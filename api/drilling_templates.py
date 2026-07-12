@@ -16,6 +16,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+# Task 6: explicit template version for provenance
+TEMPLATE_VERSION = "2026-07-v1"
+
 
 @dataclass(frozen=True)
 class MountingHole:

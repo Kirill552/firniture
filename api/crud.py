@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from api.manufacturing.contracts import ManufacturingSpec
+from api.manufacturing.coordinates import spec_hash
 
 from . import models, schemas
 from .models import ProductConfig
@@ -34,20 +38,10 @@ async def get_orders_by_factory(
     limit: int = 50,
     offset: int = 0
 ) -> list[models.Order]:
-    """Получить заказы фабрики с пагинацией.
-
-    Также возвращает заказы с factory_id = NULL (созданные до исправления бага).
-    """
-    from sqlalchemy import or_
-
+    """Получить заказы фабрики с пагинацией."""
     stmt = (
         select(models.Order)
-        .where(
-            or_(
-                models.Order.factory_id == factory_id,
-                models.Order.factory_id.is_(None)  # Старые заказы без factory_id
-            )
-        )
+        .where(models.Order.factory_id == factory_id)
         .order_by(models.Order.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -174,3 +168,144 @@ async def get_dashboard_stats(db: AsyncSession, factory_id: UUID | None = None) 
         "completed": stats.get("completed", 0),
         "total": sum(stats.values()),
     }
+
+# ============================================================================
+# Manufacturing Revision persistence (Task 7)
+# ============================================================================
+
+# Errors ----------------------------------------------------------------
+
+
+class RevisionConflictError(Exception):
+    """Raised when expected_revision does not match current revision_number."""
+
+    def __init__(self, expected: int, actual: int) -> None:
+        self.expected = expected
+        self.actual = actual
+        super().__init__(
+            f"expected_revision {expected} != current {actual} — 409 Conflict"
+        )
+
+
+# CRUD -------------------------------------------------------------------
+
+
+async def create_manufacturing_revision(
+    db: AsyncSession,
+    order_id: UUID,
+    spec: ManufacturingSpec,
+    *,
+    provenance: dict | None = None,
+    created_by: UUID | None = None,
+) -> models.ManufacturingRevision:
+    """Persist a complete ManufacturingSpec as a new revision.
+
+    The ``spec`` is serialised to its canonical JSON form and stored in the
+    ``spec`` column.  A ``spec_hash`` is embedded in ``provenance`` so that
+    downstream consumers can verify integrity without re-serialising.
+    """
+    h = spec_hash(spec)
+    prov = dict(provenance or {})
+    prov["spec_hash"] = h
+
+    # Determine next revision number for this order
+    result = await db.execute(
+        select(models.ManufacturingRevision)
+        .where(models.ManufacturingRevision.order_id == order_id)
+        .order_by(models.ManufacturingRevision.revision_number.desc())
+        .limit(1)
+    )
+    last = result.scalar_one_or_none()
+    next_number = (last.revision_number + 1) if last else 1
+
+    rev = models.ManufacturingRevision(
+        order_id=order_id,
+        revision_number=next_number,
+        spec=spec.to_canonical_dict(),
+        status=models.RevisionStatusEnum.NEEDS_REVIEW,
+        needs_review=True,
+        provenance=prov,
+        created_by=created_by,
+    )
+    db.add(rev)
+    await db.commit()
+    await db.refresh(rev)
+    return rev
+
+
+async def get_manufacturing_revision(
+    db: AsyncSession,
+    revision_id: UUID,
+) -> models.ManufacturingRevision | None:
+    """Load a manufacturing revision by ID."""
+    result = await db.execute(
+        select(models.ManufacturingRevision).where(
+            models.ManufacturingRevision.id == revision_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_latest_revision_for_order(
+    db: AsyncSession,
+    order_id: UUID,
+) -> models.ManufacturingRevision | None:
+    """Load the most recent revision for an order (by revision_number)."""
+    result = await db.execute(
+        select(models.ManufacturingRevision)
+        .where(models.ManufacturingRevision.order_id == order_id)
+        .order_by(models.ManufacturingRevision.revision_number.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_manufacturing_revision(
+    db: AsyncSession,
+    revision_id: UUID,
+    spec: ManufacturingSpec,
+    expected_revision: int,
+    *,
+    updated_by: UUID | None = None,
+) -> models.ManufacturingRevision:
+    """Update an existing revision's spec with optimistic concurrency.
+
+    Raises ``RevisionConflictError`` when ``expected_revision`` does not match
+    the stored ``revision_number`` (maps to HTTP 409).
+
+    On successful update the revision's status is reset to ``needs_review``
+    and the approval/artifact provenance is invalidated.
+    """
+    rev = await get_manufacturing_revision(db, revision_id)
+    if rev is None:
+        raise LookupError(f"revision {revision_id} not found")
+    if rev.revision_number != expected_revision:
+        raise RevisionConflictError(expected_revision, rev.revision_number)
+
+    h = spec_hash(spec)
+    rev.spec = spec.to_canonical_dict()
+    rev.status = models.RevisionStatusEnum.NEEDS_REVIEW
+    rev.needs_review = True
+    prov = dict(rev.provenance or {})
+    prov["spec_hash"] = h
+    prov["invalidated_by_edit"] = True
+    if updated_by:
+        prov["last_edited_by"] = str(updated_by)
+    rev.provenance = prov
+    rev.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(rev)
+    return rev
+
+
+async def list_manufacturing_revisions(
+    db: AsyncSession,
+    order_id: UUID,
+) -> list[models.ManufacturingRevision]:
+    """Return all revisions for an order, newest first."""
+    result = await db.execute(
+        select(models.ManufacturingRevision)
+        .where(models.ManufacturingRevision.order_id == order_id)
+        .order_by(models.ManufacturingRevision.revision_number.desc())
+    )
+    return list(result.scalars().all())

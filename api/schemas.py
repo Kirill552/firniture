@@ -734,6 +734,7 @@ class GenerateBOMRequest(BaseModel):
     height_mm: int = Field(..., gt=0, le=3000)
     depth_mm: int = Field(..., gt=0, le=1000)
     material: str = Field("ЛДСП 16мм")
+    thickness_mm: float | None = Field(None, gt=0, description="Толщина материала в мм (если не указано — берём из настроек)")
     shelf_count: int = Field(1, ge=0)
     door_count: int = Field(1, ge=0)
     drawer_count: int = Field(0, ge=0)
@@ -948,3 +949,48 @@ class TemplatesListResponse(BaseModel):
     """Список доступных шаблонов."""
     hinges: list[HingeTemplateInfo]
     slides: list[SlideTemplateInfo]
+
+# ============================================================================
+# Manufacturing Revision persistence (Task 7)
+# ============================================================================
+
+
+class ManufacturingRevisionCreate(BaseModel):
+    """Запрос на создание новой ревизии спецификации обработки."""
+    order_id: UUID = Field(..., description="ID заказа")
+    spec: dict[str, Any] = Field(
+        ..., description="Полная ManufacturingSpec в виде dict (panels + operations + edges + slots)"
+    )
+    provenance: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Provenance: source, ai_session_id, spec_hash, и т.д.",
+    )
+
+
+class ManufacturingRevisionUpdate(BaseModel):
+    """Запрос на обновление существующей ревизии (optimistic concurrency)."""
+    spec: dict[str, Any] = Field(
+        ..., description="Обновлённая ManufacturingSpec в виде dict"
+    )
+    expected_revision: int = Field(
+        ..., ge=1, description="Ожидаемый номер ревизии (409 при mismatch)"
+    )
+    provenance: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Дополнительные provenance данные",
+    )
+
+
+class ManufacturingRevisionResponse(BaseModel):
+    """Ответ с полной ревизией спецификации обработки."""
+    id: UUID
+    order_id: UUID | None = None
+    revision_number: int
+    spec: dict[str, Any] = Field(..., description="Полная ManufacturingSpec")
+    status: str
+    needs_review: bool
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

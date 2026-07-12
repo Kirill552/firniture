@@ -24,6 +24,9 @@ from api.hardware_rules import (
     calculate_slide_length,
 )
 
+# Task 6: return typed domain values (contracts) not only local dataclasses
+from api.manufacturing.contracts import DrillOperation, Face
+
 
 @dataclass
 class DrillPoint:
@@ -275,4 +278,80 @@ def calculate_drilling_for_side_panel(
         panel_height_mm=height_mm,
         drill_points=drill_points,
         warnings=warnings,
+    )
+
+
+# =============================================================================
+# Task 6 additions: typed domain returns with SKU / template / source
+# =============================================================================
+
+def drill_points_to_typed_ops(
+    points: list[DrillPoint],
+    face: Face,
+    hardware_sku: str | None = None,
+    template: str | None = None,
+    source: str = "catalog",
+) -> list[DrillOperation]:
+    """Convert DrillPoint list (from calculator) to typed DrillOperation list.
+
+    Each op encodes SKU/template/source for provenance (via id, since contracts fixed).
+    Strictly no G-code/CAM here.
+    """
+    ops: list[DrillOperation] = []
+    for i, pt in enumerate(points):
+        sku = hardware_sku or "unknown"
+        tmpl = template or "default"
+        op_id = f"drill_{pt.hardware_type}_{sku}_{tmpl}_{source}_{i+1}"
+        ops.append(
+            DrillOperation(
+                id=op_id,
+                face=face,
+                x_mm=pt.x,
+                y_mm=pt.y,
+                diameter_mm=pt.diameter,
+                depth_mm=pt.depth,
+            )
+        )
+    return ops
+
+
+def build_hinge_ops_typed(
+    panel_height_mm: float,
+    hinge_count: int | None = None,
+    template_id: str = "hinge_35mm_overlay",
+    hardware_sku: str = "blum_clip_top_110",
+    source: str = "catalog",
+    face: Face = Face.FRONT,
+) -> list[DrillOperation]:
+    """Facade hinge cup + mount ops as typed domain values."""
+    pts = calculate_hinge_drill_points(
+        panel_height_mm=panel_height_mm,
+        hinge_count=hinge_count,
+        template_id=template_id,
+        hardware_id=hardware_sku,
+    )
+    return drill_points_to_typed_ops(
+        pts, face=face, hardware_sku=hardware_sku, template=template_id, source=source
+    )
+
+
+def build_slide_ops_typed(
+    panel_height_mm: float,
+    panel_depth_mm: float,
+    drawer_positions_mm: list[float],
+    template_id: str = "slide_ball_h45",
+    hardware_sku: str = "blum_movento_500",
+    source: str = "catalog",
+    face: Face = Face.RIGHT,  # internal face of side
+) -> list[DrillOperation]:
+    """Slide mounting holes as typed ops."""
+    pts = calculate_slide_drill_points(
+        panel_height_mm=panel_height_mm,
+        panel_depth_mm=panel_depth_mm,
+        drawer_positions_mm=drawer_positions_mm,
+        template_id=template_id,
+        hardware_id=hardware_sku,
+    )
+    return drill_points_to_typed_ops(
+        pts, face=face, hardware_sku=hardware_sku, template=template_id, source=source
     )

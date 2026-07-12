@@ -34,7 +34,7 @@ export const staggerContainer = (stagger: number = 0.06, delayChildren: number =
 
 // Динамический генератор slide variants
 export const slide = (direction: 'left'|'right'|'up'|'down' = 'up', distance = 24): Variants => {
-  const map: Record<string, any> = {
+  const map: Record<typeof direction, { x?: number; y?: number }> = {
     up: { y: distance },
     down: { y: -distance },
     left: { x: distance },
@@ -51,4 +51,4 @@ export const springSoft: Transition = { type: 'spring', stiffness: 220, damping:
 export const springBouncy: Transition = { type: 'spring', stiffness: 360, damping: 20, mass: 0.7 }
 
 // Хелпер для композиции motion props
-export const combine = (...objs: any[]) => objs.reduce((acc, o) => Object.assign(acc, o), {})
+export const combine = (...objs: Record<string, unknown>[]): Record<string, unknown> => objs.reduce((acc, o) => Object.assign(acc, o), {})

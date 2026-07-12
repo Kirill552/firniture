@@ -144,7 +144,7 @@ async def test_ai_keys_check():
 
     if keys_available:
         print("[!] AI ключи найдены — API будет работать в PRODUCTION режиме")
-        print("[i] Для тестирования mock режима удалите/закомментируйте AI_API_KEY (или YC_FOLDER_ID + YC_API_KEY) из .env")
+        print("[i] Для тестирования mock режима удалите/закомментируйте AI_API_KEY из .env")
     else:
         print("[OK] AI ключи не найдены — API будет работать в MOCK режиме")
 

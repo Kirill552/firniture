@@ -327,9 +327,9 @@ async def extract_furniture_params_from_image(
     """
     start_time = time.time()
 
-    # Проверяем наличие AI-ключей
+    # Проверяем наличие AI-ключа
     settings = AISettings()
-    if not settings.ai_api_key and not (settings.yc_folder_id and settings.yc_api_key):
+    if not settings.ai_api_key:
         return ImageExtractResponse(
             success=False,
             error="AI_API_KEY не настроен",

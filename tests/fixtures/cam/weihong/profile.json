@@ -1,0 +1,25 @@
+{
+  "profile_id": "weihong-fixture",
+  "controller": "weihong",
+  "controller_version": "NCStudio 5.4.60",
+  "units": "mm",
+  "work_offset": "G54",
+  "supported_faces": ["top", "bottom", "front", "back", "left", "right"],
+  "spindles": [
+    {"spindle_id": 1, "name": "OS1", "max_rpm": 24000}
+  ],
+  "axis_limits": {
+    "x_min": 0, "x_max": 3000,
+    "y_min": 0, "y_max": 1500,
+    "z_min": 0, "z_max": 100
+  },
+  "safe_z": 5.0,
+  "feed_min": 100,
+  "feed_max": 8000,
+  "rpm_min": 6000,
+  "rpm_max": 24000,
+  "dwell_syntax": "G4 P",
+  "line_ending": "lf",
+  "certification": "draft",
+  "postprocessor_version": "1.0.0"
+}

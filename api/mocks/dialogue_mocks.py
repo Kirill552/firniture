@@ -332,10 +332,4 @@ async def mock_function_call_response(function_name: str, **kwargs) -> dict:
 def are_ai_keys_available() -> bool:
     """Проверяет наличие ключей AI-провайдера."""
     import os
-    # OpenRouter
-    if os.getenv("AI_API_KEY", "").strip():
-        return True
-    # Yandex fallback
-    yc_folder_id = os.getenv("YC_FOLDER_ID", "").strip()
-    yc_api_key = os.getenv("YC_API_KEY", "").strip()
-    return bool(yc_folder_id and yc_api_key)
+    return bool(os.getenv("AI_API_KEY", "").strip())

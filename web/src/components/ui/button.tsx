@@ -44,11 +44,11 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     if (asChild) {
-      const { whileHover, whileTap, transition, ...slotProps } = props as any;
+      const { whileHover: _whileHover, whileTap: _whileTap, transition: _transition, ...slotProps } = props;
       return (
         <Slot
           className={cn(buttonVariants({ variant, size, className }))}
-          {...slotProps}
+          {...(slotProps as React.ComponentPropsWithoutRef<typeof Slot>)}
         />
       )
     }

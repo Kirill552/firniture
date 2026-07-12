@@ -61,7 +61,7 @@ export interface OrderBase {
 }
 
 /** Запрос на создание заказа */
-export interface OrderCreateRequest extends OrderBase {}
+export type OrderCreateRequest = OrderBase
 
 /** Конфигурация изделия */
 export interface ProductConfig {
@@ -82,7 +82,7 @@ export interface ProductConfig {
   /** Толщина материала в миллиметрах */
   thickness_mm?: number | null
   /** Дополнительные параметры (JSON) */
-  params: Record<string, any>
+  params: Record<string, unknown>
   /** Заметки */
   notes?: string | null
 }
@@ -120,7 +120,7 @@ export interface Supplier {
   /** Контактный email */
   contact_email?: string | null
   /** Дополнительные метаданные */
-  meta: Record<string, any>
+  meta: Record<string, unknown>
 }
 
 /** Позиция фурнитуры */
@@ -138,7 +138,7 @@ export interface HardwareItem {
   /** Описание */
   description?: string | null
   /** Параметры (JSON) */
-  params: Record<string, any>
+  params: Record<string, unknown>
   /** Список совместимых материалов/типов */
   compat: string[]
   /** URL на страницу товара */
@@ -184,7 +184,7 @@ export interface BOMItem {
   /** Единица измерения */
   unit: string
   /** Дополнительные параметры */
-  params: Record<string, any>
+  params: Record<string, unknown>
   /** Артикул у поставщика */
   supplier_sku?: string | null
   /** UUID поставщика */
@@ -232,7 +232,7 @@ export interface CAMJob {
   /** Текст ошибки (если есть) */
   error?: string | null
   /** Контекст задачи (дополнительные данные) */
-  context: Record<string, any>
+  context: Record<string, unknown>
   /** Ключ идемпотентности */
   idempotency_key?: string | null
 }
@@ -252,7 +252,7 @@ export interface AuditLog {
   /** UUID сущности */
   entity_id: string
   /** Детали действия */
-  details: Record<string, any>
+  details: Record<string, unknown>
 }
 
 /** Сообщение в диалоге с ИИ */
@@ -298,9 +298,9 @@ export interface ValidationItem {
   /** Описание параметра */
   description?: string | null
   /** Текущее значение */
-  current_value?: any | null
+  current_value?: unknown | null
   /** Предложенное значение */
-  proposed_value?: any | null
+  proposed_value?: unknown | null
   /** Статус элемента */
   status: string
   /** Комментарий */
@@ -324,7 +324,7 @@ export interface SpecExtractResponse {
   /** UUID созданной конфигурации изделия */
   product_config_id: string
   /** Извлеченные параметры */
-  parameters: Record<string, any>
+  parameters: Record<string, unknown>
 }
 
 /** Критерии подбора фурнитуры */
@@ -372,7 +372,7 @@ export interface SpecValidateItem {
   /** Параметр для проверки */
   parameter: string
   /** Значение параметра */
-  value: any
+  value: unknown
   /** Уверенность (0-1) */
   confidence?: number | null
   /** Вопрос для уточнения */
@@ -438,7 +438,7 @@ export interface CAMJobRequest {
   /** UUID DXF задачи (для G-code генерации) */
   dxf_job_id?: string | null
   /** Контекст задачи */
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 }
 
 /** Ответ на запрос создания CAM задачи */
@@ -482,7 +482,7 @@ export interface DialogueMessageBase {
 }
 
 /** Запрос на создание сообщения диалога */
-export interface DialogueMessageCreate extends DialogueMessageBase {}
+export type DialogueMessageCreate = DialogueMessageBase
 
 /** Запрос на следующий виток диалога */
 export interface DialogueTurnRequest {
@@ -901,7 +901,7 @@ export interface PDFCuttingMapRequest {
 /** Режимы работы OrderCreator */
 export type OrderCreatorMode = 'upload' | 'processing' | 'review' | 'clarify' | 'manual'
 
-/** Параметры заказа для OrderCreator */
+/** Параметры заказа для OrderCreator (aligned with generated API contract) */
 export interface OrderCreatorParams {
   cabinet_type: string
   width_mm: number

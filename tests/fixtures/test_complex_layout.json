@@ -1,0 +1,25 @@
+{
+  "panels": [
+    {"name": "Боковина левая", "width_mm": 720, "height_mm": 560},
+    {"name": "Боковина правая", "width_mm": 720, "height_mm": 560},
+    {"name": "Дно", "width_mm": 568, "height_mm": 560},
+    {"name": "Крыша", "width_mm": 568, "height_mm": 560},
+    {"name": "Полка 1", "width_mm": 568, "height_mm": 350},
+    {"name": "Полка 2", "width_mm": 568, "height_mm": 350},
+    {"name": "Задняя стенка", "width_mm": 600, "height_mm": 720},
+    {"name": "Фасад", "width_mm": 596, "height_mm": 716},
+    {"name": "Боковина пенал лев", "width_mm": 2100, "height_mm": 560},
+    {"name": "Боковина пенал прав", "width_mm": 2100, "height_mm": 560},
+    {"name": "Дно пенал", "width_mm": 568, "height_mm": 560},
+    {"name": "Крыша пенал", "width_mm": 568, "height_mm": 560},
+    {"name": "Полка пенал 1", "width_mm": 568, "height_mm": 350},
+    {"name": "Полка пенал 2", "width_mm": 568, "height_mm": 350},
+    {"name": "Полка пенал 3", "width_mm": 568, "height_mm": 350},
+    {"name": "Фасад верх", "width_mm": 596, "height_mm": 400},
+    {"name": "Фасад низ", "width_mm": 596, "height_mm": 500}
+  ],
+  "sheet_width_mm": 2800,
+  "sheet_height_mm": 2070,
+  "gap_mm": 4,
+  "order_info": "Тест: навесной шкаф + пенал (17 панелей)"
+}

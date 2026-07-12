@@ -30,6 +30,7 @@ export function TypeSelector({ value, onChange }: TypeSelectorProps) {
         <button
           key={type.id}
           type="button"
+          data-testid={`cabinet-type-${type.id}`}
           onClick={() => onChange(type.id)}
           className={cn(
             "flex flex-col items-center p-4 rounded-lg border-2 transition-all",

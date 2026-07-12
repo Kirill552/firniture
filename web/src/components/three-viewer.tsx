@@ -12,7 +12,8 @@ interface DxfModelProps {
 }
 
 function DxfModel({ url }: DxfModelProps) {
-  const dxf = useLoader(DXFLoader as any, url)
+  const TypedDXFLoader = DXFLoader as unknown as typeof THREE.Loader
+  const dxf = useLoader(TypedDXFLoader, url) as THREE.Object3D
   const groupRef = useRef<THREE.Group>(null)
   const [hovered, setHovered] = useState<THREE.Object3D | null>(null)
   const idleStart = useRef<number>(Date.now())
@@ -54,11 +55,17 @@ function DxfModel({ url }: DxfModelProps) {
   const highlight = useCallback((obj: THREE.Object3D | null, on: boolean) => {
     if (!obj) return
     obj.traverse(child => {
-      const mat = (child as any).material as THREE.Material | undefined
-      if (mat && 'emissive' in (mat as any)) {
-        (mat as any).emissive = on ? new THREE.Color('#ffbf40') : new THREE.Color('#000')
-        ;(mat as any).emissiveIntensity = on ? 0.6 : 0
-      }
+      const mesh = child as THREE.Mesh
+      const mat = mesh.material
+      if (!mat) return
+      const materials = Array.isArray(mat) ? mat : [mat]
+      materials.forEach(m => {
+        if (m && 'emissive' in m) {
+          const standardMat = m as THREE.MeshStandardMaterial
+          standardMat.emissive = on ? new THREE.Color('#ffbf40') : new THREE.Color('#000')
+          standardMat.emissiveIntensity = on ? 0.6 : 0
+        }
+      })
     })
   }, [])
 

@@ -53,6 +53,7 @@ import {
 import { StatCardSkeleton, TableSkeleton, ChartSkeleton } from "@/components/ui/table-skeleton"
 import { useToast } from "@/hooks/use-toast"
 import { SettingsIndicator } from "@/components/settings-indicator"
+import { getAuthHeader } from "@/lib/auth"
 
 type CAMJobStatus = 'Created' | 'Processing' | 'Completed' | 'Failed'
 type CAMJobType = 'DXF' | 'GCODE'
@@ -146,7 +147,9 @@ export default function CamPage() {
   useEffect(() => {
     const loadJobs = async () => {
       try {
-        const response = await fetch('/api/v1/cam/jobs')
+        const response = await fetch('/api/v1/cam/jobs', {
+          headers: getAuthHeader(),
+        })
         if (response.ok) {
           const data = await response.json()
           if (data.jobs && data.jobs.length > 0) {
@@ -189,17 +192,20 @@ export default function CamPage() {
   useEffect(() => {
     if (!selectedJob || selectedJob.status !== 'Completed' || selectedJob.downloadUrl) return
 
+    const jobId = selectedJob.id
     const loadDownloadUrl = async () => {
       setIsLoadingDownloadUrl(true)
       try {
-        const response = await fetch(`/api/v1/cam/jobs/${selectedJob.id}/download`)
+        const response = await fetch(`/api/v1/cam/jobs/${jobId}/download`, {
+          headers: getAuthHeader(),
+        })
         if (response.ok) {
           const data = await response.json()
           if (data.download_url) {
             setSelectedJob(prev => prev ? { ...prev, downloadUrl: data.download_url } : null)
             // Также обновляем в списке jobs
             setJobs(prevJobs => prevJobs.map(job =>
-              job.id === selectedJob.id ? { ...job, downloadUrl: data.download_url } : job
+              job.id === jobId ? { ...job, downloadUrl: data.download_url } : job
             ))
           }
         }
@@ -211,7 +217,7 @@ export default function CamPage() {
     }
 
     loadDownloadUrl()
-  }, [selectedJob?.id, selectedJob?.status])
+  }, [selectedJob])
 
   const columns: ColumnDef<CAMJob>[] = useMemo(
     () => [

@@ -58,10 +58,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "aioresponses>=0.7.9",
     "black>=25.12.0",
     "httpx>=0.28.1",
+    "hypothesis>=6.156.6",
     "pytest>=9.0.2",
     "pytest-asyncio>=0.21.0,<0.23.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.14.11",
 ]
 
@@ -71,4 +74,32 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--capture=no"
+addopts = "--capture=no --tb=short"
+markers = [
+    "network: разрешает реальные сетевые вызовы (use sparingly)",
+]
+filterwarnings = [
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+source = ["api"]
+omit = ["tests/*", "*/migrations/*"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
+# Risk-based: overall backend >=80%, api/manufacturing/** requires 90% (enforced in CI when tests added)
+# Manufacturing coverage tracked separately via --cov=api/manufacturing in dedicated jobs when available.
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+]
+
+[tool.coverage.paths]
+source = [
+    "api",
+    "/home/runner/work/mebel-ai/mebel-ai/api",
+]

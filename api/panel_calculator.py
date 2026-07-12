@@ -28,6 +28,13 @@ from api.constants import (
     DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
 )
 
+# Task 6: typed domain imports for returning contract values (not dicts) from calculators
+from api.manufacturing.contracts import (
+    DrillOperation,
+    Face,
+    SlotOperation,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -373,7 +380,7 @@ class WallCabinetTemplate(CabinetTemplate):
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
             notes="Паз под ДВП 4x10мм",
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),  # independent copy (Task 6)
         ))
 
         result.panels.append(PanelSpec(
@@ -385,7 +392,7 @@ class WallCabinetTemplate(CabinetTemplate):
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
             notes="Паз под ДВП 4x10мм",
-            drilling_points=side_drilling,  # Зеркальная копия
+            drilling_points=list(side_drilling),  # independent copy, not shared mutable (Task 6)
         ))
 
         # Верх и низ
@@ -406,7 +413,7 @@ class WallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
-            drilling_points=horizontal_drilling,
+            drilling_points=list(horizontal_drilling),
         ))
 
         result.panels.append(PanelSpec(
@@ -415,7 +422,7 @@ class WallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
-            drilling_points=horizontal_drilling,
+            drilling_points=list(horizontal_drilling),
         ))
 
         # Полки (съёмные)
@@ -483,7 +490,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         result.panels.append(PanelSpec(
@@ -494,7 +501,7 @@ class BaseCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         horizontal_width = self.inner_width
@@ -601,7 +608,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         result.panels.append(PanelSpec(
@@ -612,7 +619,7 @@ class BaseSinkCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         horizontal_width = self.inner_width
@@ -685,7 +692,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         result.panels.append(PanelSpec(
@@ -696,7 +703,7 @@ class DrawerCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         horizontal_width = self.inner_width
@@ -829,7 +836,7 @@ class TallCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         result.panels.append(PanelSpec(
@@ -840,7 +847,7 @@ class TallCabinetTemplate(CabinetTemplate):
             edge_front=True,
             edge_thickness_mm=DEFAULT_VISIBLE_EDGE_THICKNESS_MM,
             has_slot_for_back=True,
-            drilling_points=side_drilling,
+            drilling_points=list(side_drilling),
         ))
 
         horizontal_width = self.inner_width
@@ -860,7 +867,7 @@ class TallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
-            drilling_points=horizontal_drilling,
+            drilling_points=list(horizontal_drilling),
         ))
 
         result.panels.append(PanelSpec(
@@ -869,7 +876,7 @@ class TallCabinetTemplate(CabinetTemplate):
             height_mm=horizontal_depth,
             thickness_mm=self.thickness_mm,
             has_slot_for_back=True,
-            drilling_points=horizontal_drilling,
+            drilling_points=list(horizontal_drilling),
         ))
 
         # Полки
@@ -964,3 +971,110 @@ def calculate_panels(
              f"{result.total_area_m2:.2f} м2, {len(result.warnings)} предупреждений")
 
     return result
+
+
+# =============================================================================
+# Task 6: typed domain value helpers (return contracts types, no loose dicts)
+# Calculators now provide typed ops for spec_builder. Convert at boundaries only.
+# =============================================================================
+
+def _dict_hole_to_drill_op(
+    hole: dict,
+    face: Face,
+    op_prefix: str,
+    hardware_sku: str | None = None,
+    template: str | None = None,
+    source: str = "rule",
+    idx: int = 0,
+) -> DrillOperation:
+    """Convert legacy hole dict from panel calc into typed DrillOperation.
+
+    Records SKU/template/source for hardware traceability (encoded in id for compatibility).
+    """
+    sku = hardware_sku or "generic"
+    tmpl = template or "std"
+    x = float(hole.get("x", 0))
+    y = float(hole.get("y", 0))
+    diam = float(hole.get("diameter", 5.0))
+    depth = float(hole.get("depth", 12.0))
+    op_id = f"{op_prefix}_{sku}_{tmpl}_{source}_{idx}"
+    return DrillOperation(
+        id=op_id,
+        face=face,
+        x_mm=x,
+        y_mm=y,
+        diameter_mm=diam,
+        depth_mm=depth,
+    )
+
+
+def build_typed_confirmat_ops_for_side(
+    panel_width: float,
+    panel_height: float,
+    thickness: float,
+    face: Face = Face.LEFT,
+    hardware_sku: str | None = "confirmat_5x50",
+    template: str = "confirmat_std",
+    source: str = "rule",
+) -> list[DrillOperation]:
+    """Return typed confirmat drill ops for side panel (from panel_calculator logic)."""
+    raw = _generate_confirmat_holes_for_side(
+        panel_width=panel_width,
+        panel_height=panel_height,
+        thickness=thickness,
+        top_panel=True,
+        bottom_panel=True,
+    )
+    ops: list[DrillOperation] = []
+    for i, h in enumerate(raw):
+        ops.append(_dict_hole_to_drill_op(h, face, "drill_confirmat_side", hardware_sku, template, source, i))
+    return ops
+
+
+def build_typed_shelf_pin_ops(
+    panel_width: float,
+    panel_height: float,
+    thickness: float,
+    shelf_count: int,
+    face: Face = Face.LEFT,
+    hardware_sku: str | None = "shelf_pin_5mm",
+    template: str = "system32",
+    source: str = "rule",
+) -> list[DrillOperation]:
+    """Return typed shelf pin ops."""
+    raw = _generate_shelf_pin_holes(
+        panel_width=panel_width,
+        panel_height=panel_height,
+        thickness=thickness,
+        shelf_count=shelf_count,
+    )
+    ops: list[DrillOperation] = []
+    for i, h in enumerate(raw):
+        ops.append(_dict_hole_to_drill_op(h, face, "drill_shelf_pin", hardware_sku, template, source, i))
+    return ops
+
+
+def build_typed_back_slot(
+    height_mm: float,
+    depth_mm: float,
+    slot_width: float,
+    slot_depth: float,
+    face: Face = Face.BACK,
+    hardware_sku: str | None = None,
+    template: str = "back_dvp_slot",
+    source: str = "design",
+) -> SlotOperation:
+    """Return typed slot for back panel (used on sides)."""
+    # Position roughly on the inner face
+    x = depth_mm - slot_depth / 2
+    y = height_mm / 2
+    op_id = f"slot_back_{template}_{source}_1"
+    return SlotOperation(
+        id=op_id,
+        face=face,
+        x_mm=x,
+        y_mm=y,
+        length_mm=height_mm,
+        width_mm=slot_width,
+        depth_mm=slot_depth,
+    )

@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "dataset": {
+    "classification": "synthetic",
+    "approved": false,
+    "fixture_ids": [],
+    "approval_reference": null
+  },
+  "metrics": [
+    {
+      "name": "dimension_accuracy",
+      "direction": "minimum",
+      "threshold": null,
+      "threshold_reference": null
+    }
+  ],
+  "owner_confirmation": {
+    "confirmed": false,
+    "owner": null,
+    "confirmation_reference": null
+  }
+}

@@ -126,9 +126,9 @@ const toastIcons = {
 }
 
 // Компонент с иконкой и улучшенным дизайном
-interface EnhancedToastProps extends ToastProps {
-  title?: string
-  description?: string
+interface EnhancedToastProps extends Omit<ToastProps, 'title' | 'description'> {
+  title?: React.ReactNode
+  description?: React.ReactNode
   action?: ToastActionElement
   variant?: 'default' | 'destructive' | 'success' | 'warning' | 'info'
 }

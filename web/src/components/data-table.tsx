@@ -54,8 +54,8 @@ export function DataTable<TData, TValue>({
   // чтобы снизить риск ранних обновлений во время рендера.
 
   // Колонка выбора строк добавляется автоматически
-  const columnsWithSelection = React.useMemo<ColumnDef<TData, any>[]>(() => {
-    const selectionCol: ColumnDef<TData, any> = {
+  const columnsWithSelection = React.useMemo<ColumnDef<TData, TValue>[]>(() => {
+    const selectionCol: ColumnDef<TData, TValue> = {
       id: "select",
       header: () => null,
       cell: () => null,
@@ -114,8 +114,8 @@ export function DataTable<TData, TValue>({
   // ========= Экспорт =========
   function toCSV(rows: TData[], visibleCols: string[]) {
     const headers = visibleCols
-    const body = rows.map((row: any) =>
-      headers.map((key) => JSON.stringify(row[key] ?? "")).join(",")
+    const body = rows.map((row) =>
+      headers.map((key) => JSON.stringify((row as Record<string, unknown>)[key] ?? "")).join(",")
     )
     return [headers.join(","), ...body].join("\n")
   }
@@ -143,7 +143,7 @@ export function DataTable<TData, TValue>({
     } else {
       // Простейший TSV как fallback для Excel
       const headers = visibleCols.join("\t")
-      const body = (rows as any[]).map(row => visibleCols.map(k => row[k] ?? "").join("\t")).join("\n")
+      const body = rows.map(row => visibleCols.map(k => (row as Record<string, unknown>)[k] ?? "").join("\t")).join("\n")
       downloadBlob([headers, body].join("\n"), `${tableId}-${onlySelected ? "selected" : "all"}.xls`, "application/vnd.ms-excel")
     }
   }

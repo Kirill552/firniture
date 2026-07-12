@@ -267,7 +267,7 @@ export default function WelcomePage() {
                     Быстрая настройка
                   </h2>
                   <p className="text-neutral-600 dark:text-neutral-400">
-                    Можно настроить позже в разделе "Настройки"
+                    Можно настроить позже в разделе &quot;Настройки&quot;
                   </p>
                 </div>
 

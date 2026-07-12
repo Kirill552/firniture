@@ -1,0 +1,61 @@
+name: furniture-ai-test
+
+# ИЗОЛИРОВАННАЯ тестовая среда — отдельные порты, пароли, volumes.
+# НЕ использует production .env / secrets.
+# Запуск инфраструктуры:
+#   docker compose -f docker-compose.test.yml up -d --wait
+#
+# Для тестов (Task 2): поднять infra, затем pytest с routing в conftest.py
+# (тестовая БД/Redis/MinIO на 5434/6381/9004, AI пустой = mock, без внешней сети)
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_only_password
+      POSTGRES_DB: furniture_ai_test
+    ports:
+      - "5434:5432"
+    volumes:
+      - test_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "test_user", "-d", "furniture_ai_test"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "test_redis_password", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 3s
+    command: ["redis-server", "--requirepass", "test_redis_password"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: test_minio_user
+      MINIO_ROOT_PASSWORD: test_minio_secret_2026
+    ports:
+      - "9004:9000"
+      - "9005:9001"
+    volumes:
+      - test_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  test_pgdata:
+  test_miniodata:

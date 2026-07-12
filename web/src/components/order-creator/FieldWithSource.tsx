@@ -24,13 +24,14 @@ interface FieldWithSourceProps {
   label: string;
   value: string | number | undefined;
   source: FieldSource | undefined;
-  onChange: (value: string | number) => void;
+  onChange: (value: string | number | undefined) => void;
   unit?: string;
   type?: "text" | "number" | "select";
   options?: { value: string; label: string }[];
   placeholder?: string;
   min?: number;
   max?: number;
+  "data-testid"?: string;
 }
 
 const SOURCE_CONFIG: Record<FieldSource, { icon: typeof Check; color: string; label: string }> = {
@@ -52,6 +53,7 @@ export function FieldWithSource({
   placeholder,
   min,
   max,
+  "data-testid": testId,
 }: FieldWithSourceProps) {
   const config = SOURCE_CONFIG[source];
   const Icon = config.icon;
@@ -75,12 +77,15 @@ export function FieldWithSource({
       <div className="relative">
         {type === "select" && options ? (
           <Select
-            value={String(value || "")}
+            value={value ? String(value) : ""}
             onValueChange={(v) => onChange(v)}
           >
-            <SelectTrigger className={cn(
-              source === "default" && "border-amber-300 bg-amber-50/50"
-            )}>
+            <SelectTrigger
+              className={cn(
+                source === "default" && "border-amber-300 bg-amber-50/50"
+              )}
+              data-testid={testId}
+            >
               <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
@@ -95,10 +100,19 @@ export function FieldWithSource({
           <div className="relative">
             <Input
               type={type}
-              value={value ?? ""}
+              value={value != null ? String(value) : ""}
               onChange={(e) => {
-                const v = type === "number" ? parseInt(e.target.value) || 0 : e.target.value;
-                onChange(v);
+                if (type === "number") {
+                  const str = e.target.value;
+                  if (str === "") {
+                    onChange(undefined);
+                    return;
+                  }
+                  const n = parseInt(str);
+                  onChange(isNaN(n) ? undefined : n);
+                  return;
+                }
+                onChange(e.target.value);
               }}
               placeholder={placeholder}
               min={min}
@@ -107,6 +121,7 @@ export function FieldWithSource({
                 source === "default" && "border-amber-300 bg-amber-50/50",
                 unit && "pr-12"
               )}
+              data-testid={testId}
             />
             {unit && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">

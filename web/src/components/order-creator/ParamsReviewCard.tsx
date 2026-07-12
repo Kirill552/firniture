@@ -47,8 +47,30 @@ export function ParamsReviewCard({
   onOpenClarify,
   isLoading,
 }: ParamsReviewCardProps) {
-  const defaultCount = Object.values(fieldSources).filter((s) => s === "default").length;
+  const trackedKeys: (keyof OrderCreatorParams)[] = [
+    "cabinet_type",
+    "width_mm",
+    "height_mm",
+    "depth_mm",
+    "material",
+    "thickness_mm",
+    "door_count",
+    "drawer_count",
+    "shelf_count",
+  ];
+
+  const defaultCount = trackedKeys.filter((k) => fieldSources[k] === "default").length;
   const hasDefaults = defaultCount > 0;
+
+  const canConfirm =
+    typeof params.cabinet_type === "string" &&
+    params.cabinet_type.trim().length > 0 &&
+    typeof params.width_mm === "number" &&
+    params.width_mm > 0 &&
+    typeof params.height_mm === "number" &&
+    params.height_mm > 0 &&
+    typeof params.depth_mm === "number" &&
+    params.depth_mm > 0;
 
   return (
     <Card>
@@ -72,11 +94,12 @@ export function ParamsReviewCard({
         <FieldWithSource
           label="Тип изделия"
           value={params.cabinet_type}
-          source={fieldSources.furniture_type}
+          source={fieldSources.cabinet_type}
           onChange={(v) => onUpdateParam("cabinet_type", v)}
           type="select"
           options={CABINET_TYPES}
           placeholder="Выберите тип"
+          data-testid="param-cabinet-type"
         />
 
         {/* Размеры */}
@@ -90,6 +113,7 @@ export function ParamsReviewCard({
             unit="мм"
             min={100}
             max={3000}
+            data-testid="param-width-mm"
           />
           <FieldWithSource
             label="Высота"
@@ -100,6 +124,7 @@ export function ParamsReviewCard({
             unit="мм"
             min={100}
             max={3000}
+            data-testid="param-height-mm"
           />
           <FieldWithSource
             label="Глубина"
@@ -110,6 +135,7 @@ export function ParamsReviewCard({
             unit="мм"
             min={100}
             max={1200}
+            data-testid="param-depth-mm"
           />
         </div>
 
@@ -122,14 +148,19 @@ export function ParamsReviewCard({
             onChange={(v) => onUpdateParam("material", v)}
             type="select"
             options={MATERIALS}
+            data-testid="param-material"
           />
           <FieldWithSource
             label="Толщина"
-            value={String(params.thickness_mm)}
+            value={params.thickness_mm != null ? String(params.thickness_mm) : "16"}
             source={fieldSources.thickness_mm}
-            onChange={(v) => onUpdateParam("thickness_mm", parseInt(String(v)))}
+            onChange={(v) => {
+              const n = typeof v === "number" ? v : (v != null ? parseInt(String(v)) : undefined);
+              onUpdateParam("thickness_mm", n);
+            }}
             type="select"
             options={THICKNESSES}
+            data-testid="param-thickness-mm"
           />
         </div>
 
@@ -139,19 +170,27 @@ export function ParamsReviewCard({
             variant="outline"
             onClick={onOpenClarify}
             className="gap-2"
+            data-testid="open-clarify-button"
           >
             <MessageSquare className="h-4 w-4" />
             Уточнить с AI
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isLoading || !canConfirm}
             className="flex-1 gap-2"
+            data-testid="confirm-params-button"
           >
             <Check className="h-4 w-4" />
             {isLoading ? "Создаём заказ..." : "Рассчитать деталировку"}
           </Button>
         </div>
+
+        {!canConfirm && (
+          <p className="text-sm text-muted-foreground">
+            Для расчёта заполните тип изделия и габариты (Ш×В×Г).
+          </p>
+        )}
       </CardContent>
     </Card>
   );

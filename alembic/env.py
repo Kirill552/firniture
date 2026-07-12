@@ -57,6 +57,13 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 def run_migrations_online() -> None:
+    # Allow injecting a connectable for testing (avoids creating a separate engine).
+    injectable = config.attributes.get("connectable", None)
+    if injectable is not None:
+        with injectable.connect() as connection:
+            do_run_migrations(connection)
+        return
+
     # Используем синхронный драйвер psycopg для миграций (на Windows стабильнее)
     url = (
         f"postgresql+psycopg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
