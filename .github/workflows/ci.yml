@@ -74,7 +74,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install deps
         working-directory: web
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       - name: Typecheck
         working-directory: web
         run: npm run typecheck
@@ -92,7 +92,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install deps
         working-directory: web
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       - name: Lint
         working-directory: web
         run: npm run lint
@@ -111,7 +111,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install deps
         working-directory: web
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       - name: Build
         working-directory: web
         run: npm run build
@@ -129,7 +129,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install deps
         working-directory: web
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       - name: Install Playwright browsers
         working-directory: web
         run: npx playwright install --with-deps chromium

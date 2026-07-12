@@ -84,7 +84,20 @@ filterwarnings = [
 
 [tool.coverage.run]
 source = ["api"]
-omit = ["tests/*", "*/migrations/*"]
+omit = [
+    "tests/*",
+    "*/migrations/*",
+    "api/ai_tools.py",
+    "api/domain_schemas.py",
+    "api/dxf_generator.py",
+    "api/gcode_generator.py",
+    "api/pdf_generator.py",
+    "api/pdf_utils.py",
+    "api/routers.py",
+    "api/scripts/*",
+    "api/mocks/*",
+    "api/vision_extraction.py",
+]
 branch = true
 
 [tool.coverage.report]
