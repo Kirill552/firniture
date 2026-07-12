@@ -36,7 +36,7 @@ jobs:
       - name: Build and push Web image (immutable SHA tag)
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./web
           file: ./web/Dockerfile
           push: true
           tags: ghcr.io/kirill552/firniture/web:${{ github.sha }}
@@ -66,17 +66,37 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GHCR_TOKEN
           script: |
+            set -Eeuo pipefail
             cd ~/mebel-ai
             git fetch origin
             git checkout main
-            git pull origin main
-            # Example: would use the deploy script with manifest and backup
-            # IMAGE_TAG=${{ github.sha }} ./deploy/deploy.sh --release-sha ${{ github.sha }} --manifest /path/release-manifest.json --backup-command "./deploy/backup.sh ..." --dry-run || true
-            # Real execution requires SSH + approvals + backup (human controlled)
-            echo "Release SHA: ${{ github.sha }}"
-            echo "Manifest validated locally in CI. Full deploy/rollback/backup requires production credentials and approvals."
-            docker compose -f docker-compose.prod.yml config --quiet || echo "compose config requires IMAGE_TAG in prod env"
+            git pull --ff-only origin main
+
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username Kirill552 --password-stdin
+
+            manifest="/tmp/release-manifest-${{ github.sha }}.json"
+            cat > "$manifest" <<'MANIFEST'
+            {
+              "release_sha": "${{ github.sha }}",
+              "images": {
+                "api": "ghcr.io/kirill552/firniture/api:${{ github.sha }}",
+                "web": "ghcr.io/kirill552/firniture/web:${{ github.sha }}",
+                "worker": "ghcr.io/kirill552/firniture/api:${{ github.sha }}"
+              }
+            }
+            MANIFEST
+
+            IMAGE_TAG=${{ github.sha }} ./deploy/deploy.sh \
+              --release-sha ${{ github.sha }} \
+              --manifest "$manifest" \
+              --compose-file docker-compose.prod.yml \
+              --backup-command "mkdir -p \"\$HOME/mebel-ai-deploy-backups\"; cp -p docker-compose.prod.yml \"\$HOME/mebel-ai-deploy-backups/docker-compose.prod.yml.${{ github.sha }}\""
+
+            rm -f "$manifest"
+        env:
+          GHCR_TOKEN: ${{ secrets.GH_PAT }}
 
       - name: (Optional) Dry-run deploy script locally in CI
         run: |
