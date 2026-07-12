@@ -97,7 +97,7 @@ done
 [[ -n "$MANIFEST" ]] || { usage; die "--manifest must be provided"; }
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40,64}$ ]] || die "release SHA must be 40-64 lowercase hexadecimal characters"
 
-: "${MIGRATION_COMMAND:=docker compose -f \"$COMPOSE_FILE\" run --rm api alembic upgrade head}"
+: "${MIGRATION_COMMAND:=docker compose -f \"$COMPOSE_FILE\" run --rm api .venv/bin/python -m alembic upgrade head}"
 : "${HEALTH_COMMAND:=docker compose -f \"$COMPOSE_FILE\" ps --status running}"
 : "${PREFLIGHT_COMMAND:=docker compose -f \"$COMPOSE_FILE\" config --quiet}"
 
