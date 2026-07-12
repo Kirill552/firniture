@@ -88,7 +88,7 @@ jobs:
             }
             MANIFEST
 
-            IMAGE_TAG=${{ github.sha }} ./deploy/deploy.sh \
+            IMAGE_TAG=${{ github.sha }} bash ./deploy/deploy.sh \
               --release-sha ${{ github.sha }} \
               --manifest "$manifest" \
               --compose-file docker-compose.prod.yml \
