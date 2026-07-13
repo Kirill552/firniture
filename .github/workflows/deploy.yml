@@ -66,7 +66,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GHCR_TOKEN,GUEST_UPLOAD_SECRET
+          envs: GHCR_TOKEN,GUEST_UPLOAD_SECRET,RUSENDER_API_KEY,RUSENDER_SENDING_KEY_ID
           script: |
             set -Eeuo pipefail
             cd ~/mebel-ai
@@ -75,11 +75,22 @@ jobs:
             git pull --ff-only origin main
 
             touch .env
-            if grep -q '^GUEST_UPLOAD_SECRET=' .env; then
-              sed -i "s/^GUEST_UPLOAD_SECRET=.*/GUEST_UPLOAD_SECRET=$GUEST_UPLOAD_SECRET/" .env
-            else
-              printf '\nGUEST_UPLOAD_SECRET=%s\n' "$GUEST_UPLOAD_SECRET" >> .env
+            upsert_env() {
+              local key="$1"
+              local value="$2"
+              if grep -q "^${key}=" .env; then
+                sed -i "s|^${key}=.*|${key}=${value}|" .env
+              else
+                printf '\n%s=%s\n' "$key" "$value" >> .env
+              fi
+            }
+            upsert_env GUEST_UPLOAD_SECRET "$GUEST_UPLOAD_SECRET"
+            upsert_env RUSENDER_API_KEY "$RUSENDER_API_KEY"
+            if [ -n "$RUSENDER_SENDING_KEY_ID" ]; then
+              upsert_env RUSENDER_SENDING_KEY_ID "$RUSENDER_SENDING_KEY_ID"
             fi
+            upsert_env FRONTEND_URL "https://avtoraskroy.ru"
+            upsert_env EMAIL_FROM "noreply@avtoraskroy.ru"
 
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username Kirill552 --password-stdin
 
@@ -105,6 +116,8 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GH_PAT }}
           GUEST_UPLOAD_SECRET: ${{ secrets.GUEST_UPLOAD_SECRET }}
+          RUSENDER_API_KEY: ${{ secrets.RUSENDER_API_KEY }}
+          RUSENDER_SENDING_KEY_ID: ${{ secrets.RUSENDER_SENDING_KEY_ID }}
 
       - name: (Optional) Dry-run deploy script locally in CI
         run: |

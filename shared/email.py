@@ -20,12 +20,15 @@ class EmailClient:
 
     def __init__(self):
         self.api_key = settings.RUSENDER_API_KEY
+        self.sending_key_id = settings.RUSENDER_SENDING_KEY_ID
         self.email_from = settings.EMAIL_FROM
         self.frontend_url = settings.FRONTEND_URL
-        self.is_mock = not self.api_key
+        self.is_mock = not self.api_key or not self.sending_key_id
 
         if self.is_mock:
-            logger.warning("RuSender API key not set — running in MOCK mode")
+            logger.warning(
+                "RuSender API token or sending key ID not set — running in MOCK mode"
+            )
 
     async def send_magic_link(
         self,
@@ -98,8 +101,8 @@ class EmailClient:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    f"{self.BASE_URL}/external-mails/send",
-                    headers={"X-Api-Key": self.api_key},
+                    f"{self.BASE_URL}/external-mails/send/{self.sending_key_id}",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
                     json={
                         "idempotencyKey": idempotency_key,
                         "mail": {
