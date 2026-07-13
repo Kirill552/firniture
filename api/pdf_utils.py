@@ -21,10 +21,15 @@ class PDFValidationError(Exception):
 
 def validate_pdf(pdf_bytes: bytes) -> None:
     """
-    Проверяет PDF на соответствие ограничениям.
+    Проверяет PDF на соответствие ограничениям (Task 1 strict).
+
+    - size
+    - 1-2 pages (reject 0 or >2)
+    - not encrypted / password protected
+    - not corrupt
 
     Raises:
-        PDFValidationError: если PDF не соответствует ограничениям
+        PDFValidationError
     """
     if len(pdf_bytes) > MAX_PDF_SIZE_BYTES:
         size_mb = len(pdf_bytes) / (1024 * 1024)
@@ -34,16 +39,22 @@ def validate_pdf(pdf_bytes: bytes) -> None:
 
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        page_count = len(doc)
-        doc.close()
+        try:
+            if doc.is_encrypted:
+                raise PDFValidationError("PDF защищён паролем или зашифрован")
 
-        if page_count > MAX_PDF_PAGES:
-            raise PDFValidationError(
-                f"PDF содержит {page_count} страниц (максимум {MAX_PDF_PAGES}). "
-                "Вероятно, это не один модуль."
-            )
+            page_count = len(doc)
+            if page_count < 1:
+                raise PDFValidationError("PDF не содержит страниц")
+            if page_count > MAX_PDF_PAGES:
+                raise PDFValidationError(
+                    f"PDF содержит {page_count} страниц (максимум {MAX_PDF_PAGES}). "
+                    "Вероятно, это не один модуль."
+                )
+        finally:
+            doc.close()
     except fitz.fitz.FileDataError as e:
-        raise PDFValidationError(f"Невалидный PDF файл: {e}")
+        raise PDFValidationError(f"Невалидный или повреждённый PDF файл: {e}")
 
 
 def pdf_to_images(pdf_bytes: bytes, dpi: int = 150) -> list[bytes]:

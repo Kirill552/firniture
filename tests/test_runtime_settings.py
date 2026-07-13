@@ -18,6 +18,8 @@ def _prod_env(**overrides: str) -> dict[str, str]:
     """Minimal production-like env. Override specific keys as needed."""
     base = {
         "JWT_SECRET": "a3f8c1e29b4d7065ef123456789abcdef01234567890",
+        "GUEST_UPLOAD_SECRET": "guest_hmac_secret_2026_at_least_32_chars",
+        "TRUSTED_PROXY_CIDRS": "172.16.0.0/12",
         "S3_SECRET_KEY": "s3_prd_s3cr3t_k3y_2026_long_enough",
         "S3_ACCESS_KEY": "s3_prd_access_key_2026",
         "S3_PUBLIC_ENDPOINT_URL": "https://storage.mebel-ai.ru",

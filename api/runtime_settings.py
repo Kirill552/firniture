@@ -231,4 +231,24 @@ def validate_runtime_settings(
                 "Укажите валидный ID модели."
             )
 
+    # ── Секреты защиты гостевой загрузки (Task 1) ───────────────────
+    guest_secret = _get(env, "GUEST_UPLOAD_SECRET")
+    if guest_secret in ("", "CHANGE_ME", "secret"):
+        errors.append(
+            "GUEST_UPLOAD_SECRET: пустой или placeholder. "
+            "Установите сильный HMAC secret для guest grants и session."
+        )
+    if guest_secret and len(guest_secret) < 32:
+        errors.append(
+            "GUEST_UPLOAD_SECRET: слишком короткий (<32 символов)."
+        )
+
+    # В production список доверенных прокси обязателен для защиты от подмены адреса.
+    trusted = _get(env, "TRUSTED_PROXY_CIDRS")
+    if not trusted:
+        errors.append(
+            "TRUSTED_PROXY_CIDRS: обязательно для production. "
+            "Укажите CIDR сети reverse-proxy (Caddy), иначе spoofed X-Forwarded-For разрешены."
+        )
+
     return RuntimeValidationResult(errors=tuple(errors))

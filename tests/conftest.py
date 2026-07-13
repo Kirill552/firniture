@@ -78,6 +78,10 @@ def _force_test_environment_routing() -> None:
     # JWT test only (never prod)
     os.environ["JWT_SECRET"] = "test-only-jwt-secret-not-for-production"
 
+    # Тестовые значения защиты гостевой загрузки для герметичных тестов (Task 1).
+    os.environ["GUEST_UPLOAD_SECRET"] = "test-guest-upload-secret-32bytes-minimum-2026"
+    os.environ["TRUSTED_PROXY_CIDRS"] = "127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
     # Email / external: mock
     os.environ["RUSENDER_API_KEY"] = ""
 

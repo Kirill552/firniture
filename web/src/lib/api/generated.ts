@@ -508,13 +508,15 @@ export interface ImageExtractResponse {
   dialogue_prompt?: string | null
   error?: string | null
   /** Тип ошибки для программной обработки */
-  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed' | null
+  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed' | 'not_furniture_source' | 'payload_too_large' | 'invalid_base64' | 'mime_mismatch' | 'invalid_pdf' | 'image_too_large' | 'unsupported_file_type' | 'service_unavailable' | null
   /** Рекомендуется перейти в диалог для уточнения */
   fallback_to_dialogue?: boolean
   /** Источник каждого поля: ocr/inferred/default */
   field_sources?: Record<string, FieldSource> | null
   /** Поля, требующие проверки пользователем */
   fields_need_review?: string[]
+  /** Одноразовый подписанный grant для /orders/anonymous (scope=create_anonymous_order) */
+  guest_upload_grant?: string | null
   /** Количество модулей на изображении (если определено) */
   module_count?: number | null
   /** Уверенность OCR */
@@ -934,6 +936,11 @@ export interface create_order_api_v1_orders_post {
 export interface create_anonymous_order_api_v1_orders_anonymous_post {
   body: OrderCreate
   response: Order
+}
+
+/** POST /api/v1/orders/anonymous/grant - Create Manual Anonymous Order Grant */
+export interface create_manual_anonymous_order_grant_api_v1_orders_anonymous_grant_post {
+  response: Record<string, string>
 }
 
 /** GET /api/v1/orders/{order_id} - Get Order With Products Endpoint */

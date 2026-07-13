@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getAuthHeader } from "@/lib/auth";
+import { getUploadErrorMessage } from "./upload-errors";
 import type {
   OrderCreatorMode,
   OrderCreatorParams,
@@ -22,6 +23,8 @@ interface OrderCreatorState {
   isChatLoading: boolean;
   recognizedCount: number;
   suggestedPrompt: string | null;
+  // Гостевой grant хранится только в памяти текущего сценария, не в localStorage.
+  guestUploadGrant: string | null;
 }
 
 const DEFAULT_PARAMS: Partial<OrderCreatorParams> = {
@@ -51,22 +54,41 @@ export function useOrderCreator() {
     isChatLoading: false,
     recognizedCount: 0,
     suggestedPrompt: null,
+    guestUploadGrant: null,
   });
 
-  const createAnonymousOrder = useCallback(async (): Promise<string> => {
+  const createAnonymousOrder = useCallback(async (grant?: string | null): Promise<string> => {
     const authHeader = getAuthHeader();
-    const endpoint = authHeader.Authorization ? "/api/v1/orders" : "/api/v1/orders/anonymous";
+    const isAuthed = !!authHeader.Authorization;
+    const endpoint = isAuthed ? "/api/v1/orders" : "/api/v1/orders/anonymous";
+
+    let effectiveGrant = grant;
+    if (!isAuthed && !effectiveGrant) {
+      const grantResponse = await fetch("/api/v1/orders/anonymous/grant", { method: "POST" });
+      if (!grantResponse.ok) {
+        const payload = await grantResponse.json().catch(() => null);
+        throw new Error(getUploadErrorMessage(grantResponse.status, payload));
+      }
+      const grantPayload = await grantResponse.json() as { guest_upload_grant?: string };
+      effectiveGrant = grantPayload.guest_upload_grant ?? null;
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeader };
+    if (!isAuthed && effectiveGrant) {
+      headers["X-Guest-Upload-Grant"] = effectiveGrant;
+    }
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeader },
+      headers,
       body: JSON.stringify({
         notes: "Черновик (Vision OCR / ручной ввод)",
       }),
     });
 
     if (!response.ok) {
-      throw new Error("Не удалось создать заказ для AI-диалога");
+      const txt = await response.text().catch(() => "");
+      throw new Error(txt || "Не удалось создать заказ для AI-диалога");
     }
 
     const order = await response.json();
@@ -81,13 +103,13 @@ export function useOrderCreator() {
   }, []);
 
   // Создаём заказ один раз на сессию создания (нужен для /dialogue/clarify и BOM/CAM).
-  // Если пользователь авторизован - создаём /orders, иначе /orders/anonymous (freemium).
+  // Если пользователь авторизован - создаём /orders, иначе /orders/anonymous (freemium) с grant.
   const ensureAnonymousOrder = useCallback(async (): Promise<string> => {
     if (state.orderId) return state.orderId;
     if (creatingOrderRef.current) return creatingOrderRef.current;
 
     creatingOrderRef.current = (async () => {
-      return await createAnonymousOrder();
+      return await createAnonymousOrder(state.guestUploadGrant);
     })();
 
     try {
@@ -95,7 +117,7 @@ export function useOrderCreator() {
     } finally {
       creatingOrderRef.current = null;
     }
-  }, [createAnonymousOrder, state.orderId]);
+  }, [createAnonymousOrder, state.orderId, state.guestUploadGrant]);
 
   // Переход в режим manual
   const goToManual = useCallback(() => {
@@ -120,6 +142,7 @@ export function useOrderCreator() {
       suggestedPrompt: null,
       recognizedCount: 0,
       fieldSources: {},
+      guestUploadGrant: null,
     }));
 
     try {
@@ -136,7 +159,8 @@ export function useOrderCreator() {
       });
 
       if (!response.ok) {
-        throw new Error("Ошибка распознавания");
+        const payload = await response.json().catch(() => null);
+        throw new Error(getUploadErrorMessage(response.status, payload));
       }
 
       const data: ImageExtractResponse = await response.json();
@@ -147,13 +171,16 @@ export function useOrderCreator() {
           mode: "manual",
           error: data.error || "Не удалось распознать изображение",
           isLoading: false,
+          guestUploadGrant: null,
         }));
         return;
       }
 
-      // Создаём заказ заранее, чтобы уточнение с AI работало сразу после OCR.
-      // Это безопасно: BOM всё равно генерируется только после подтверждения.
-      const orderId = await createAnonymousOrder();
+      // Сохраняем grant ТОЛЬКО в памяти (для передачи при создании anonymous)
+      const grant = data.guest_upload_grant || null;
+      if (!grant) {
+        throw new Error("Проверка завершилась без разрешения на создание заказа. Повторите загрузку.");
+      }
 
       // Конвертируем параметры
       const params = extractParamsFromResponse(data);
@@ -172,11 +199,12 @@ export function useOrderCreator() {
         mode: nextMode,
         params,
         fieldSources,
-        orderId,
+        orderId: null,
         chatMessages: [],
         recognizedCount: data.recognized_count,
         suggestedPrompt: data.suggested_prompt ?? null,
         isLoading: false,
+        guestUploadGrant: grant,
       }));
     } catch (err) {
       setState((prev) => ({
@@ -186,7 +214,7 @@ export function useOrderCreator() {
         isLoading: false,
       }));
     }
-  }, [createAnonymousOrder]);
+  }, []);
 
   // Обновление параметра пользователем
   const updateParam = useCallback((key: keyof OrderCreatorParams, value: unknown) => {

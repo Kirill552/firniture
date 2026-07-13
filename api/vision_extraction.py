@@ -1,23 +1,33 @@
 """
 Модуль извлечения параметров мебели из изображений.
 
-Процесс:
-1. Vision модель: Изображение → текст (один шаг вместо OCR + GPT)
-2. GPT: Текст → структурированные параметры (JSON)
-3. Валидация и fallback на диалог при низкой уверенности
+Строгие серверные проверки (Task 1) выполняются ДО любого OCR/LLM/vision:
+- base64 strict
+- decoded size <=10MB
+- magic bytes + MIME match
+- PDF/image structural limits (pages, dims, MP)
+- relevance preflight (single furniture module) via limited vision
+- только потом — полный pipeline
+
+Mock mode не обходит проверки. Невалидный/мусор -> 422/413/415 без grant и без дорогих вызовов.
+Валидный low-confidence -> success + grant + fallback_to_dialogue.
 """
 
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import time
 
+from PIL import Image
+
+from api.settings import settings
 from shared.ai_client import get_ai_client
 from shared.ai_settings import AISettings
 
-from .pdf_utils import MAX_PDF_SIZE_BYTES, PDFValidationError, pdf_to_images
+from .pdf_utils import PDFValidationError, pdf_to_images
 from .schemas import (
     ExtractedDimensions,
     ExtractedFurnitureParams,
@@ -30,6 +40,100 @@ log = logging.getLogger(__name__)
 
 # Минимальный порог уверенности для автоматического принятия
 MIN_CONFIDENCE_THRESHOLD = 0.6
+
+# Сигнатуры содержимого: расширению файла не доверяем.
+_MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"RIFF", "image/webp"),  # further check WEBP
+    (b"%PDF-", "application/pdf"),
+]
+
+
+def _detect_mime_by_magic(data: bytes) -> str | None:
+    """Return canonical mime or None. Never trust client extension."""
+    for sig, mime in _MAGIC_SIGNATURES:
+        if data.startswith(sig):
+            if mime == "image/webp":
+                if b"WEBP" not in data[0:16]:
+                    return None
+            return mime
+    return None
+
+
+def _validate_base64_and_size(image_base64: str) -> tuple[bytes, str | None, str | None]:
+    """Strict decode + size. Returns (bytes, error_code, message) or (b, None, None)."""
+    try:
+        # Строго проверяем padding и запрещаем посторонние символы.
+        file_bytes = base64.b64decode(image_base64, validate=True)
+    except Exception:
+        return b"", "invalid_base64", "Некорректный base64 в поле image_base64"
+
+    if len(file_bytes) > settings.MAX_UPLOAD_BYTES:
+        mb = len(file_bytes) / (1024 * 1024)
+        return file_bytes, "payload_too_large", f"Файл слишком большой: {mb:.1f} МБ (максимум 10 МБ)"
+
+    if len(image_base64) > settings.MAX_BASE64_BYTES:
+        return file_bytes, "payload_too_large", "Поле base64 превышает допустимый размер"
+
+    return file_bytes, None, None
+
+
+def _validate_mime_magic(declared: str, data: bytes) -> tuple[bool, str | None, str | None]:
+    actual = _detect_mime_by_magic(data)
+    if actual is None:
+        return False, "unsupported_file_type", "Неподдерживаемый тип файла по сигнатуре. Разрешены JPEG, PNG, WebP, PDF."
+    if actual != declared:
+        return False, "mime_mismatch", f"Заявленный MIME {declared} не соответствует фактическому содержимому ({actual})."
+    if declared not in settings.ALLOWED_MIME_TYPES:
+        return False, "unsupported_file_type", "Неподдерживаемый MIME тип."
+    return True, None, None
+
+
+def _validate_image_structure(data: bytes) -> tuple[bool, str | None, str | None]:
+    """Pillow: dimensions, MP, min size. Reject decompression bombs / blank-ish."""
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            im.verify()  # structural
+        # Открываем изображение повторно: verify закрывает исходный объект.
+        with Image.open(io.BytesIO(data)) as im:
+            w, h = im.size
+            if w <= 0 or h <= 0:
+                return False, "image_too_large", "Изображение имеет нулевые размеры"
+            if w < settings.MIN_IMAGE_SIDE_PX or h < settings.MIN_IMAGE_SIDE_PX:
+                return False, "image_too_large", f"Изображение слишком маленькое (мин {settings.MIN_IMAGE_SIDE_PX}px)"
+            if w > settings.MAX_IMAGE_SIDE_PX or h > settings.MAX_IMAGE_SIDE_PX:
+                return False, "image_too_large", f"Изображение слишком большое по стороне (макс {settings.MAX_IMAGE_SIDE_PX}px)"
+            pixels = w * h
+            if pixels > settings.MAX_IMAGE_PIXELS:
+                return False, "image_too_large", f"Изображение превышает 24 МП ({pixels} пикселей)"
+            # Быстрая выборочная проверка пустого или почти однотонного изображения.
+            try:
+                small = im.convert("L").resize((8, 8))
+                extrema = small.getextrema()
+                if isinstance(extrema, tuple) and len(extrema) == 2:
+                    mn, mx = extrema
+                    if (mx - mn) < 4:  # almost solid color
+                        return False, "not_furniture_source", "Загрузите фото, скриншот или PDF с одним мебельным модулем."
+            except Exception:
+                pass
+            return True, None, None
+    except Exception as e:
+        return False, "unsupported_file_type", f"Не удалось открыть изображение: {type(e).__name__}"
+
+
+def _validate_pdf_structure(data: bytes) -> tuple[bool, str | None, str | None]:
+    try:
+        pdf_to_images(data)  # reuses strict validate (pages 1-2, size, not encrypted)
+        return True, None, None
+    except PDFValidationError as e:
+        code = "invalid_pdf"
+        msg = str(e)
+        if "большой" in msg.lower():
+            code = "payload_too_large"
+        return False, code, msg
+    except Exception as e:
+        return False, "invalid_pdf", f"Невалидный PDF: {e}"
 
 # Промпт для GPT для парсинга текста OCR в структурированные параметры
 FURNITURE_EXTRACTION_PROMPT = """Ты — эксперт по мебельному производству. Проанализируй текст, извлечённый из изображения/эскиза мебели, и извлеки параметры изделия.
@@ -318,18 +422,83 @@ async def extract_furniture_params_from_image(
     """
     Главная функция: извлекает параметры мебели из изображения.
 
-    Args:
-        image_base64: Изображение в base64
-        language_hint: Язык для OCR ("ru", "en", "auto")
-
-    Returns:
-        ImageExtractResponse с параметрами или ошибкой
+    ВАЖНО (Task 1):
+    - Все детерминированные проверки (size, magic, mime, PDF/image, dims) — СРАЗУ и всегда.
+    - Relevance preflight (single furniture) — до полного OCR/LLM.
+    - При ошибке preflight / не мебель — 422 not_furniture_source, grant НЕ выдаётся.
+    - Low confidence но валидный мебельный источник -> success + (grant от caller).
     """
     start_time = time.time()
 
-    # Проверяем наличие AI-ключа
-    settings = AISettings()
-    if not settings.ai_api_key:
+    # === РАННИЕ СЕРВЕРНЫЕ ПРОВЕРКИ (до любого AI, до mock decision) ===
+    file_bytes, err_code, err_msg = _validate_base64_and_size(image_base64)
+    if err_code:
+        return ImageExtractResponse(
+            success=False,
+            error=err_msg,
+            error_type=err_code,  # type: ignore[arg-type]
+            processing_time_ms=int((time.time() - start_time) * 1000),
+        )
+
+    ok, code, msg = _validate_mime_magic(mime_type, file_bytes)
+    if not ok:
+        return ImageExtractResponse(
+            success=False,
+            error=msg,
+            error_type=code,  # type: ignore[arg-type]
+            processing_time_ms=int((time.time() - start_time) * 1000),
+        )
+
+    # Подготавливаем байты для Vision OCR.
+    try:
+        if mime_type == "application/pdf":
+            ok, code, msg = _validate_pdf_structure(file_bytes)
+            if not ok:
+                return ImageExtractResponse(
+                    success=False,
+                    error=msg,
+                    error_type=code,  # type: ignore[arg-type]
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            images = pdf_to_images(file_bytes)
+            if not images:
+                return ImageExtractResponse(
+                    success=False,
+                    error="PDF не содержит страниц",
+                    error_type="invalid_pdf",
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            image_bytes_for_preflight = images[0]
+            # Для полного распознавания ниже используется первая страница.
+        else:
+            ok, code, msg = _validate_image_structure(file_bytes)
+            if not ok:
+                return ImageExtractResponse(
+                    success=False,
+                    error=msg,
+                    error_type=code,  # type: ignore[arg-type]
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            image_bytes_for_preflight = file_bytes
+    except PDFValidationError as e:
+        return ImageExtractResponse(
+            success=False,
+            error=str(e),
+            error_type="invalid_pdf",
+            processing_time_ms=int((time.time() - start_time) * 1000),
+        )
+    except Exception as e:
+        return ImageExtractResponse(
+            success=False,
+            error=f"Ошибка валидации файла: {e}",
+            error_type="unsupported_file_type",
+            processing_time_ms=int((time.time() - start_time) * 1000),
+        )
+
+    # Проверка AI ключа ПОСЛЕ детерминированных проверок (mock тоже их прошёл)
+    ai_settings = AISettings()
+    if not ai_settings.ai_api_key:
+        # В реальном пути (не mock router) это не должно случаться, но для безопасности
         return ImageExtractResponse(
             success=False,
             error="AI_API_KEY не настроен",
@@ -339,79 +508,49 @@ async def extract_furniture_params_from_image(
         )
 
     try:
-        # Декодируем base64
-        file_bytes = base64.b64decode(image_base64)
-
-        # Проверка размера
-        if len(file_bytes) > MAX_PDF_SIZE_BYTES:
-            size_mb = len(file_bytes) / (1024 * 1024)
+        # === ОГРАНИЧЕННЫЙ PREFLIGHT: релевантность + ровно один мебельный модуль ===
+        # Должен быть fail-closed: ошибки AI префлайта -> не furniture / 503
+        log.info("[Vision] Running limited relevance/module preflight...")
+        try:
+            is_single, module_count, module_types, reason = await analyze_module_count(
+                image_bytes=image_bytes_for_preflight,
+            )
+        except Exception as pre_e:
+            log.warning("[Vision] Preflight vision failed (fail-closed): %s", pre_e)
             return ImageExtractResponse(
                 success=False,
-                error=f"Файл слишком большой: {size_mb:.1f} MB (максимум 10 MB)",
-                error_type="file_too_large",
+                error="Сервис временно недоступен. Попробуйте позже.",
+                error_type="service_unavailable",
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
 
-        # Если PDF — конвертируем в изображения
-        if mime_type == "application/pdf":
-            try:
-                images = pdf_to_images(file_bytes)
-                if not images:
-                    return ImageExtractResponse(
-                        success=False,
-                        error="PDF не содержит страниц",
-                        error_type="ocr_failed",
-                        processing_time_ms=int((time.time() - start_time) * 1000),
-                    )
-                # Используем первую страницу для основного анализа
-                image_bytes = images[0]
-            except PDFValidationError as e:
-                return ImageExtractResponse(
-                    success=False,
-                    error=str(e),
-                    error_type="file_too_large" if "большой" in str(e) else "unsupported_format",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
-                )
-        else:
-            image_bytes = file_bytes
-
-        # Шаг 0: Проверка количества модулей
-        log.info("[Vision] Checking module count...")
-        is_single, module_count, module_types, reason = await analyze_module_count(
-            image_bytes=image_bytes,
-        )
-
-        if not is_single or module_count > 1:
-            types_str = ", ".join(module_types) if module_types else "различные модули"
+        if not is_single or module_count != 1:
             return ImageExtractResponse(
                 success=False,
-                error=f"Обнаружено {module_count} модулей ({types_str}). Загрузите фото одного модуля.",
-                error_type="multiple_modules",
+                error="Загрузите фото, скриншот или PDF с одним мебельным модулем.",
+                error_type="not_furniture_source",
                 module_count=module_count,
                 fallback_to_dialogue=False,
                 dialogue_prompt=None,
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
 
-        # Определяем языки для OCR
+        # Только теперь — полный OCR + parse (дорого)
         language_codes = ["ru", "en"] if language_hint == "auto" else [language_hint, "en"]
 
-        # Шаг 1: OCR
         log.info("[Vision] Starting OCR extraction...")
         ocr_text, ocr_confidence = await extract_text_from_image(
-            image_bytes=image_bytes,
+            image_bytes=image_bytes_for_preflight,
             language_codes=language_codes,
         )
         log.info(f"[Vision] OCR complete. Text length: {len(ocr_text)}, confidence: {ocr_confidence:.2f}")
 
-        # Шаг 2: Парсинг через GPT
         log.info("[Vision] Parsing OCR text with GPT...")
         params, field_sources, fields_need_review, recognized_count, suggested_prompt = await parse_ocr_text_to_params(
             ocr_text=ocr_text,
         )
         log.info(f"[Vision] Parsing complete. Confidence: {params.confidence:.2f}")
 
-        # Шаг 3: Определяем нужен ли fallback на диалог
         needs_fallback = (
             params.confidence < MIN_CONFIDENCE_THRESHOLD
             or params.needs_clarification
@@ -420,21 +559,17 @@ async def extract_furniture_params_from_image(
 
         dialogue_prompt = None
         if needs_fallback:
-            # Формируем начальный промпт для диалога
             if params.raw_text:
                 dialogue_prompt = f"Я вижу на изображении: {params.raw_text[:200]}... Уточните, что именно нужно изготовить?"
             else:
                 dialogue_prompt = "Не удалось распознать параметры с изображения. Опишите изделие, которое нужно изготовить."
-
             if params.clarification_questions:
                 dialogue_prompt += f"\n\nВопросы: {', '.join(params.clarification_questions)}"
 
         processing_time_ms = int((time.time() - start_time) * 1000)
-
-        # Используем confidence от GPT парсера (более релевантный),
-        # OCR confidence часто 0 для рукописных/нестандартных изображений
         final_confidence = params.confidence if params.confidence > 0 else ocr_confidence
 
+        # Разрешение добавит routers.py после лимитов, блокировки и успешной проверки.
         return ImageExtractResponse(
             success=True,
             parameters=params,
@@ -446,6 +581,8 @@ async def extract_furniture_params_from_image(
             fallback_to_dialogue=needs_fallback,
             dialogue_prompt=dialogue_prompt,
             processing_time_ms=processing_time_ms,
+            module_count=1,
+            guest_upload_grant=None,  # router attaches if all gates passed
         )
 
     except Exception as e:
@@ -464,23 +601,49 @@ async def extract_furniture_params_mock(
     image_base64: str,
     mime_type: str = "image/jpeg",
 ) -> ImageExtractResponse:
-    """Mock функция для локального тестирования без AI API ключей."""
+    """Mock функция — ВСЕГДА проходит те же детерминированные проверки, что и prod path.
+    Нет bypass: отсутствие ключа не даёт success на мусоре.
+    """
     import asyncio
-    import random
 
-    # Имитируем задержку обработки
-    await asyncio.sleep(0.5)
+    start = time.time()
+    await asyncio.sleep(0.05)  # tiny for test speed
 
-    # 10% шанс вернуть multiple_modules для тестирования UI
-    if random.random() < 0.1:
+    # 1. base64 + size (strict)
+    file_bytes, err_code, err_msg = _validate_base64_and_size(image_base64)
+    if err_code:
         return ImageExtractResponse(
             success=False,
-            error="Обнаружено 4 модуля (верхний шкаф, тумба, пенал, столешница). Загрузите фото одного модуля.",
-            error_type="multiple_modules",
-            module_count=4,
-            processing_time_ms=500,
+            error=err_msg,
+            error_type=err_code,  # type: ignore[arg-type]
+            processing_time_ms=int((time.time() - start) * 1000),
         )
 
+    # 2. magic + declared match
+    ok, code, msg = _validate_mime_magic(mime_type, file_bytes)
+    if not ok:
+        return ImageExtractResponse(
+            success=False,
+            error=msg,
+            error_type=code,  # type: ignore[arg-type]
+            processing_time_ms=int((time.time() - start) * 1000),
+        )
+
+    # 3. structural + PDF/pages or image dims
+    if mime_type == "application/pdf":
+        ok, code, msg = _validate_pdf_structure(file_bytes)
+    else:
+        ok, code, msg = _validate_image_structure(file_bytes)
+    if not ok:
+        return ImageExtractResponse(
+            success=False,
+            error=msg,
+            error_type=code,  # type: ignore[arg-type]
+            processing_time_ms=int((time.time() - start) * 1000),
+        )
+
+    # В mock-режиме структурно корректный тестовый файл считаем мебельным.
+    # Реальный режим выполняет ограниченный Vision preflight выше.
     mock_params = ExtractedFurnitureParams(
         furniture_type=FurnitureType(
             category="навесной_шкаф",
@@ -532,6 +695,7 @@ async def extract_furniture_params_mock(
         suggested_prompt="Проверь параметры и уточни недостающее (тип, размеры, материал, количество дверей/полок).",
         ocr_confidence=0.9,
         fallback_to_dialogue=False,
-        processing_time_ms=500,
+        processing_time_ms=int((time.time() - start) * 1000),
         module_count=1,
+        guest_upload_grant=None,  # grant issued by caller (router) only after full acceptance
     )

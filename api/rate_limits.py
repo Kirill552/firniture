@@ -156,3 +156,9 @@ class RedisRateLimiter:
 
     async def reset(self, key: str) -> None:
         await self._redis.delete(self._key(key))  # type: ignore[union-attr]
+
+
+# ── Guest upload specific rate rules (Task 1) ────────────────────────
+# Используются в guest_upload.py и routers.py; здесь находится единый источник настроек.
+GUEST_BURST_RULE = RateLimitRule(max_requests=3, window_seconds=600)
+GUEST_DAILY_RULE = RateLimitRule(max_requests=10, window_seconds=86400)

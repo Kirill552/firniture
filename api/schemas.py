@@ -244,9 +244,34 @@ class ExtractedFurnitureParams(BaseModel):
         return v if v is not None else []
 
 
+class GuestUploadErrorCode(str, Enum):
+    """Коды ошибок для публичной загрузки (guest upload)."""
+    payload_too_large = "payload_too_large"
+    invalid_base64 = "invalid_base64"
+    unsupported_file_type = "unsupported_file_type"
+    mime_mismatch = "mime_mismatch"
+    invalid_pdf = "invalid_pdf"
+    image_too_large = "image_too_large"
+    not_furniture_source = "not_furniture_source"
+    rate_limited = "rate_limited"
+    analysis_busy = "analysis_busy"
+    service_unavailable = "service_unavailable"
+
+
+class UploadErrorDetail(BaseModel):
+    """Единый envelope ошибок для upload routes. Используется в HTTPException.detail."""
+    code: GuestUploadErrorCode
+    message: str
+    retry_after_seconds: int | None = None
+
+
 class ImageExtractRequest(BaseModel):
     """Запрос на извлечение параметров из изображения или PDF."""
-    image_base64: str = Field(..., description="Изображение или PDF в формате base64")
+    image_base64: str = Field(
+        ...,
+        max_length=14 * 1024 * 1024,  # ~14MB base64 (guard against chunked oversized)
+        description="Изображение или PDF в формате base64",
+    )
     image_mime_type: Literal["image/jpeg", "image/png", "image/webp", "application/pdf"] = "image/jpeg"
     order_id: UUID | None = Field(None, description="ID заказа для привязки")
     language_hint: Literal["ru", "en", "auto"] = "ru"
@@ -267,7 +292,11 @@ class ImageExtractResponse(BaseModel):
     error: str | None = None
 
     # Новые поля для валидации модулей
-    error_type: Literal["multiple_modules", "file_too_large", "unsupported_format", "ocr_failed"] | None = Field(
+    error_type: Literal[
+        "multiple_modules", "file_too_large", "unsupported_format", "ocr_failed",
+        "not_furniture_source", "payload_too_large", "invalid_base64", "mime_mismatch", "invalid_pdf", "image_too_large",
+        "unsupported_file_type", "service_unavailable"
+    ] | None = Field(
         None, description="Тип ошибки для программной обработки"
     )
     module_count: int | None = Field(None, description="Количество модулей на изображении (если определено)")
@@ -282,6 +311,12 @@ class ImageExtractResponse(BaseModel):
     recognized_count: int = Field(0, description="Количество распознанных полей (не default)")
     suggested_prompt: str | None = Field(
         None, description="Предлагаемый промпт для AI-уточнения"
+    )
+
+    # Разрешение выдаётся только после успешной проверки, даже при низкой уверенности.
+    # Оно позволяет один раз создать анонимный заказ; иначе значение отсутствует.
+    guest_upload_grant: str | None = Field(
+        None, description="Одноразовый подписанный grant для /orders/anonymous (scope=create_anonymous_order)"
     )
 
 

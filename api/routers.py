@@ -1,9 +1,11 @@
 # Settings endpoints added 2026-01-16
+import base64
 import logging
+import os
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +17,17 @@ from api.drilling_calculator import (
     calculate_drilling_for_side_panel,
 )
 from api.drilling_templates import list_hinge_templates, list_slide_templates
+from api.guest_upload import (
+    acquire_analysis_lock,
+    issue_guest_upload_grant,
+    release_analysis_lock,
+    resolve_guest_identity,
+    validate_and_consume_grant,
+)
 from api.mocks.dialogue_mocks import are_ai_keys_available, generate_mock_dialogue_response
 from api.routes.manufacturing import assert_order_export_gate
+from api.schemas import GuestUploadErrorCode, UploadErrorDetail
+from api.settings import settings
 from api.vision_extraction import (
     extract_furniture_params_from_image,
     extract_furniture_params_mock,
@@ -233,22 +244,103 @@ async def create_order(
     )
 
 
+@router.post("/orders/anonymous/grant")
+async def create_manual_anonymous_order_grant(
+    request: Request,
+    response: Response,
+) -> dict[str, str]:
+    """Выдать ограниченный одноразовый grant для ручного guest-flow без AI-вызова."""
+    try:
+        identity = resolve_guest_identity(request, response)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail=UploadErrorDetail(
+                code=GuestUploadErrorCode.service_unavailable,
+                message="Сервис временно недоступен.",
+            ).model_dump(),
+        ) from None
+
+    allowed, retry_after, reason = await check_guest_rate_limits_safe(identity)
+    if not allowed:
+        is_rate_limit = reason == "rate_limited"
+        raise HTTPException(
+            status_code=429 if is_rate_limit else 503,
+            detail=UploadErrorDetail(
+                code=(
+                    GuestUploadErrorCode.rate_limited
+                    if is_rate_limit
+                    else GuestUploadErrorCode.service_unavailable
+                ),
+                message=(
+                    "Слишком много попыток. Повторите позже."
+                    if is_rate_limit
+                    else "Сервис временно недоступен."
+                ),
+                retry_after_seconds=retry_after,
+            ).model_dump(),
+            headers={"Retry-After": str(retry_after)} if retry_after else None,
+        )
+    try:
+        grant = await issue_guest_upload_grant(
+            f"manual:{identity.identity_hash}".encode(),
+            identity,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail=UploadErrorDetail(
+                code=GuestUploadErrorCode.service_unavailable,
+                message="Сервис временно недоступен.",
+            ).model_dump(),
+        ) from None
+    return {"guest_upload_grant": grant}
+
+
 @router.post("/orders/anonymous", response_model=OrderSchema)
 async def create_anonymous_order(
     order: OrderCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Создать анонимный заказ (freemium флоу).
+    Создать анонимный заказ (freemium флоу) — ТОЛЬКО по одноразовому grant.
 
+    Grant выдаётся backend'ом после успешной валидации + relevance preflight.
+    Повторное использование, подделка, истечение, mismatch файла -> 401/409.
     Не требует авторизации. Заказ не привязан к фабрике.
     """
-    return await crud.create_order(
+    grant = request.headers.get("x-guest-upload-grant") or request.headers.get("X-Guest-Upload-Grant")
+    if not grant:
+        # Прямой вызов без grant запрещён
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=UploadErrorDetail(
+                code=GuestUploadErrorCode.service_unavailable,  # or introduce unauthorized but stick to listed
+                message="Требуется одноразовый guest_upload_grant после успешного распознавания.",
+            ).model_dump(),
+        )
+
+    # Атомарно расходуем grant, уже связанный с хешем загруженного файла.
+    # При создании заказа файла нет, поэтому проверяем подпись, срок и одноразовый nonce.
+    if not await validate_and_consume_grant(grant):
+        # Разрешение просрочено, подделано либо уже использовано.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=UploadErrorDetail(
+                code=GuestUploadErrorCode.service_unavailable,
+                message="Недействительный, просроченный или уже использованный guest_upload_grant.",
+            ).model_dump(),
+        )
+
+    created = await crud.create_order(
         db=db,
         order=order,
         factory_id=None,
         created_by_id=None
     )
+    log.info("[GuestUpload] Anonymous order created after valid grant: %s", created.id)
+    return created
 
 
 @router.get("/orders", response_model=list[OrderSchema])
@@ -1731,61 +1823,172 @@ async def export_1c(
 # ============================================================================
 
 @router.post("/spec/extract-from-image", response_model=ImageExtractResponse)
-async def extract_from_image(req: ImageExtractRequest) -> ImageExtractResponse:
+async def extract_from_image(
+    req: ImageExtractRequest,
+    request: Request,
+    response: Response,
+) -> ImageExtractResponse:
     """
-    Извлечение параметров мебели из фото или эскиза.
+    Извлечение параметров мебели из фото или эскиза (защищённый guest flow).
 
-    Процесс:
-    1. Vision OCR: распознавание текста с изображения
-    2. GPT: парсинг текста в структурированные параметры
-    3. При низкой уверенности — рекомендация перейти в диалог
+    Защиты (выполняются всегда, включая mock):
+    - Content-Length + base64 max_length -> 413
+    - magic/MIME/PDF/image/relevance preflight ДО AI
+    - Redis burst (3/10m) + daily (10/d) + single concurrency lock
+    - trusted proxy + HMAC identity (cookie ar_guest_session)
+    - grant выдаётся только при success=True (даже low conf) и ровно после preflight
+    - garbage / не мебель / rate -> соответствующий 4xx/5xx, grant=None, order не создаётся
 
-    ## Пример запроса:
-    ```json
-    {
-        "image_base64": "base64_encoded_image...",
-        "image_mime_type": "image/jpeg",
-        "language_hint": "ru"
-    }
-    ```
-
-    ## Пример ответа:
-    ```json
-    {
-        "success": true,
-        "parameters": {
-            "furniture_type": {"category": "навесной_шкаф", ...},
-            "dimensions": {"width_mm": 600, "height_mm": 720, ...},
-            "body_material": {"type": "ЛДСП", "color": "белый"},
-            ...
-        },
-        "fallback_to_dialogue": false,
-        "ocr_confidence": 0.85,
-        "processing_time_ms": 1500
-    }
-    ```
-
-    При `fallback_to_dialogue: true` рекомендуется перенаправить пользователя
-    в диалог с ИИ-технологом для уточнения параметров.
+    Ошибки используют единый envelope: {"detail": {"code": "...", "message": "...", "retry_after_seconds": N}}
     """
-    # Проверяем наличие AI API ключей
-    use_mock = not are_ai_keys_available()
+    # 1. EARLY Content-Length guard (до полного парсинга тела в pydantic)
+    cl = request.headers.get("content-length")
+    if cl:
+        try:
+            if int(cl) > settings.MAX_BASE64_BYTES + 1024:  # headroom
+                detail = UploadErrorDetail(
+                    code=GuestUploadErrorCode.payload_too_large,
+                    message="Тело запроса превышает допустимый размер.",
+                )
+                raise HTTPException(status_code=413, detail=detail.model_dump())
+        except ValueError:
+            pass
 
-    if use_mock:
-        log.warning("[Vision OCR] Mock mode: AI keys not found")
-        return await extract_furniture_params_mock(req.image_base64, req.image_mime_type)
+    # 2. Определяем HMAC-идентичность и устанавливаем cookie. Без секрета закрываем доступ.
+    try:
+        ident = resolve_guest_identity(request, response)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail=UploadErrorDetail(
+                code=GuestUploadErrorCode.service_unavailable,
+                message="Сервис временно недоступен.",
+            ).model_dump(),
+        ) from None
 
-    log.info(f"[Vision OCR] Processing image, mime: {req.image_mime_type}, lang: {req.language_hint}")
+    # 3. Проверяем краткосрочный и суточный лимиты.
+    allowed, retry_after, reason = await check_guest_rate_limits_safe(ident)
+    if not allowed:
+        code = GuestUploadErrorCode.rate_limited if reason == "rate_limited" else GuestUploadErrorCode.service_unavailable
+        detail = UploadErrorDetail(
+            code=code,
+            message="Слишком много попыток. Повторите позже." if code == GuestUploadErrorCode.rate_limited else "Сервис временно недоступен.",
+            retry_after_seconds=retry_after,
+        )
+        status_code = 429 if code == GuestUploadErrorCode.rate_limited else 503
+        if retry_after:
+            # FastAPI добавит переданные заголовки в ответ.
+            raise HTTPException(
+                status_code=status_code,
+                detail=detail.model_dump(),
+                headers={"Retry-After": str(retry_after)} if retry_after else None,
+            )
+        raise HTTPException(status_code=status_code, detail=detail.model_dump())
 
-    result = await extract_furniture_params_from_image(
-        image_base64=req.image_base64,
-        mime_type=req.image_mime_type,
-        language_hint=req.language_hint,
-    )
+    # 4. Разрешаем только одну активную обработку на идентичность.
+    lock_token = await acquire_analysis_lock(ident)
+    if lock_token is None:
+        detail = UploadErrorDetail(
+            code=GuestUploadErrorCode.analysis_busy,
+            message="Анализ уже выполняется для этой сессии. Дождитесь завершения.",
+            retry_after_seconds=5,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=detail.model_dump(),
+            headers={"Retry-After": "5"},
+        )
 
-    log.info(f"[Vision OCR] Result: success={result.success}, confidence={result.ocr_confidence:.2f}, fallback={result.fallback_to_dialogue}")
+    try:
+        # 5. Выбираем mock или реальный путь; детерминированная проверка выполняется всегда.
+        use_mock = not are_ai_keys_available()
 
-    return result
+        if use_mock:
+            if os.getenv("APP_ENVIRONMENT", "dev").lower() in {"prod", "production"}:
+                raise HTTPException(
+                    status_code=503,
+                    detail=UploadErrorDetail(
+                        code=GuestUploadErrorCode.service_unavailable,
+                        message="Сервис временно недоступен.",
+                    ).model_dump(),
+                )
+            log.warning("[Vision OCR] Mock mode: AI keys not found (checks still enforced)")
+            result = await extract_furniture_params_mock(req.image_base64, req.image_mime_type)
+        else:
+            log.info(f"[Vision OCR] Processing image, mime: {req.image_mime_type}, lang: {req.language_hint}")
+            result = await extract_furniture_params_from_image(
+                image_base64=req.image_base64,
+                mime_type=req.image_mime_type,
+                language_hint=req.language_hint,
+            )
+
+        log.info(f"[Vision OCR] Result: success={result.success}, confidence={result.ocr_confidence:.2f}, fallback={result.fallback_to_dialogue}")
+
+        if not result.success:
+            error_type = result.error_type or "ocr_failed"
+            status_by_error = {
+                "payload_too_large": 413,
+                "file_too_large": 413,
+                "unsupported_file_type": 415,
+                "mime_mismatch": 415,
+                "invalid_base64": 422,
+                "invalid_pdf": 422,
+                "image_too_large": 422,
+                "not_furniture_source": 422,
+                "multiple_modules": 422,
+                "unsupported_format": 415,
+                "service_unavailable": 503,
+            }
+            status_code = status_by_error.get(error_type)
+            if status_code is not None:
+                try:
+                    code = GuestUploadErrorCode(error_type)
+                except ValueError:
+                    code = GuestUploadErrorCode.not_furniture_source
+                raise HTTPException(
+                    status_code=status_code,
+                    detail=UploadErrorDetail(
+                        code=code,
+                        message=result.error or "Не удалось обработать файл.",
+                    ).model_dump(),
+                )
+
+        # 6. После полного успеха выдаём одноразовый grant.
+        if result.success:
+            # Повторно декодируем уже проверенный base64, чтобы связать grant с хешем файла.
+            try:
+                verified_bytes = base64.b64decode(req.image_base64, validate=True)
+            except Exception:
+                verified_bytes = b""
+
+            if verified_bytes:
+                try:
+                    grant = await issue_guest_upload_grant(verified_bytes, ident)
+                    # Добавляем grant в ответ.
+                    result.guest_upload_grant = grant  # type: ignore[attr-defined]
+                except Exception as gerr:
+                    log.error("Failed to issue grant: %s", gerr)
+                    raise HTTPException(
+                        status_code=503,
+                        detail=UploadErrorDetail(
+                            code=GuestUploadErrorCode.service_unavailable,
+                            message="Сервис временно недоступен.",
+                        ).model_dump(),
+                    ) from None
+            else:
+                result.guest_upload_grant = None
+        else:
+            result.guest_upload_grant = None
+
+        return result
+    finally:
+        await release_analysis_lock(ident, lock_token)
+
+
+# Небольшая обёртка предотвращает циклический импорт при загрузке модуля.
+async def check_guest_rate_limits_safe(ident: object) -> tuple[bool, int | None, str | None]:
+    from api.guest_upload import check_guest_rate_limits
+    return await check_guest_rate_limits(ident)
 
 
 # ============================================================================

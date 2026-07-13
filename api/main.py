@@ -101,6 +101,46 @@ app.add_middleware(
 )
 
 
+# ── Раннее ограничение тела публичной загрузки (Task 1) ────────────
+# Выполняется до разбора тела запроса и возвращает 413 без полного чтения.
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+
+class _EarlyUploadSizeLimit:
+    """ASGI middleware: 413 on oversized Content-Length for extract-from-image before body read."""
+
+    def __init__(self, app: ASGIApp, max_bytes: int = 14 * 1024 * 1024) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+        self.target_path = "/api/v1/spec/extract-from-image"
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if path == self.target_path or path.startswith(self.target_path):
+            headers = dict(scope.get("headers", []))
+            cl = headers.get(b"content-length")
+            if cl:
+                try:
+                    if int(cl) > self.max_bytes:
+                        # Немедленно возвращаем 413.
+                        from starlette.responses import JSONResponse
+                        resp = JSONResponse(
+                            {"detail": {"code": "payload_too_large", "message": "Payload too large", "retry_after_seconds": None}},
+                            status_code=413,
+                        )
+                        await resp(scope, receive, send)
+                        return
+                except Exception:
+                    pass
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_EarlyUploadSizeLimit)  # type: ignore[arg-type]
+
+
 # ── Observability middleware: structured request events ───────────
 @app.middleware("http")
 async def _observability_middleware(request: Request, call_next):

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useDropzone } from "react-dropzone";
+import Image from "next/image";
+import { type FileRejection, useDropzone } from "react-dropzone";
 import { Upload, FileImage, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ interface FileDropzoneProps {
   isLoading?: boolean;
   accept?: Record<string, string[]>;
   maxSize?: number;
+  error?: string | null; // typed error from parent (413/415/422/429/503/not_furniture)
   "data-testid"?: string;
 }
 
@@ -19,16 +21,19 @@ export function FileDropzone({
   isLoading = false,
   accept = { "image/*": [".jpeg", ".jpg", ".png", ".webp"], "application/pdf": [".pdf"] },
   maxSize = 10 * 1024 * 1024, // 10MB
+  error = null,
   "data-testid": testId,
 }: FileDropzoneProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
       if (!file) return;
 
+      setLocalError(null);
       setFileName(file.name);
 
       // Превью для изображений
@@ -45,8 +50,18 @@ export function FileDropzone({
     [onFileSelect]
   );
 
+  const onDropRejected = useCallback((rejections: FileRejection[]) => {
+    const code = rejections[0]?.errors[0]?.code;
+    if (code === "file-too-large") {
+      setLocalError(`Файл слишком большой. Максимальный размер — ${Math.floor(maxSize / 1024 / 1024)} МБ.`);
+      return;
+    }
+    setLocalError("Этот формат не поддерживается. Загрузите JPG, PNG, WebP или PDF.");
+  }, [maxSize]);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept,
     maxFiles: 1,
     maxSize,
@@ -56,6 +71,7 @@ export function FileDropzone({
   const clearFile = () => {
     setPreview(null);
     setFileName(null);
+    setLocalError(null);
   };
 
   return (
@@ -75,18 +91,21 @@ export function FileDropzone({
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <div>
-            <p className="font-medium">Распознаём эскиз...</p>
+            <p className="font-medium">Проверяем файл...</p>
             <p className="text-sm text-muted-foreground">
-              Обычно это занимает 5-10 секунд
+              Валидация формата, размера и содержания
             </p>
           </div>
         </div>
       ) : preview ? (
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
-            <img
+            <Image
               src={preview}
               alt="Превью"
+              width={768}
+              height={512}
+              unoptimized
               className="max-h-48 rounded-lg object-contain"
             />
             <Button
@@ -139,6 +158,12 @@ export function FileDropzone({
           <p className="text-xs text-muted-foreground">
             JPG, PNG, WebP, PDF до 10 МБ
           </p>
+        </div>
+      )}
+
+      {(error || localError) && (
+        <div className="mt-3 rounded bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid={testId ? `${testId}-error` : undefined}>
+          {error || localError}
         </div>
       )}
     </div>

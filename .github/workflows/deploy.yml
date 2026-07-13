@@ -66,13 +66,20 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GHCR_TOKEN
+          envs: GHCR_TOKEN,GUEST_UPLOAD_SECRET
           script: |
             set -Eeuo pipefail
             cd ~/mebel-ai
             git fetch origin
             git checkout main
             git pull --ff-only origin main
+
+            touch .env
+            if grep -q '^GUEST_UPLOAD_SECRET=' .env; then
+              sed -i "s/^GUEST_UPLOAD_SECRET=.*/GUEST_UPLOAD_SECRET=$GUEST_UPLOAD_SECRET/" .env
+            else
+              printf '\nGUEST_UPLOAD_SECRET=%s\n' "$GUEST_UPLOAD_SECRET" >> .env
+            fi
 
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username Kirill552 --password-stdin
 
@@ -97,6 +104,7 @@ jobs:
             rm -f "$manifest"
         env:
           GHCR_TOKEN: ${{ secrets.GH_PAT }}
+          GUEST_UPLOAD_SECRET: ${{ secrets.GUEST_UPLOAD_SECRET }}
 
       - name: (Optional) Dry-run deploy script locally in CI
         run: |

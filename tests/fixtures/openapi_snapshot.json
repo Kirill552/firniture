@@ -2217,6 +2217,7 @@
         "properties": {
           "image_base64": {
             "description": "Изображение или PDF в формате base64",
+            "maxLength": 14680064,
             "title": "Image Base64",
             "type": "string"
           },
@@ -2294,7 +2295,15 @@
                   "multiple_modules",
                   "file_too_large",
                   "unsupported_format",
-                  "ocr_failed"
+                  "ocr_failed",
+                  "not_furniture_source",
+                  "payload_too_large",
+                  "invalid_base64",
+                  "mime_mismatch",
+                  "invalid_pdf",
+                  "image_too_large",
+                  "unsupported_file_type",
+                  "service_unavailable"
                 ],
                 "type": "string"
               },
@@ -2333,6 +2342,18 @@
             },
             "title": "Fields Need Review",
             "type": "array"
+          },
+          "guest_upload_grant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Одноразовый подписанный grant для /orders/anonymous (scope=create_anonymous_order)",
+            "title": "Guest Upload Grant"
           },
           "module_count": {
             "anyOf": [
@@ -4563,7 +4584,7 @@
     },
     "/api/v1/orders/anonymous": {
       "post": {
-        "description": "Создать анонимный заказ (freemium флоу).\n\nНе требует авторизации. Заказ не привязан к фабрике.",
+        "description": "Создать анонимный заказ (freemium флоу) — ТОЛЬКО по одноразовому grant.\n\nGrant выдаётся backend'ом после успешной валидации + relevance preflight.\nПовторное использование, подделка, истечение, mismatch файла -> 401/409.\nНе требует авторизации. Заказ не привязан к фабрике.",
         "operationId": "create_anonymous_order_api_v1_orders_anonymous_post",
         "requestBody": {
           "content": {
@@ -4598,6 +4619,29 @@
           }
         },
         "summary": "Create Anonymous Order"
+      }
+    },
+    "/api/v1/orders/anonymous/grant": {
+      "post": {
+        "description": "Выдать ограниченный одноразовый grant для ручного guest-flow без AI-вызова.",
+        "operationId": "create_manual_anonymous_order_grant_api_v1_orders_anonymous_grant_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Create Manual Anonymous Order Grant Api V1 Orders Anonymous Grant Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create Manual Anonymous Order Grant"
       }
     },
     "/api/v1/orders/{order_id}": {
@@ -5222,7 +5266,7 @@
     },
     "/api/v1/spec/extract-from-image": {
       "post": {
-        "description": "Извлечение параметров мебели из фото или эскиза.\n\nПроцесс:\n1. Vision OCR: распознавание текста с изображения\n2. GPT: парсинг текста в структурированные параметры\n3. При низкой уверенности — рекомендация перейти в диалог\n\n## Пример запроса:\n```json\n{\n    \"image_base64\": \"base64_encoded_image...\",\n    \"image_mime_type\": \"image/jpeg\",\n    \"language_hint\": \"ru\"\n}\n```\n\n## Пример ответа:\n```json\n{\n    \"success\": true,\n    \"parameters\": {\n        \"furniture_type\": {\"category\": \"навесной_шкаф\", ...},\n        \"dimensions\": {\"width_mm\": 600, \"height_mm\": 720, ...},\n        \"body_material\": {\"type\": \"ЛДСП\", \"color\": \"белый\"},\n        ...\n    },\n    \"fallback_to_dialogue\": false,\n    \"ocr_confidence\": 0.85,\n    \"processing_time_ms\": 1500\n}\n```\n\nПри `fallback_to_dialogue: true` рекомендуется перенаправить пользователя\nв диалог с ИИ-технологом для уточнения параметров.",
+        "description": "Извлечение параметров мебели из фото или эскиза (защищённый guest flow).\n\nЗащиты (выполняются всегда, включая mock):\n- Content-Length + base64 max_length -> 413\n- magic/MIME/PDF/image/relevance preflight ДО AI\n- Redis burst (3/10m) + daily (10/d) + single concurrency lock\n- trusted proxy + HMAC identity (cookie ar_guest_session)\n- grant выдаётся только при success=True (даже low conf) и ровно после preflight\n- garbage / не мебель / rate -> соответствующий 4xx/5xx, grant=None, order не создаётся\n\nОшибки используют единый envelope: {\"detail\": {\"code\": \"...\", \"message\": \"...\", \"retry_after_seconds\": N}}",
         "operationId": "extract_from_image_api_v1_spec_extract_from_image_post",
         "requestBody": {
           "content": {

@@ -25,10 +25,16 @@ Thumbs.db
 .gemini/
 
 # Test artifacts
+.coverage
+.superpowers/
+tmp_*
+web/test-results/
 tests/output/
 tests/**/*.nc
 tests/**/*.zip
 tests/**/*.gcode
+tests/test_output.*
+tests/test_*_request.json
 etl_pipeline/
 
 # Documentation (local only, not in repo)
@@ -55,6 +61,7 @@ debug_finalize.log
 backup_local.sql
 nul
 NUL
+nul[{}]command
 
 # RuVector intelligence data
 .ruvector/

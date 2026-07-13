@@ -41,6 +41,8 @@ def _prod_env(**overrides: str) -> dict[str, str]:
         "S3_SECRET_KEY": "a_strong_s3_secret_2026!",
         "S3_ACCESS_KEY": "minio_ro",
         "JWT_SECRET": "a_strong_jwt_secret_at_least_32_chars_long!",
+        "GUEST_UPLOAD_SECRET": "guest_hmac_secret_2026_at_least_32_chars",
+        "TRUSTED_PROXY_CIDRS": "172.16.0.0/12",
         "AI_API_KEY": "sk-or-v1-real_key_abc123def456",
         "AI_CHAT_MODEL": "deepseek/deepseek-chat-v3-0324",
         "AI_VISION_MODEL": "google/gemini-2.0-flash-001",

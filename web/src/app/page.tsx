@@ -1,323 +1,130 @@
-'use client'
+import React from 'react';
+import Link from 'next/link';
+import { Unbounded, Golos_Text, JetBrains_Mono } from 'next/font/google';
+import { LandingHeader } from '@/components/landing/landing-header';
+import { LandingHero } from '@/components/landing/landing-hero';
+import { ProcessStory } from '@/components/landing/process-story';
+import { OutputSection } from '@/components/landing/output-section';
+import { LANDING_COPY } from '@/components/landing/landing-copy';
 
-import { motion } from 'framer-motion'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
-import {
-  ArrowRight,
-  Camera,
-  MessageSquare,
-  FileCode,
-  Cpu,
-  Package,
-  Zap,
-  CheckCircle2
-} from 'lucide-react'
-import { ThemeToggle } from '@/components/theme-toggle'
+// Шрифты подключаются на маршруте лендинга (кириллица + латиница).
+// Unbounded — акцентный дисплей, Golos Text — основной, JetBrains Mono — техтекст.
+const display = Unbounded({ subsets: ['latin', 'cyrillic'], variable: '--font-display', display: 'swap' });
+const golos = Golos_Text({ subsets: ['latin', 'cyrillic'], variable: '--font-golos', display: 'swap' });
+const tech = JetBrains_Mono({ subsets: ['latin', 'cyrillic'], variable: '--font-tech', display: 'swap' });
 
-const fadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 }
-}
+const CAPS = [
+  { n: '01', label: 'Размеры' },
+  { n: '02', label: 'Уточнения' },
+  { n: '03', label: 'Спецификация' },
+  { n: '04', label: 'DXF + PDF' },
+];
 
-const steps = [
-  {
-    icon: Camera,
-    title: 'Загрузите эскиз',
-    description: 'Фото чертежа или ТЗ — система извлечёт размеры автоматически'
-  },
-  {
-    icon: MessageSquare,
-    title: 'ИИ уточнит детали',
-    description: 'Диалог с технологом: материал, фурнитура, особенности сборки'
-  },
-  {
-    icon: FileCode,
-    title: 'Получите файлы',
-    description: 'DXF для раскроя и G-code для вашего станка — готово к производству'
-  }
-]
-
-const features = [
-  {
-    icon: Camera,
-    title: 'Vision OCR',
-    description: 'Распознавание размеров и параметров с фото эскизов и чертежей'
-  },
-  {
-    icon: Package,
-    title: 'Каталог Boyard 2024',
-    description: '1300+ позиций фурнитуры с умным подбором по параметрам изделия'
-  },
-  {
-    icon: Zap,
-    title: 'G-code генерация',
-    description: 'Программы ЧПУ под ваш станок с учётом профиля и инструмента'
-  }
-]
-
-const machines = [
-  'Weihong NK105/NK260',
-  'Syntec 6MB',
-  'FANUC 0i-MF',
-  'DSP A11/A18',
-  'HOMAG woodWOP'
-]
-
+/**
+ * Лендинг АвтоРаскрой — концепция «Чертёжная доска».
+ * Приём: технический чертёж корпуса, который дорисовывается при прокрутке.
+ * Весь смысл (оффер, 5 этапов, DXF/PDF, CTA) присутствует в HTML без JS.
+ * Только SVG-графика — без WebGL, без лишних JS-чанков на мобильных.
+ */
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
-              А
-            </div>
-            <span className="font-semibold">АвтоРаскрой</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            <Link href="/login">
-              <Button variant="ghost" size="sm">Войти</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+    <div className={`landing-root ${display.variable} ${golos.variable} ${tech.variable} min-h-screen`}>
+      <a href="#main" className="skip-link">
+        Перейти к основному содержимому
+      </a>
 
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={fadeIn}
-            transition={{ duration: 0.5 }}
-          >
-            <p className="text-sm font-medium text-primary mb-4">
-              Для технологов мебельных производств
-            </p>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
-              Фото эскиза → файлы для станка
-              <br />
-              <span className="text-muted-foreground">за 30 секунд</span>
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-              ИИ-технолог извлекает параметры из чертежа, подбирает фурнитуру
-              и генерирует файлы для вашего станка ЧПУ
-            </p>
-          </motion.div>
+      <LandingHeader />
 
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={fadeIn}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
-            <Link href="/new">
-              <Button size="lg" className="text-base px-8 h-12 group">
-                Попробовать бесплатно
-                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button variant="outline" size="lg" className="text-base px-8 h-12">
-                Войти
-              </Button>
-            </Link>
-          </motion.div>
+      <main id="main" tabIndex={-1}>
+        {/* HERO */}
+        <section className="mx-auto max-w-[1280px] px-6">
+          <LandingHero />
+        </section>
 
-          <motion.p
-            initial="hidden"
-            animate="visible"
-            variants={fadeIn}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-6 text-sm text-muted-foreground"
-          >
-            Экономия 2-3 часов на каждый заказ
-          </motion.p>
-        </div>
-      </section>
-
-      {/* Как это работает */}
-      <section className="py-20 px-6 bg-muted/30">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeIn}
-            className="text-center mb-12"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">Как это работает</h2>
-            <p className="text-muted-foreground">Три шага от эскиза до готовых файлов</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {steps.map((step, index) => (
-              <motion.div
-                key={step.title}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeIn}
-                transition={{ delay: index * 0.1 }}
-                className="relative"
-              >
-                <div className="bg-background border border-border rounded-xl p-6 h-full">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                    <step.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="text-sm font-medium text-muted-foreground mb-2">
-                    Шаг {index + 1}
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">{step.title}</h3>
-                  <p className="text-muted-foreground text-sm">{step.description}</p>
-                </div>
-                {index < steps.length - 1 && (
-                  <div className="hidden md:block absolute top-1/2 -right-4 transform -translate-y-1/2">
-                    <ArrowRight className="h-5 w-5 text-muted-foreground/40" />
-                  </div>
-                )}
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Возможности */}
-      <section className="py-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeIn}
-            className="text-center mb-12"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">Возможности</h2>
-            <p className="text-muted-foreground">Всё что нужно для автоматизации расчётов</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {features.map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeIn}
-                transition={{ delay: index * 0.1 }}
-                className="border border-border rounded-xl p-6 hover:border-primary/50 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <feature.icon className="h-5 w-5 text-primary" />
-                </div>
-                <h3 className="font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm">{feature.description}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Совместимость */}
-      <section className="py-20 px-6 bg-muted/30">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeIn}
-          >
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <Cpu className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl md:text-3xl font-bold">Совместимые станки</h2>
-            </div>
-            <p className="text-muted-foreground mb-8">
-              Генерируем G-code под профиль вашего оборудования
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeIn}
-            transition={{ delay: 0.1 }}
-            className="flex flex-wrap items-center justify-center gap-3"
-          >
-            {machines.map((machine) => (
+        {/* Полоса возможностей — техническая линейка */}
+        <section id="capabilities" className="border-y-2 border-[#17130d] bg-[#fbf8f1]">
+          <div className="mx-auto grid max-w-[1280px] grid-cols-2 md:grid-cols-4">
+            {CAPS.map((c, i) => (
               <div
-                key={machine}
-                className="flex items-center gap-2 bg-background border border-border rounded-full px-4 py-2"
+                key={c.n}
+                className={`flex items-center gap-4 px-6 py-6 ${
+                  i < CAPS.length - 1 ? 'md:border-r-2 md:border-[#cec4ae]' : ''
+                } ${i < 2 ? 'border-b-2 border-[#cec4ae] md:border-b-0' : ''}`}
               >
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium">{machine}</span>
+                <span className="font-tech text-[13px] text-[#d8352a]">{c.n}</span>
+                <span className="font-display text-[17px] font-semibold tracking-[-0.4px] text-[#17130d]">
+                  {c.label}
+                </span>
               </div>
             ))}
-          </motion.div>
-
-          <motion.p
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeIn}
-            transition={{ delay: 0.2 }}
-            className="mt-6 text-sm text-muted-foreground"
-          >
-            Не нашли свой станок? Напишите нам — добавим профиль
-          </motion.p>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20 px-6">
-        <div className="max-w-2xl mx-auto text-center">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeIn}
-          >
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">
-              Готовы автоматизировать расчёты?
-            </h2>
-            <p className="text-muted-foreground mb-8">
-              Регистрация бесплатная. Первые 10 заказов — без ограничений.
-            </p>
-            <Link href="/new">
-              <Button size="lg" className="text-base px-8 h-12 group">
-                Начать бесплатно
-                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border py-8 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs">
-              А
-            </div>
-            <span className="text-sm text-muted-foreground">
-              АвтоРаскрой © 2026
-            </span>
           </div>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <Link href="/pricing" className="hover:text-foreground transition-colors">
+        </section>
+
+        {/* SCROLL STORY — пять этапов, самозарисовывающийся чертёж */}
+        <section id="how" className="mx-auto max-w-[1280px] px-6 pb-28 pt-24">
+          <ProcessStory />
+        </section>
+
+        {/* РЕЗУЛЬТАТ */}
+        <section className="border-t-2 border-[#17130d] bg-[#e3dac8]/40">
+          <div className="mx-auto max-w-[1280px] px-6 py-20">
+            <OutputSection />
+          </div>
+        </section>
+
+        {/* ФИНАЛЬНЫЙ CTA — чертёжный лист во всю ширину */}
+        <section className="mx-auto max-w-[1280px] px-6 py-24">
+          <div className="hardline hardshadow relative overflow-hidden bg-[#fbf8f1] px-8 py-16 md:px-16">
+            {/* Угловые метки */}
+            <span className="absolute left-4 top-4 h-4 w-4 border-l-2 border-t-2 border-[#17130d]" />
+            <span className="absolute right-4 top-4 h-4 w-4 border-r-2 border-t-2 border-[#17130d]" />
+            <span className="absolute bottom-4 left-4 h-4 w-4 border-b-2 border-l-2 border-[#17130d]" />
+            <span className="absolute bottom-4 right-4 h-4 w-4 border-b-2 border-r-2 border-[#17130d]" />
+
+            <div className="max-w-[22ch]">
+              <div className="mb-4 font-tech text-[12px] uppercase tracking-[2px] text-[#8c8373]">
+                Лист · чистый
+              </div>
+              <h2 className="font-display text-[34px] font-extrabold leading-[1.02] tracking-[-1.2px] text-[#17130d] md:text-[44px]">
+                {LANDING_COPY.finalCtaTitle}
+              </h2>
+              <Link
+                href="/new"
+                className="group mt-9 inline-flex h-14 w-fit items-center gap-3 bg-[#d8352a] px-9 text-[17px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#c22e24] hover:shadow-[6px_6px_0_#17130d] active:translate-y-0 active:shadow-none"
+              >
+                {LANDING_COPY.ctaPrimary}
+                <span className="transition-transform group-hover:translate-x-1">→</span>
+              </Link>
+              <p className="mt-4 text-[13px] text-[#8c8373]">{LANDING_COPY.finalCtaHint}</p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t-2 border-[#17130d] bg-[#fbf8f1]">
+        <div className="mx-auto flex max-w-[1280px] flex-col items-start gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between">
+          <div className="font-tech flex items-center gap-3 text-[12px] text-[#8c8373]">
+            <span className="flex h-6 w-6 items-center justify-center border border-[#17130d] text-[10px] font-bold text-[#17130d]">
+              АР
+            </span>
+            {LANDING_COPY.footerCopyright}
+          </div>
+          <div className="font-tech flex flex-wrap gap-x-6 gap-y-2 text-[12px] uppercase tracking-[0.5px]">
+            <Link href="/pricing" className="text-[#544c3f] transition-colors hover:text-[#d8352a]">
               Тарифы
             </Link>
-            <a href="mailto:support@avtoraskroy.ru" className="hover:text-foreground transition-colors">
+            <Link href="/login" className="text-[#544c3f] transition-colors hover:text-[#d8352a]">
+              Войти
+            </Link>
+            <a
+              href="mailto:support@avtoraskroy.ru"
+              className="text-[#544c3f] transition-colors hover:text-[#d8352a]"
+            >
               support@avtoraskroy.ru
             </a>
           </div>
         </div>
       </footer>
     </div>
-  )
+  );
 }

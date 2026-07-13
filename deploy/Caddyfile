@@ -20,7 +20,11 @@ https://avtoraskroy.ru:443 {
 
     @api path /api /api/*
     handle @api {
-        reverse_proxy api:8000
+        # Передаём только адрес прямого клиента и не доверяем входящему заголовку.
+        # Backend принимает заголовок лишь от известных CIDR reverse-proxy.
+        reverse_proxy api:8000 {
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 
     # Все остальные URL обслуживает web после проверки его readiness.

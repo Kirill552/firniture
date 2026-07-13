@@ -724,9 +724,19 @@ export interface ImageExtractResponse {
   /** Ошибка (если есть) */
   error?: string | null
   /** Тип ошибки */
-  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed' | null
+  error_type?: 'multiple_modules' | 'file_too_large' | 'unsupported_format' | 'ocr_failed' | 'not_furniture_source' | 'payload_too_large' | 'invalid_base64' | 'mime_mismatch' | 'invalid_pdf' | 'image_too_large' | 'unsupported_file_type' | 'service_unavailable' | null
   /** Количество модулей (если обнаружено несколько) */
   module_count?: number | null
+
+  /** Одноразовый grant для создания анонимного заказа (выдаётся только после успешной валидации) */
+  guest_upload_grant?: string | null
+}
+
+/** Единый envelope ошибки для upload (в detail при 4xx/5xx) */
+export interface UploadErrorDetail {
+  code: 'payload_too_large' | 'invalid_base64' | 'unsupported_file_type' | 'mime_mismatch' | 'invalid_pdf' | 'image_too_large' | 'not_furniture_source' | 'rate_limited' | 'analysis_busy' | 'service_unavailable'
+  message: string
+  retry_after_seconds?: number | null
 }
 
 // ============================================================================

@@ -190,18 +190,17 @@ def test_api_readiness_checks_dependencies_without_using_liveness_endpoint() -> 
 
 def test_caddy_handler_order_and_exact_api_upstream() -> None:
     config = _caddyfile()
-    api_handler = re.search(
-        r"(?P<handler>handle\s+@api\s*\{\s*reverse_proxy\s+api:8000\s*\})",
-        config,
-        re.DOTALL,
-    )
+    api_handler_start = config.find("handle @api {")
+    api_proxy_start = config.find("reverse_proxy api:8000", api_handler_start)
     fallback_handler = re.search(
         r"(?P<handler>handle\s*\{\s*reverse_proxy\s+web:3000\s*\})",
         config,
         re.DOTALL,
     )
-    assert api_handler and fallback_handler
-    assert api_handler.start() < fallback_handler.start(), "API handler must precede web fallback"
+    assert api_handler_start >= 0 and api_proxy_start >= 0 and fallback_handler
+    assert api_handler_start < api_proxy_start < fallback_handler.start(), (
+        "API handler must precede web fallback"
+    )
 
     matcher = re.search(r"@api\s+path\s+(?P<paths>[^\n]+)", config)
     assert matcher, "Caddy must declare an API path matcher"
@@ -210,6 +209,7 @@ def test_caddy_handler_order_and_exact_api_upstream() -> None:
 
     api_region = config[matcher.start() : fallback_handler.start()]
     assert "reverse_proxy web:3000" not in api_region
+    assert "header_up X-Forwarded-For {remote_host}" in api_region
 
 def _exposed_port(dockerfile: Path) -> int:
     match = re.search(r"^EXPOSE (?P<port>\d+)$", dockerfile.read_text(encoding="utf-8"), re.MULTILINE)
@@ -225,11 +225,7 @@ def test_caddy_routes_http_to_https_and_api_to_backend() -> None:
     assert "http://avtoraskroy.ru" in config
     assert "https://avtoraskroy.ru" in config
     assert re.search(r"@api\s+path\s+/api\s+/api/\*", config)
-    assert re.search(
-        rf"handle\s+@api\s*\{{\s*reverse_proxy\s+api:{api_port}\s*\}}",
-        config,
-        re.DOTALL,
-    )
+    assert f"reverse_proxy api:{api_port}" in config
     assert f"reverse_proxy web:{web_port}" in config
 
 

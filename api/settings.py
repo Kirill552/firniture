@@ -36,6 +36,24 @@ class Settings(BaseSettings):
     # Guest Capability Token (HMAC-SHA256 secret)
     GUEST_CAPABILITY_SECRET: str = ""  # Empty = no guest tokens allowed (fail closed)
 
+    # Защита гостевой загрузки (Task 1).
+    GUEST_UPLOAD_SECRET: str = ""  # HMAC secret for guest session cookies and upload grants. Fail closed if empty in prod.
+    # CIDR доверенных reverse-proxy через запятую; в production значение обязательно.
+    TRUSTED_PROXY_CIDRS: str = ""
+    GUEST_UPLOAD_BURST_LIMIT: int = 3
+    GUEST_UPLOAD_BURST_WINDOW_SECONDS: int = 600  # 10 minutes
+    GUEST_UPLOAD_DAILY_LIMIT: int = 10
+    GUEST_UPLOAD_DAILY_WINDOW_SECONDS: int = 86400
+    GUEST_UPLOAD_CONCURRENCY_TTL: int = 60  # seconds for analysis lock
+    GUEST_GRANT_TTL_SECONDS: int = 900  # 15 minutes
+    VISION_PIPELINE_TIMEOUT_SECONDS: int = 45
+    MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024  # 10 MB decoded
+    MAX_BASE64_BYTES: int = 14 * 1024 * 1024  # ~14 MB for base64 field
+    MAX_IMAGE_SIDE_PX: int = 8000
+    MIN_IMAGE_SIDE_PX: int = 256
+    MAX_IMAGE_PIXELS: int = 24 * 1000 * 1000  # 24 MP
+    ALLOWED_MIME_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

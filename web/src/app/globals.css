@@ -236,3 +236,98 @@
     @apply border-l-4 border-accent;
   }
 }
+
+/* ============================================================
+ * ЛЕНДИНГ АвтоРаскрой — «Чертёжная доска»
+ * Инженерный чертёж: тёплая бумага, сетка-миллиметровка,
+ * один красный акцент, самозарисовывающийся чертёж.
+ * Все стили изолированы под .landing-root, чтобы не влиять
+ * на остальное приложение (оно живёт на Onest / oklch-теме).
+ * ============================================================ */
+
+.landing-root {
+  --paper: #ece4d5;
+  --paper-2: #e3dac8;
+  --sheet: #fbf8f1;
+  --ink: #17130d;
+  --graphite: #544c3f;
+  --muted: #8c8373;
+  --line: #cec4ae;
+  --line-strong: #b3a88f;
+  --red: #d8352a;
+  --red-deep: #a9271d;
+
+  font-family: var(--font-golos), ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  /* Сетка-миллиметровка: тонкая 8px + жирная 48px, тёплый графит */
+  background-image:
+    linear-gradient(to right, rgba(120, 104, 74, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(120, 104, 74, 0.045) 1px, transparent 1px),
+    linear-gradient(to right, rgba(120, 104, 74, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(120, 104, 74, 0.08) 1px, transparent 1px);
+  background-size: 8px 8px, 8px 8px, 48px 48px, 48px 48px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.landing-root .font-display {
+  font-family: var(--font-display), var(--font-golos), sans-serif;
+}
+.landing-root .font-tech {
+  font-family: var(--font-tech), ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* Выключка текста как в чертёжном штампе */
+.landing-root .ink { color: var(--ink); }
+.landing-root .graphite { color: var(--graphite); }
+.landing-root .muted { color: var(--muted); }
+.landing-root .red { color: var(--red); }
+
+/* Штамп-рамка (title block) и жёсткие тени вместо мягких */
+.landing-root .hardline { border: 2px solid var(--ink); }
+.landing-root .hardshadow { box-shadow: 7px 7px 0 var(--ink); }
+.landing-root .softshadow { box-shadow: 6px 6px 0 var(--paper-2); }
+
+/* Крест-курсор над чертёжным листом — метафора CAD */
+.landing-root .cad-cursor { cursor: crosshair; }
+
+/* ---------- Анимации ---------- */
+@keyframes ar-rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes ar-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ar-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.2; }
+}
+@keyframes ar-sweep {
+  from { transform: translateX(-120%); }
+  to   { transform: translateX(320%); }
+}
+
+.landing-root [data-rise] {
+  opacity: 0;
+  animation: ar-rise 0.85s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+.landing-root [data-blink] {
+  animation: ar-blink 1.4s steps(1, end) infinite;
+}
+/* Красный «луч сканирования» под каретку сетки */
+.landing-root .scan-sweep {
+  animation: ar-sweep 2.6s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-root [data-rise],
+  .landing-root [data-blink],
+  .landing-root .scan-sweep {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
