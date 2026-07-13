@@ -1,31 +1,31 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test';
 
-test.describe("Landing page smoke", () => {
-  test("renders hero with brand and CTA", async ({ page }) => {
-    await page.goto("/");
+test.describe('Landing page smoke', () => {
+  test('renders hero with brand and CTA', async ({ page }) => {
+    await page.goto('/');
 
-    // Brand name is visible in header
-    await expect(page.locator("header").getByText("АвтоРаскрой")).toBeVisible();
+    // Название бренда видно в шапке.
+    await expect(page.locator('header').getByText('АвтоРаскрой')).toBeVisible();
 
-    // Hero headline renders
-    await expect(
-      page.getByText("Фото эскиза → файлы для станка"),
-    ).toBeVisible();
+    // Первый экран показывает актуальный оффер.
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      'Эскиз клиента — в точный заказ',
+    );
 
-    // Primary CTA is present and links to /new
-    const cta = page.getByRole("link", { name: "Попробовать бесплатно" }).first();
+    // Основная CTA ведёт в создание заказа.
+    const cta = page.getByRole('link', { name: 'Загрузить эскиз' }).first();
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute("href", "/new");
+    await expect(cta).toHaveAttribute('href', '/new');
   });
 
-  test("login link navigates to /login", async ({ page }) => {
-    await page.goto("/");
+  test('login link navigates to /login', async ({ page }) => {
+    await page.goto('/');
 
-    const loginLink = page.locator("header").getByRole("link", { name: "Войти" });
+    const loginLink = page.locator('header').getByRole('link', { name: 'Войти' });
     await expect(loginLink).toBeVisible();
     await loginLink.click();
 
     await page.waitForURL(/\/login/);
-    expect(page.url()).toContain("/login");
+    expect(page.url()).toContain('/login');
   });
 });
