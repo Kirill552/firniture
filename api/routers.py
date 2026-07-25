@@ -5,12 +5,12 @@ import os
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.access_control import enforce_factory_access
+from api.access_control import enforce_factory_access, enforce_order_access
 from api.ai_tools import execute_tool_call, get_tools_schema
 from api.drilling_calculator import (
     calculate_drilling_for_facade,
@@ -19,6 +19,7 @@ from api.drilling_calculator import (
 from api.drilling_templates import list_hinge_templates, list_slide_templates
 from api.guest_upload import (
     acquire_analysis_lock,
+    get_or_create_guest_session,
     issue_guest_upload_grant,
     release_analysis_lock,
     resolve_guest_identity,
@@ -226,7 +227,7 @@ def _user_factory_id(current_user: User | None) -> UUID | None:
 async def create_order(
     order: OrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Создать новый заказ.
@@ -237,10 +238,7 @@ async def create_order(
     created_by_id = current_user.id
 
     return await crud.create_order(
-        db=db,
-        order=order,
-        factory_id=factory_id,
-        created_by_id=created_by_id
+        db=db, order=order, factory_id=factory_id, created_by_id=created_by_id
     )
 
 
@@ -301,16 +299,18 @@ async def create_manual_anonymous_order_grant(
 async def create_anonymous_order(
     order: OrderCreate,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Создать анонимный заказ (freemium флоу) — ТОЛЬКО по одноразовому grant.
+    """Создать анонимный заказ (freemium флоу) — ТОЛЬКО по одноразовому grant.
 
     Grant выдаётся backend'ом после успешной валидации + relevance preflight.
     Повторное использование, подделка, истечение, mismatch файла -> 401/409.
     Не требует авторизации. Заказ не привязан к фабрике.
     """
-    grant = request.headers.get("x-guest-upload-grant") or request.headers.get("X-Guest-Upload-Grant")
+    grant = request.headers.get("x-guest-upload-grant") or request.headers.get(
+        "X-Guest-Upload-Grant"
+    )
     if not grant:
         # Прямой вызов без grant запрещён
         raise HTTPException(
@@ -333,13 +333,26 @@ async def create_anonymous_order(
             ).model_dump(),
         )
 
-    created = await crud.create_order(
-        db=db,
-        order=order,
-        factory_id=None,
-        created_by_id=None
-    )
+    created = await crud.create_order(db=db, order=order, factory_id=None, created_by_id=None)
     log.info("[GuestUpload] Anonymous order created after valid grant: %s", created.id)
+
+    # Выставляем подписанный HttpOnly-cookie для гостевого доступа к этому черновику
+    session_id = get_or_create_guest_session(request, response)
+    from api.guest_drafts import create_guest_draft_token, set_guest_draft_cookie
+
+    token = create_guest_draft_token(
+        order_id=str(created.id),
+        guest_session_id=session_id,
+        secret=settings.GUEST_UPLOAD_SECRET,
+    )
+    is_secure = request.url.scheme == "https"
+    if settings.GUEST_UPLOAD_SECRET not in (
+        "local-test-guest-secret-at-least-32-characters",
+        "test-guest-upload-secret-32bytes-minimum-2026",
+    ):
+        is_secure = True
+    set_guest_draft_cookie(response, token, secure=is_secure)
+
     return created
 
 
@@ -348,7 +361,7 @@ async def list_orders(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional)
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """
     Получить список заказов текущей фабрики.
@@ -359,10 +372,7 @@ async def list_orders(
         return []
 
     return await crud.get_orders_by_factory(
-        db=db,
-        factory_id=current_user.factory_id,
-        limit=limit,
-        offset=offset
+        db=db, factory_id=current_user.factory_id, limit=limit, offset=offset
     )
 
 
@@ -400,41 +410,49 @@ async def get_order_with_products_endpoint(
     )
 
 
-def _calculate_fasteners(panels_count: int, door_count: int, drawer_count: int, shelf_count: int) -> list[dict]:
+def _calculate_fasteners(
+    panels_count: int, door_count: int, drawer_count: int, shelf_count: int
+) -> list[dict]:
     """Расчёт крепежа на основе количества панелей и элементов."""
     fasteners = []
 
     # Конфирматы для сборки корпуса (2 на соединение, ~4 соединения на панель)
     confirmats_count = panels_count * 4
     if confirmats_count > 0:
-        fasteners.append({
-            "id": str(uuid.uuid4()),
-            "name": "Конфирмат",
-            "size": "7×50",
-            "quantity": confirmats_count,
-            "purpose": "сборка корпуса",
-            "unit_price": 2.0,
-        })
+        fasteners.append(
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Конфирмат",
+                "size": "7×50",
+                "quantity": confirmats_count,
+                "purpose": "сборка корпуса",
+                "unit_price": 2.0,
+            }
+        )
         # Заглушки под конфирматы
-        fasteners.append({
-            "id": str(uuid.uuid4()),
-            "name": "Заглушка",
-            "size": "15мм",
-            "quantity": confirmats_count,
-            "purpose": "закрытие конфирматов",
-            "unit_price": 1.0,
-        })
+        fasteners.append(
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Заглушка",
+                "size": "15мм",
+                "quantity": confirmats_count,
+                "purpose": "закрытие конфирматов",
+                "unit_price": 1.0,
+            }
+        )
 
     # Полкодержатели (4 на полку)
     if shelf_count > 0:
-        fasteners.append({
-            "id": str(uuid.uuid4()),
-            "name": "Полкодержатель",
-            "size": "5мм",
-            "quantity": shelf_count * 4,
-            "purpose": "крепление полок",
-            "unit_price": 3.0,
-        })
+        fasteners.append(
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Полкодержатель",
+                "size": "5мм",
+                "quantity": shelf_count * 4,
+                "purpose": "крепление полок",
+                "unit_price": 3.0,
+            }
+        )
 
     return fasteners
 
@@ -443,7 +461,7 @@ def _calculate_edge_bands(panels: list, material_color: str = "белый") -> l
     """Расчёт кромки на основе панелей."""
     # Считаем периметр всех панелей
     total_visible_edges_mm = 0  # Видимые торцы (ПВХ 2мм)
-    total_hidden_edges_mm = 0   # Скрытые торцы (меламин 0.4мм)
+    total_hidden_edges_mm = 0  # Скрытые торцы (меламин 0.4мм)
 
     for panel in panels:
         width = panel.get("width_mm", 0) or 0
@@ -461,24 +479,28 @@ def _calculate_edge_bands(panels: list, material_color: str = "белый") -> l
     edge_bands = []
 
     if total_visible_edges_mm > 0:
-        edge_bands.append({
-            "id": str(uuid.uuid4()),
-            "type": "ПВХ 2мм",
-            "color": material_color,
-            "length_m": round(total_visible_edges_mm / 1000, 2),
-            "purpose": "видимые торцы",
-            "unit_price": 25.0,  # за погонный метр
-        })
+        edge_bands.append(
+            {
+                "id": str(uuid.uuid4()),
+                "type": "ПВХ 2мм",
+                "color": material_color,
+                "length_m": round(total_visible_edges_mm / 1000, 2),
+                "purpose": "видимые торцы",
+                "unit_price": 25.0,  # за погонный метр
+            }
+        )
 
     if total_hidden_edges_mm > 0:
-        edge_bands.append({
-            "id": str(uuid.uuid4()),
-            "type": "Меламин 0.4мм",
-            "color": material_color,
-            "length_m": round(total_hidden_edges_mm / 1000, 2),
-            "purpose": "скрытые торцы",
-            "unit_price": 8.0,
-        })
+        edge_bands.append(
+            {
+                "id": str(uuid.uuid4()),
+                "type": "Меламин 0.4мм",
+                "color": material_color,
+                "length_m": round(total_hidden_edges_mm / 1000, 2),
+                "purpose": "скрытые торцы",
+                "unit_price": 8.0,
+            }
+        )
 
     return edge_bands
 
@@ -570,13 +592,15 @@ async def finalize_order_endpoint(
                 edge_front = True
             # Задняя панель — без кромки (остаётся False/False)
 
-            parsed_panels.append({
-                "name": panel_name,
-                "width_mm": panel_width,
-                "height_mm": panel_height,
-                "edge_front": panel_data.get("edge_front", edge_front),
-                "edge_back": panel_data.get("edge_back", edge_back),
-            })
+            parsed_panels.append(
+                {
+                    "name": panel_name,
+                    "width_mm": panel_width,
+                    "height_mm": panel_height,
+                    "edge_front": panel_data.get("edge_front", edge_front),
+                    "edge_back": panel_data.get("edge_back", edge_back),
+                }
+            )
     else:
         # Панели НЕ пришли — рассчитываем сами по габаритам
         from api.panel_calculator import calculate_panels
@@ -607,13 +631,15 @@ async def finalize_order_endpoint(
             )
 
             for p in calc_result.panels:
-                parsed_panels.append({
-                    "name": p.name,
-                    "width_mm": p.width_mm,
-                    "height_mm": p.height_mm,
-                    "edge_front": p.edge_front,
-                    "edge_back": p.edge_back,
-                })
+                parsed_panels.append(
+                    {
+                        "name": p.name,
+                        "width_mm": p.width_mm,
+                        "height_mm": p.height_mm,
+                        "edge_front": p.edge_front,
+                        "edge_back": p.edge_back,
+                    }
+                )
         except Exception as e:
             log.warning(f"Failed to calculate panels: {e}")
 
@@ -629,10 +655,7 @@ async def finalize_order_endpoint(
     edge_bands = _calculate_edge_bands(parsed_panels, material_color)
 
     # Рассчитываем площадь панелей
-    total_area_m2 = sum(
-        (p["width_mm"] * p["height_mm"]) / 1_000_000
-        for p in parsed_panels
-    )
+    total_area_m2 = sum((p["width_mm"] * p["height_mm"]) / 1_000_000 for p in parsed_panels)
     sheet_area_m2 = 5.796  # Стандартный лист 2800×2070
 
     # Собираем полные params
@@ -643,7 +666,9 @@ async def finalize_order_endpoint(
         "summary": {
             "total_area_m2": round(total_area_m2, 3),
             "sheet_area_m2": sheet_area_m2,
-            "utilization_percent": round((total_area_m2 / sheet_area_m2) * 100, 1) if total_area_m2 > 0 else 0,
+            "utilization_percent": round((total_area_m2 / sheet_area_m2) * 100, 1)
+            if total_area_m2 > 0
+            else 0,
             "panels_count": len(parsed_panels),
             "hardware_count": len(spec.get("hardware", [])),
             "fasteners_count": sum(f["quantity"] for f in fasteners),
@@ -726,9 +751,8 @@ async def get_order_bom(
 
     # Получаем панели из БД
     from sqlalchemy import select
-    panels_result = await db.execute(
-        select(Panel).where(Panel.product_id == product.id)
-    )
+
+    panels_result = await db.execute(select(Panel).where(Panel.product_id == product.id))
     panels = panels_result.scalars().all()
 
     # Формируем ответ
@@ -742,8 +766,7 @@ async def get_order_bom(
     if door_count > 0:
         # Ищем фасад среди панелей
         facade_panel = next(
-            (p for p in panels if "фасад" in p.name.lower() or "дверь" in p.name.lower()),
-            None
+            (p for p in panels if "фасад" in p.name.lower() or "дверь" in p.name.lower()), None
         )
         # Если фасад не найден — рассчитываем по размерам шкафа
         if facade_panel:
@@ -751,33 +774,34 @@ async def get_order_bom(
             facade_height = facade_panel.height_mm
         else:
             # Размер фасада = размер шкафа минус зазоры (по 2мм с каждой стороны)
-            facade_width = (product.width_mm - 4) / door_count if door_count > 1 else product.width_mm - 4
+            facade_width = (
+                (product.width_mm - 4) / door_count if door_count > 1 else product.width_mm - 4
+            )
             facade_height = product.height_mm - 4
 
         facade_drilling = calculate_drilling_for_facade(
             width_mm=facade_width,
             height_mm=facade_height,
         )
-        drill_points.extend([
-            {
-                "x": pt.x,
-                "y": pt.y,
-                "diameter": pt.diameter,
-                "depth": pt.depth,
-                "layer": pt.layer,
-                "hardware_id": pt.hardware_id,
-                "hardware_type": pt.hardware_type,
-                "notes": pt.notes,
-            }
-            for pt in facade_drilling.drill_points
-        ])
+        drill_points.extend(
+            [
+                {
+                    "x": pt.x,
+                    "y": pt.y,
+                    "diameter": pt.diameter,
+                    "depth": pt.depth,
+                    "layer": pt.layer,
+                    "hardware_id": pt.hardware_id,
+                    "hardware_type": pt.hardware_type,
+                    "notes": pt.notes,
+                }
+                for pt in facade_drilling.drill_points
+            ]
+        )
 
     if drawer_count > 0:
         # Ищем боковину среди панелей
-        side_panel = next(
-            (p for p in panels if "боковина" in p.name.lower()),
-            None
-        )
+        side_panel = next((p for p in panels if "боковина" in p.name.lower()), None)
         # Если боковина не найдена — рассчитываем по размерам шкафа
         if side_panel:
             side_height = side_panel.height_mm
@@ -791,19 +815,21 @@ async def get_order_bom(
             depth_mm=side_depth,
             drawer_count=drawer_count,
         )
-        drill_points.extend([
-            {
-                "x": pt.x,
-                "y": pt.y,
-                "diameter": pt.diameter,
-                "depth": pt.depth,
-                "layer": pt.layer,
-                "hardware_id": pt.hardware_id,
-                "hardware_type": pt.hardware_type,
-                "notes": pt.notes,
-            }
-            for pt in side_drilling.drill_points
-        ])
+        drill_points.extend(
+            [
+                {
+                    "x": pt.x,
+                    "y": pt.y,
+                    "diameter": pt.diameter,
+                    "depth": pt.depth,
+                    "layer": pt.layer,
+                    "hardware_id": pt.hardware_id,
+                    "hardware_type": pt.hardware_type,
+                    "notes": pt.notes,
+                }
+                for pt in side_drilling.drill_points
+            ]
+        )
 
     return {
         "order_id": str(order_id),
@@ -817,7 +843,9 @@ async def get_order_bom(
         "body_material": {
             "type": product.material,
             "thickness_mm": product.thickness_mm,
-            "color": params.get("body_material", {}).get("color", "белый") if isinstance(params.get("body_material"), dict) else "белый",
+            "color": params.get("body_material", {}).get("color", "белый")
+            if isinstance(params.get("body_material"), dict)
+            else "белый",
         },
         "panels": [
             {
@@ -899,12 +927,11 @@ async def update_order_bom(
     # Обновляем панели
     if "panels" in updates:
         from sqlalchemy import select
+
         for panel_update in updates["panels"]:
             panel_id = panel_update.get("id")
             if panel_id:
-                result = await db.execute(
-                    select(Panel).where(Panel.id == UUID(panel_id))
-                )
+                result = await db.execute(select(Panel).where(Panel.id == UUID(panel_id)))
                 panel = result.scalars().first()
                 if panel:
                     if "name" in panel_update:
@@ -923,16 +950,17 @@ async def update_order_bom(
     # Пересчитываем сводку если изменились панели
     if "panels" in updates:
         from sqlalchemy import select
-        panels_result = await db.execute(
-            select(Panel).where(Panel.product_id == product.id)
-        )
+
+        panels_result = await db.execute(select(Panel).where(Panel.product_id == product.id))
         panels = panels_result.scalars().all()
         total_area = sum((p.width_mm * p.height_mm) / 1_000_000 for p in panels)
         sheet_area = 5.796
         params["summary"] = {
             "total_area_m2": round(total_area, 3),
             "sheet_area_m2": sheet_area,
-            "utilization_percent": round((total_area / sheet_area) * 100, 1) if total_area > 0 else 0,
+            "utilization_percent": round((total_area / sheet_area) * 100, 1)
+            if total_area > 0
+            else 0,
             "panels_count": len(panels),
             "hardware_count": len(params.get("hardware", [])),
             "fasteners_count": sum(f.get("quantity", 0) for f in params.get("fasteners", [])),
@@ -1074,9 +1102,7 @@ async def recalculate_bom(
     )
 
     # Удаляем старые панели
-    await db.execute(
-        sql_delete(Panel).where(Panel.product_id == product.id)
-    )
+    await db.execute(sql_delete(Panel).where(Panel.product_id == product.id))
 
     # Создаём новые панели
     new_panels = []
@@ -1106,7 +1132,11 @@ async def recalculate_bom(
     )
 
     # Рассчитываем кромку
-    material_color = params.get("body_material", {}).get("color", "белый") if isinstance(params.get("body_material"), dict) else "белый"
+    material_color = (
+        params.get("body_material", {}).get("color", "белый")
+        if isinstance(params.get("body_material"), dict)
+        else "белый"
+    )
     parsed_panels = [p.to_dict() for p in calc_result.panels]
     edge_bands = _calculate_edge_bands(parsed_panels, material_color)
 
@@ -1171,8 +1201,7 @@ async def recalculate_bom(
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     Получить статистику заказов для dashboard.
@@ -1191,10 +1220,10 @@ async def get_dashboard_stats(
 # Settings — настройки фабрики
 # ============================================================================
 
+
 @router.get("/settings", response_model=FactorySettingsResponse)
 async def get_settings(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     Получить настройки фабрики.
@@ -1205,9 +1234,7 @@ async def get_settings(
     Требует авторизации.
     """
     # Получаем фабрику пользователя
-    result = await db.execute(
-        select(Factory).where(Factory.id == current_user.factory_id)
-    )
+    result = await db.execute(select(Factory).where(Factory.id == current_user.factory_id))
     factory = result.scalar_one_or_none()
     if not factory:
         raise HTTPException(status_code=404, detail="Factory not found")
@@ -1216,7 +1243,7 @@ async def get_settings(
     owner_result = await db.execute(
         select(User).where(
             User.factory_id == factory.id,
-            User.is_owner == True  # noqa: E712
+            User.is_owner == True,  # noqa: E712
         )
     )
     owner = owner_result.scalar_one_or_none()
@@ -1249,8 +1276,13 @@ async def get_settings(
 async def update_settings(
     req: FactorySettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
+    if not settings.MVP_MACHINE_FEATURES_ENABLED and "machine_profile" in req.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Станочные ЧПУ-функции отключены в текущей версии. Профиль станка изменить нельзя.",
+        )
     """
     Обновить настройки фабрики (частично).
 
@@ -1260,9 +1292,7 @@ async def update_settings(
     Требует авторизации (только owner может менять factory_name).
     """
     # Получаем фабрику
-    result = await db.execute(
-        select(Factory).where(Factory.id == current_user.factory_id)
-    )
+    result = await db.execute(select(Factory).where(Factory.id == current_user.factory_id))
     factory = result.scalar_one_or_none()
     if not factory:
         raise HTTPException(status_code=404, detail="Factory not found")
@@ -1272,10 +1302,7 @@ async def update_settings(
     # Обновление названия фабрики (только owner)
     if req.factory_name is not None:
         if not current_user.is_owner:
-            raise HTTPException(
-                status_code=403,
-                detail="Only owner can change factory name"
-            )
+            raise HTTPException(status_code=403, detail="Only owner can change factory name")
         factory.name = req.factory_name
         updated_fields.append("factory_name")
 
@@ -1284,10 +1311,19 @@ async def update_settings(
 
     # Все поля настроек (кроме factory_name)
     settings_fields = [
-        "machine_profile", "sheet_width_mm", "sheet_height_mm",
-        "thickness_mm", "edge_thickness_mm", "decor", "gap_mm",
-        "spindle_speed", "feed_rate_cutting", "feed_rate_plunge",
-        "cut_depth", "safe_height", "tool_diameter"
+        "machine_profile",
+        "sheet_width_mm",
+        "sheet_height_mm",
+        "thickness_mm",
+        "edge_thickness_mm",
+        "decor",
+        "gap_mm",
+        "spindle_speed",
+        "feed_rate_cutting",
+        "feed_rate_plunge",
+        "cut_depth",
+        "safe_height",
+        "tool_diameter",
     ]
 
     req_dict = req.model_dump(exclude_unset=True)
@@ -1314,6 +1350,7 @@ async def update_settings(
 # ============================================================================
 # Panel Calculator — расчёт панелей
 # ============================================================================
+
 
 @router.post("/panels/calculate", response_model=CalculatePanelsResponse)
 async def calculate_panels_endpoint(
@@ -1402,11 +1439,13 @@ async def calculate_panels_endpoint(
 # BOM Generator — генерация полного BOM (панели + фурнитура)
 # ============================================================================
 
+
 @router.post("/bom/generate", response_model=GenerateBOMResponse)
 async def generate_bom_endpoint(
     req: GenerateBOMRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
+    ar_guest_draft: str | None = Cookie(None),
 ) -> GenerateBOMResponse:
     """
     Сгенерировать полный BOM (панели + фурнитура) для изделия.
@@ -1480,23 +1519,27 @@ async def generate_bom_endpoint(
 
         if hinges.get("success") and hinges.get("items"):
             item = hinges["items"][0]
-            hardware_list.append(HardwareRecommendation(
-                type="hinge",
-                sku=item.get("sku"),
-                name=item.get("name", "Петля накладная"),
-                quantity=qty_result.get("quantity", req.door_count * 2),
-                unit="шт",
-                source="rag",
-            ))
+            hardware_list.append(
+                HardwareRecommendation(
+                    type="hinge",
+                    sku=item.get("sku"),
+                    name=item.get("name", "Петля накладная"),
+                    quantity=qty_result.get("quantity", req.door_count * 2),
+                    unit="шт",
+                    source="rag",
+                )
+            )
         else:
-            hardware_list.append(HardwareRecommendation(
-                type="hinge",
-                sku=None,
-                name="Петля накладная с доводчиком",
-                quantity=qty_result.get("quantity", req.door_count * 2),
-                unit="шт",
-                source="calculated",
-            ))
+            hardware_list.append(
+                HardwareRecommendation(
+                    type="hinge",
+                    sku=None,
+                    name="Петля накладная с доводчиком",
+                    quantity=qty_result.get("quantity", req.door_count * 2),
+                    unit="шт",
+                    source="calculated",
+                )
+            )
 
     # Направляющие (если есть ящики)
     if req.drawer_count > 0:
@@ -1513,47 +1556,55 @@ async def generate_bom_endpoint(
 
         if slides.get("success") and slides.get("items"):
             item = slides["items"][0]
-            hardware_list.append(HardwareRecommendation(
-                type="slide",
-                sku=item.get("sku"),
-                name=item.get("name", "Направляющие"),
-                quantity=qty_result.get("quantity", req.drawer_count),
-                unit="пар",
-                source="rag",
-            ))
+            hardware_list.append(
+                HardwareRecommendation(
+                    type="slide",
+                    sku=item.get("sku"),
+                    name=item.get("name", "Направляющие"),
+                    quantity=qty_result.get("quantity", req.drawer_count),
+                    unit="пар",
+                    source="rag",
+                )
+            )
         else:
-            hardware_list.append(HardwareRecommendation(
-                type="slide",
-                sku=None,
-                name="Направляющие полного выдвижения",
-                quantity=req.drawer_count,
-                unit="пар",
-                source="calculated",
-            ))
+            hardware_list.append(
+                HardwareRecommendation(
+                    type="slide",
+                    sku=None,
+                    name="Направляющие полного выдвижения",
+                    quantity=req.drawer_count,
+                    unit="пар",
+                    source="calculated",
+                )
+            )
 
     # Конфирматы (всегда)
     fixed_panels = sum(1 for p in panel_result.panels if "полка" not in p.name.lower())
     confirmat_qty = fixed_panels * 4
 
-    hardware_list.append(HardwareRecommendation(
-        type="connector",
-        sku=None,
-        name="Конфирмат 5×40",
-        quantity=confirmat_qty,
-        unit="шт",
-        source="calculated",
-    ))
+    hardware_list.append(
+        HardwareRecommendation(
+            type="connector",
+            sku=None,
+            name="Конфирмат 5×40",
+            quantity=confirmat_qty,
+            unit="шт",
+            source="calculated",
+        )
+    )
 
     # Полкодержатели (если есть полки)
     if req.shelf_count > 0:
-        hardware_list.append(HardwareRecommendation(
-            type="other",
-            sku=None,
-            name="Полкодержатель 5мм",
-            quantity=req.shelf_count * 4,
-            unit="шт",
-            source="calculated",
-        ))
+        hardware_list.append(
+            HardwareRecommendation(
+                type="other",
+                sku=None,
+                name="Полкодержатель 5мм",
+                quantity=req.shelf_count * 4,
+                unit="шт",
+                source="calculated",
+            )
+        )
 
     # Рассчитываем крепёж и кромку
     fasteners = _calculate_fasteners(
@@ -1562,7 +1613,15 @@ async def generate_bom_endpoint(
         drawer_count=req.drawer_count,
         shelf_count=req.shelf_count,
     )
-    parsed_panels = [{"width_mm": p.width_mm, "height_mm": p.height_mm, "edge_front": p.edge_front, "edge_back": p.edge_back} for p in panel_result.panels]
+    parsed_panels = [
+        {
+            "width_mm": p.width_mm,
+            "height_mm": p.height_mm,
+            "edge_front": p.edge_front,
+            "edge_back": p.edge_back,
+        }
+        for p in panel_result.panels
+    ]
     edge_bands = _calculate_edge_bands(parsed_panels, "белый")
 
     # Формируем ответ
@@ -1591,7 +1650,7 @@ async def generate_bom_endpoint(
         # Ищем заказ
         order = await db.get(Order, req.order_id)
         if order:
-            enforce_factory_access(order.factory_id, _user_factory_id(current_user))
+            enforce_order_access(order, current_user, ar_guest_draft, settings.GUEST_UPLOAD_SECRET)
             # Ищем или создаём ProductConfig
             product_result = await db.execute(
                 select(ProductConfig).where(ProductConfig.order_id == req.order_id)
@@ -1624,7 +1683,9 @@ async def generate_bom_endpoint(
                 await db.flush()
             else:
                 # Обновляем базовые поля изделия и params, чтобы BOM был консистентным при повторной генерации.
-                product.name = f"{cabinet_type_label_ru} {req.width_mm}×{req.height_mm}×{req.depth_mm}"
+                product.name = (
+                    f"{cabinet_type_label_ru} {req.width_mm}×{req.height_mm}×{req.depth_mm}"
+                )
                 product.width_mm = req.width_mm
                 product.height_mm = req.height_mm
                 product.depth_mm = req.depth_mm
@@ -1647,6 +1708,7 @@ async def generate_bom_endpoint(
 
             # Удаляем старые панели
             from sqlalchemy import delete as sql_delete
+
             await db.execute(sql_delete(Panel).where(Panel.product_id == product.id))
 
             # Создаём новые панели
@@ -1715,17 +1777,19 @@ async def search_hardware(
     for i, hw in enumerate(results):
         # Рассчитываем score как убывающую релевантность
         score = 1.0 - (i * 0.05) if i < 20 else 0.1
-        items.append(HardwareSearchItem(
-            sku=hw.sku,
-            name=hw.name,
-            description=hw.description,
-            brand=hw.brand,
-            type=hw.type,
-            category=hw.category,
-            price_rub=hw.price_rub,
-            params=hw.params or {},
-            score=round(score, 2),
-        ))
+        items.append(
+            HardwareSearchItem(
+                sku=hw.sku,
+                name=hw.name,
+                description=hw.description,
+                brand=hw.brand,
+                type=hw.type,
+                category=hw.category,
+                price_rub=hw.price_rub,
+                params=hw.params or {},
+                score=round(score, 2),
+            )
+        )
 
     return HardwareSearchResponse(
         items=items,
@@ -1737,6 +1801,7 @@ async def search_hardware(
 # ============================================================================
 # Integrations — 1C Export
 # ============================================================================
+
 
 @router.post("/integrations/1c/export", response_model=Export1CResponse)
 async def export_1c(
@@ -1782,7 +1847,7 @@ async def export_1c(
         storage.put_object(
             key=storage_key,
             data=excel_bytes,
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     else:  # csv
@@ -1799,9 +1864,7 @@ async def export_1c(
         storage_key = f"exports/1c/{filename}"
 
         storage.put_object(
-            key=storage_key,
-            data=zip_buffer.getvalue(),
-            content_type="application/zip"
+            key=storage_key, data=zip_buffer.getvalue(), content_type="application/zip"
         )
 
     # Генерируем presigned URL
@@ -1814,13 +1877,14 @@ async def export_1c(
         format=req.format,
         filename=filename,
         download_url=download_url,
-        expires_in_seconds=900
+        expires_in_seconds=900,
     )
 
 
 # ============================================================================
 # Vision OCR - извлечение параметров из изображений
 # ============================================================================
+
 
 @router.post("/spec/extract-from-image", response_model=ImageExtractResponse)
 async def extract_from_image(
@@ -1869,10 +1933,16 @@ async def extract_from_image(
     # 3. Проверяем краткосрочный и суточный лимиты.
     allowed, retry_after, reason = await check_guest_rate_limits_safe(ident)
     if not allowed:
-        code = GuestUploadErrorCode.rate_limited if reason == "rate_limited" else GuestUploadErrorCode.service_unavailable
+        code = (
+            GuestUploadErrorCode.rate_limited
+            if reason == "rate_limited"
+            else GuestUploadErrorCode.service_unavailable
+        )
         detail = UploadErrorDetail(
             code=code,
-            message="Слишком много попыток. Повторите позже." if code == GuestUploadErrorCode.rate_limited else "Сервис временно недоступен.",
+            message="Слишком много попыток. Повторите позже."
+            if code == GuestUploadErrorCode.rate_limited
+            else "Сервис временно недоступен.",
             retry_after_seconds=retry_after,
         )
         status_code = 429 if code == GuestUploadErrorCode.rate_limited else 503
@@ -1915,14 +1985,18 @@ async def extract_from_image(
             log.warning("[Vision OCR] Mock mode: AI keys not found (checks still enforced)")
             result = await extract_furniture_params_mock(req.image_base64, req.image_mime_type)
         else:
-            log.info(f"[Vision OCR] Processing image, mime: {req.image_mime_type}, lang: {req.language_hint}")
+            log.info(
+                f"[Vision OCR] Processing image, mime: {req.image_mime_type}, lang: {req.language_hint}"
+            )
             result = await extract_furniture_params_from_image(
                 image_base64=req.image_base64,
                 mime_type=req.image_mime_type,
                 language_hint=req.language_hint,
             )
 
-        log.info(f"[Vision OCR] Result: success={result.success}, confidence={result.ocr_confidence:.2f}, fallback={result.fallback_to_dialogue}")
+        log.info(
+            f"[Vision OCR] Result: success={result.success}, confidence={result.ocr_confidence:.2f}, fallback={result.fallback_to_dialogue}"
+        )
 
         if not result.success:
             error_type = result.error_type or "ocr_failed"
@@ -1988,6 +2062,7 @@ async def extract_from_image(
 # Небольшая обёртка предотвращает циклический импорт при загрузке модуля.
 async def check_guest_rate_limits_safe(ident: object) -> tuple[bool, int | None, str | None]:
     from api.guest_upload import check_guest_rate_limits
+
     return await check_guest_rate_limits(ident)
 
 
@@ -2090,12 +2165,15 @@ async def create_dxf_job(
     await db.commit()
 
     # Отправляем в очередь
-    await enqueue(DXF_QUEUE, {
-        "job_id": str(job_id),
-        "job_kind": "DXF",
-        "context": context,
-        "idempotency_key": req.idempotency_key,
-    })
+    await enqueue(
+        DXF_QUEUE,
+        {
+            "job_id": str(job_id),
+            "job_kind": "DXF",
+            "context": context,
+            "idempotency_key": req.idempotency_key,
+        },
+    )
 
     log.info(f"[CAM] Created DXF job {job_id} with {len(req.panels)} panels")
 
@@ -2235,8 +2313,7 @@ async def download_cam_artifact(
 
     if job.status != JobStatusEnum.Completed:
         raise HTTPException(
-            status_code=400,
-            detail=f"Job not completed. Current status: {job.status.value}"
+            status_code=400, detail=f"Job not completed. Current status: {job.status.value}"
         )
 
     if not job.artifact_id:
@@ -2252,7 +2329,11 @@ async def download_cam_artifact(
 
     # Определяем имя файла
     ext = "dxf" if job.job_kind == "DXF" else "gcode" if job.job_kind == "GCODE" else "zip"
-    filename = f"order_{job.order_id}_{job.job_kind.lower()}.{ext}" if job.order_id else f"job_{job_id}.{ext}"
+    filename = (
+        f"order_{job.order_id}_{job.job_kind.lower()}.{ext}"
+        if job.order_id
+        else f"job_{job_id}.{ext}"
+    )
 
     return ArtifactDownload(
         artifact_id=artifact.id,
@@ -2291,8 +2372,7 @@ async def stream_cam_file(
 
     if job.status != JobStatusEnum.Completed:
         raise HTTPException(
-            status_code=400,
-            detail=f"Job not completed. Current status: {job.status}"
+            status_code=400, detail=f"Job not completed. Current status: {job.status}"
         )
 
     if not job.artifact_id:
@@ -2308,7 +2388,11 @@ async def stream_cam_file(
 
     # Определяем имя файла и content-type
     ext = "dxf" if job.job_kind == "DXF" else "gcode" if job.job_kind == "GCODE" else "zip"
-    filename = f"order_{job.order_id}_{job.job_kind.lower()}.{ext}" if job.order_id else f"job_{job_id}.{ext}"
+    filename = (
+        f"order_{job.order_id}_{job.job_kind.lower()}.{ext}"
+        if job.order_id
+        else f"job_{job_id}.{ext}"
+    )
 
     content_type = {
         "DXF": "application/dxf",
@@ -2322,7 +2406,7 @@ async def stream_cam_file(
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(file_data)),
-        }
+        },
     )
 
 
@@ -2330,8 +2414,11 @@ async def stream_cam_file(
 # G-code генерация (P2)
 # ============================================================================
 
+
 @router.get("/cam/machine-profiles", response_model=MachineProfilesList)
 async def list_machine_profiles() -> MachineProfilesList:
+    if not settings.MVP_MACHINE_FEATURES_ENABLED:
+        raise HTTPException(status_code=404, detail="Станочные профили не найдены")
     """
     Получить список доступных профилей станков ЧПУ.
 
@@ -2343,9 +2430,7 @@ async def list_machine_profiles() -> MachineProfilesList:
     - **homag** — Homag — ~2-3% рынка, премиум мебельное оборудование
     """
     profiles = get_available_profiles()
-    return MachineProfilesList(
-        profiles=[MachineProfileInfo(**p) for p in profiles]
-    )
+    return MachineProfilesList(profiles=[MachineProfileInfo(**p) for p in profiles])
 
 
 @router.post("/cam/gcode", response_model=GCodeJobResponse)
@@ -2354,6 +2439,8 @@ async def create_gcode_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> GCodeJobResponse:
+    if not settings.MVP_MACHINE_FEATURES_ENABLED:
+        raise HTTPException(status_code=404, detail="Генерация G-code отключена")
     """
     Создаёт задачу генерации G-code из DXF артефакта.
 
@@ -2382,7 +2469,9 @@ async def create_gcode_job(
         raise HTTPException(status_code=404, detail=f"DXF artifact {req.dxf_artifact_id} not found")
 
     if dxf_artifact.type != "DXF":
-        raise HTTPException(status_code=400, detail=f"Artifact is not DXF type: {dxf_artifact.type}")
+        raise HTTPException(
+            status_code=400, detail=f"Artifact is not DXF type: {dxf_artifact.type}"
+        )
 
     source_job_result = await db.execute(
         select(CAMJob)
@@ -2466,14 +2555,19 @@ async def create_gcode_job(
     await db.commit()
 
     # Отправляем в очередь
-    await enqueue(GCODE_QUEUE, {
-        "job_id": str(job_id),
-        "job_kind": "GCODE",
-        "context": context,
-        "idempotency_key": req.idempotency_key,
-    })
+    await enqueue(
+        GCODE_QUEUE,
+        {
+            "job_id": str(job_id),
+            "job_kind": "GCODE",
+            "context": context,
+            "idempotency_key": req.idempotency_key,
+        },
+    )
 
-    log.info(f"[CAM] Created GCODE job {job_id} from DXF {req.dxf_artifact_id}, profile={machine_profile}")
+    log.info(
+        f"[CAM] Created GCODE job {job_id} from DXF {req.dxf_artifact_id}, profile={machine_profile}"
+    )
 
     return GCodeJobResponse(
         job_id=job_id,
@@ -2489,6 +2583,8 @@ async def create_drilling_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DrillingGcodeResponse:
+    if not settings.MVP_MACHINE_FEATURES_ENABLED:
+        raise HTTPException(status_code=404, detail="Генерация файлов присадки отключена")
     """
     Создать задачу генерации G-code присадки.
 
@@ -2503,9 +2599,7 @@ async def create_drilling_job(
 
     # Получаем панели заказа через ProductConfig
     panels_query = await db.execute(
-        select(Panel)
-        .join(ProductConfig)
-        .where(ProductConfig.order_id == request.order_id)
+        select(Panel).join(ProductConfig).where(ProductConfig.order_id == request.order_id)
     )
     panels = panels_query.scalars().all()
 
@@ -2514,13 +2608,42 @@ async def create_drilling_job(
 
     # Формируем список файлов (упрощённая транслитерация для превью)
     def simple_transliterate(text: str) -> str:
-        table = {'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e',
-                 'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l',
-                 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's',
-                 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch',
-                 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e',
-                 'ю': 'yu', 'я': 'ya', ' ': '_'}
-        return ''.join(table.get(c, c) for c in text.lower())
+        table = {
+            "а": "a",
+            "б": "b",
+            "в": "v",
+            "г": "g",
+            "д": "d",
+            "е": "e",
+            "ж": "zh",
+            "з": "z",
+            "и": "i",
+            "й": "y",
+            "к": "k",
+            "л": "l",
+            "м": "m",
+            "н": "n",
+            "о": "o",
+            "п": "p",
+            "р": "r",
+            "с": "s",
+            "т": "t",
+            "у": "u",
+            "ф": "f",
+            "х": "h",
+            "ц": "ts",
+            "ч": "ch",
+            "ш": "sh",
+            "щ": "sch",
+            "ъ": "",
+            "ы": "y",
+            "ь": "",
+            "э": "e",
+            "ю": "yu",
+            "я": "ya",
+            " ": "_",
+        }
+        return "".join(table.get(c, c) for c in text.lower())
 
     estimated_files = []
     for panel in panels:
@@ -2545,12 +2668,15 @@ async def create_drilling_job(
     await db.commit()
 
     # Ставим в очередь
-    await enqueue(DRILLING_QUEUE, {
-        "job_id": str(job.id),
-        "job_kind": "DRILLING",
-        "order_id": str(request.order_id),
-        "machine_profile": request.machine_profile,
-    })
+    await enqueue(
+        DRILLING_QUEUE,
+        {
+            "job_id": str(job.id),
+            "job_kind": "DRILLING",
+            "order_id": str(request.order_id),
+            "machine_profile": request.machine_profile,
+        },
+    )
 
     return DrillingGcodeResponse(
         job_id=job.id,
@@ -2611,14 +2737,16 @@ async def layout_preview(req: LayoutPreviewRequest) -> LayoutPreviewResponse:
         # При повороте ширина и высота меняются местами
         w = panel.height_mm if rotated else panel.width_mm
         h = panel.width_mm if rotated else panel.height_mm
-        placed_panels.append(PlacedPanelInfo(
-            name=panel.name,
-            x=x,
-            y=y,
-            width_mm=w,
-            height_mm=h,
-            rotated=rotated,
-        ))
+        placed_panels.append(
+            PlacedPanelInfo(
+                name=panel.name,
+                x=x,
+                y=y,
+                width_mm=w,
+                height_mm=h,
+                rotated=rotated,
+            )
+        )
 
     # Названия неразмещённых панелей
     unplaced_names = [p.name for p in layout.unplaced_panels]
@@ -2669,6 +2797,13 @@ async def generate_cutting_map_pdf(
 
     from api.pdf_generator import generate_cutting_map_pdf as gen_pdf
 
+    # Загружаем заказ и проверяем права + gate утверждённой ревизии
+    order = await crud.get_order_with_products(db, req.order_id)
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
+    await assert_order_export_gate(db, req.order_id)
+
     # Получаем настройки фабрики
     factory = await db.get(Factory, current_user.factory_id)
     factory_settings = factory.settings if factory else {}
@@ -2709,14 +2844,16 @@ async def generate_cutting_map_pdf(
     for panel, x, y, rotated in layout.placed_panels:
         w = panel.height_mm if rotated else panel.width_mm
         h = panel.width_mm if rotated else panel.height_mm
-        placed_panels.append(PlacedPanel(
-            name=panel.name,
-            x=x,
-            y=y,
-            width_mm=w,
-            height_mm=h,
-            rotated=rotated,
-        ))
+        placed_panels.append(
+            PlacedPanel(
+                name=panel.name,
+                x=x,
+                y=y,
+                width_mm=w,
+                height_mm=h,
+                rotated=rotated,
+            )
+        )
 
     # Генерируем PDF
     order_info = req.order_info or ""
@@ -2732,7 +2869,9 @@ async def generate_cutting_map_pdf(
     filename = "cutting_map.pdf"
     if req.order_info:
         # Оставляем только ASCII буквы, цифры и безопасные символы
-        safe_name = "".join(c for c in req.order_info if c.isascii() and (c.isalnum() or c in " -_")).strip()
+        safe_name = "".join(
+            c for c in req.order_info if c.isascii() and (c.isalnum() or c in " -_")
+        ).strip()
         safe_name = safe_name.replace(" ", "_")
         if safe_name:
             filename = f"cutting_map_{safe_name[:30]}.pdf"
@@ -2751,6 +2890,7 @@ async def dialogue_clarify(
     req: DialogueTurnRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
+    ar_guest_draft: str | None = Cookie(None),
 ) -> StreamingResponse:
     """
     Принимает текущую историю диалога и возвращает потоковый ответ от ИИ-технолога.
@@ -2760,23 +2900,28 @@ async def dialogue_clarify(
     order = await crud.get_order_with_history(db, req.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    enforce_factory_access(order.factory_id, _user_factory_id(current_user))
+    enforce_order_access(order, current_user, ar_guest_draft, settings.GUEST_UPLOAD_SECRET)
 
     # Проверяем наличие AI API ключей
     use_mock_mode = not are_ai_keys_available()
 
     if use_mock_mode:
-        log.warning(f"[MOCK MODE] AI keys not found. Using mock dialogue responses for order {req.order_id}")
+        log.warning(
+            f"[MOCK MODE] AI keys not found. Using mock dialogue responses for order {req.order_id}"
+        )
 
     # Добавляем новые сообщения из запроса в БД
     current_turn = (order.dialogue_messages[-1].turn_number + 1) if order.dialogue_messages else 1
     user_message_text = ""
     for user_msg in req.messages:
         user_message_text = user_msg.content  # Сохраняем последнее сообщение пользователя
-        await crud.create_dialogue_message(db, order.id, current_turn, user_msg.role, user_msg.content)
+        await crud.create_dialogue_message(
+            db, order.id, current_turn, user_msg.role, user_msg.content
+        )
 
     # MOCK РЕЖИМ - используем заготовленные ответы
     if use_mock_mode:
+
         async def mock_response_generator():
             full_response = ""
             is_first_message = current_turn == 1
@@ -2793,11 +2938,15 @@ async def dialogue_clarify(
                     yield chunk
 
                 # Сохраняем полный mock ответ в БД
-                await crud.create_dialogue_message(db, order.id, current_turn, "assistant", full_response)
+                await crud.create_dialogue_message(
+                    db, order.id, current_turn, "assistant", full_response
+                )
                 log.info(f"[MOCK MODE] Mock response saved to DB for order {order.id}")
 
             except Exception as e:
-                log.error(f"[MOCK MODE] Mock dialogue generation failed for order {req.order_id}: {e}")
+                log.error(
+                    f"[MOCK MODE] Mock dialogue generation failed for order {req.order_id}: {e}"
+                )
                 yield "\n\n[ОШИБКА] Не удалось сгенерировать mock ответ."
 
         return StreamingResponse(mock_response_generator(), media_type="text/plain")
@@ -2819,6 +2968,7 @@ async def dialogue_clarify(
 
     if req.current_params:
         import json
+
         system_prompt_text += f"\n\n## Текущие параметры:\n```json\n{json.dumps(req.current_params, ensure_ascii=False, indent=2)}\n```\n\nЭто режим уточнения — НЕ создавай новый заказ, просто уточни параметры."
 
     messages = [{"role": "system", "content": system_prompt_text}]
@@ -2846,7 +2996,9 @@ async def dialogue_clarify(
                 yield chunk
 
             # 3. Сохраняем полный ответ ассистента в БД
-            await crud.create_dialogue_message(db, order.id, current_turn, "assistant", full_response)
+            await crud.create_dialogue_message(
+                db, order.id, current_turn, "assistant", full_response
+            )
 
         except Exception as e:
             log.error(f"Dialogue clarification failed for order {req.order_id}: {e}")
@@ -2860,6 +3012,7 @@ async def dialogue_clarify_with_tools(
     req: DialogueTurnRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
+    ar_guest_draft: str | None = Cookie(None),
 ):
     """
     Диалог с ИИ-технологом с поддержкой Function Calling.
@@ -2875,23 +3028,21 @@ async def dialogue_clarify_with_tools(
     order = await crud.get_order_with_history(db, req.order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    enforce_factory_access(order.factory_id, _user_factory_id(current_user))
+    enforce_order_access(order, current_user, ar_guest_draft, settings.GUEST_UPLOAD_SECRET)
 
     # Проверяем наличие AI API ключей
     if not are_ai_keys_available():
         log.warning(f"[MOCK MODE] AI keys not found for order {req.order_id}")
-        return {
-            "success": False,
-            "error": "AI_API_KEY не настроен",
-            "mock_mode": True
-        }
+        return {"success": False, "error": "AI_API_KEY не настроен", "mock_mode": True}
 
     # Добавляем новые сообщения из запроса в БД
     current_turn = (order.dialogue_messages[-1].turn_number + 1) if order.dialogue_messages else 1
     user_message_text = ""
     for user_msg in req.messages:
         user_message_text = user_msg.content
-        await crud.create_dialogue_message(db, order.id, current_turn, user_msg.role, user_msg.content)
+        await crud.create_dialogue_message(
+            db, order.id, current_turn, user_msg.role, user_msg.content
+        )
 
     # Системный промпт
     system_prompt_text = TECHNOLOGIST_SYSTEM_PROMPT
@@ -2908,6 +3059,7 @@ async def dialogue_clarify_with_tools(
 
     if req.current_params:
         import json
+
         system_prompt_text += f"\n\n## Текущие параметры:\n```json\n{json.dumps(req.current_params, ensure_ascii=False, indent=2)}\n```\n\nЭто режим уточнения — НЕ создавай новый заказ, просто уточни параметры."
 
     # Дополняем системный промпт информацией об инструментах
@@ -2969,11 +3121,11 @@ async def dialogue_clarify_with_tools(
                         "type": "function",
                         "function": {
                             "name": tc.name,
-                            "arguments": json.dumps(tc.arguments, ensure_ascii=False)
-                        }
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                        },
                     }
                     for tc in response.tool_calls
-                ]
+                ],
             }
             messages.append(assistant_message)
 
@@ -2982,51 +3134,55 @@ async def dialogue_clarify_with_tools(
                 log.info(f"[Function Calling] Executing tool: {tool_call.name}")
 
                 tool_result = await execute_tool_call(
-                    tool_name=tool_call.name,
-                    arguments=tool_call.arguments
+                    tool_name=tool_call.name, arguments=tool_call.arguments
                 )
 
-                tool_calls_log.append({
-                    "tool": tool_call.name,
-                    "arguments": tool_call.arguments,
-                    "result": tool_result
-                })
+                tool_calls_log.append(
+                    {
+                        "tool": tool_call.name,
+                        "arguments": tool_call.arguments,
+                        "result": tool_result,
+                    }
+                )
 
                 # Добавляем результат в историю
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps(tool_result, ensure_ascii=False)
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(tool_result, ensure_ascii=False),
+                    }
+                )
 
         else:
             # Превышено максимальное количество итераций
             log.warning(f"[Function Calling] Max iterations reached for order {req.order_id}")
-            final_response = "Извините, не удалось получить ответ. Попробуйте переформулировать вопрос."
+            final_response = (
+                "Извините, не удалось получить ответ. Попробуйте переформулировать вопрос."
+            )
 
         # Сохраняем финальный ответ в БД
         if final_response:
-            await crud.create_dialogue_message(db, order.id, current_turn, "assistant", final_response)
+            await crud.create_dialogue_message(
+                db, order.id, current_turn, "assistant", final_response
+            )
 
         return {
             "success": True,
             "response": final_response,
             "tool_calls": tool_calls_log,
-            "iterations": min(iteration + 1, max_iterations) if 'iteration' in dir() else 1
+            "iterations": min(iteration + 1, max_iterations) if "iteration" in dir() else 1,
         }
 
     except Exception as e:
         log.error(f"[Function Calling] Error for order {req.order_id}: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "tool_calls": tool_calls_log
-        }
+        return {"success": False, "error": str(e), "tool_calls": tool_calls_log}
 
 
 # ============================================================================
 # Cost Estimation
 # ============================================================================
+
 
 @router.get("/orders/{order_id}/cost", response_model=CostEstimateResponse)
 async def calculate_order_cost(
@@ -3036,7 +3192,7 @@ async def calculate_order_cost(
 ):
     """
     Рассчитать себестоимость заказа.
-    
+
     Учитывает:
     - Материалы (ЛДСП, МДФ) по площади
     - Кромку по длине
@@ -3057,124 +3213,149 @@ async def calculate_order_cost(
         )
 
     product = order.products[0]
-    
+
     # Получаем панели
-    panels_result = await db.execute(
-        select(Panel).where(Panel.product_id == product.id)
-    )
+    panels_result = await db.execute(select(Panel).where(Panel.product_id == product.id))
     panels = panels_result.scalars().all()
-    
+
     params = product.params or {}
     hardware = params.get("hardware", [])
     fasteners = params.get("fasteners", [])
     edge_bands = params.get("edge_bands", [])
-    
+
     breakdown = []
-    
+
     # 1. Материалы (ЛДСП)
     # Цена за лист 2800x2070 (5.8 м2) ~ 3500 руб -> ~600 руб/м2
-    MATERIAL_PRICE_M2 = 600.0 
-    
+    MATERIAL_PRICE_M2 = 600.0
+
     total_area_m2 = sum((p.width_mm * p.height_mm) / 1_000_000 for p in panels)
     # Учитываем обрезки (+20%)
     sheet_area_needed = total_area_m2 * 1.2
-    
-    breakdown.append(CostBreakdownItem(
-        name=f"ЛДСП {product.material or '16мм'}",
-        quantity=round(sheet_area_needed, 2),
-        unit="м²",
-        unit_price=MATERIAL_PRICE_M2,
-        total_price=round(sheet_area_needed * MATERIAL_PRICE_M2, 2)
-    ))
-    
+
+    breakdown.append(
+        CostBreakdownItem(
+            name=f"ЛДСП {product.material or '16мм'}",
+            quantity=round(sheet_area_needed, 2),
+            unit="м²",
+            unit_price=MATERIAL_PRICE_M2,
+            total_price=round(sheet_area_needed * MATERIAL_PRICE_M2, 2),
+        )
+    )
+
     # 2. Кромка
     # Цена 25 руб/м (2мм) и 8 руб/м (0.4мм)
     for band in edge_bands:
-        breakdown.append(CostBreakdownItem(
-            name=f"Кромка {band.get('type')}",
-            quantity=band.get("length_m", 0),
-            unit="м",
-            unit_price=band.get("unit_price", 10),
-            total_price=round(band.get("length_m", 0) * band.get("unit_price", 10), 2)
-        ))
-        
+        breakdown.append(
+            CostBreakdownItem(
+                name=f"Кромка {band.get('type')}",
+                quantity=band.get("length_m", 0),
+                unit="м",
+                unit_price=band.get("unit_price", 10),
+                total_price=round(band.get("length_m", 0) * band.get("unit_price", 10), 2),
+            )
+        )
+
     # 3. Фурнитура
     # Примерные цены
     HARDWARE_PRICES = {
-        "hinge": 120.0, # Петля с доводчиком
-        "slide": 450.0, # Направляющие скрытого монтажа
-        "handle": 150.0, # Ручка
-        "leg": 30.0, # Опора
-        "suspension": 80.0, # Навес
-        "lift": 3500.0, # Aventos
-        "connector": 2.0, # Конфирмат
+        "hinge": 120.0,  # Петля с доводчиком
+        "slide": 450.0,  # Направляющие скрытого монтажа
+        "handle": 150.0,  # Ручка
+        "leg": 30.0,  # Опора
+        "suspension": 80.0,  # Навес
+        "lift": 3500.0,  # Aventos
+        "connector": 2.0,  # Конфирмат
         "other": 10.0,
     }
-    
+
     for item in hardware:
         hw_type = item.get("type", "other")
         price = HARDWARE_PRICES.get(hw_type, 50.0)
         qty = item.get("quantity", item.get("qty", 0))
-        
-        breakdown.append(CostBreakdownItem(
-            name=item.get("name", "Фурнитура"),
-            quantity=qty,
-            unit="шт",
-            unit_price=price,
-            total_price=qty * price
-        ))
-        
+
+        breakdown.append(
+            CostBreakdownItem(
+                name=item.get("name", "Фурнитура"),
+                quantity=qty,
+                unit="шт",
+                unit_price=price,
+                total_price=qty * price,
+            )
+        )
+
     for item in fasteners:
         price = item.get("unit_price", 1.0)
         qty = item.get("quantity", 0)
-        breakdown.append(CostBreakdownItem(
-            name=item.get("name", "Крепёж"),
-            quantity=qty,
-            unit="шт",
-            unit_price=price,
-            total_price=qty * price
-        ))
-        
+        breakdown.append(
+            CostBreakdownItem(
+                name=item.get("name", "Крепёж"),
+                quantity=qty,
+                unit="шт",
+                unit_price=price,
+                total_price=qty * price,
+            )
+        )
+
     # 4. Операции
     # Распил: 30 руб/м погонный реза
     # Кромление: 40 руб/м
     # Присадка: 10 руб/отверстие
-    
+
     # Оценка длины реза (периметр * 1.5)
     cut_length_m = sum((p.width_mm + p.height_mm) * 2 / 1000 for p in panels)
-    breakdown.append(CostBreakdownItem(
-        name="Распил ЛДСП",
-        quantity=round(cut_length_m, 1),
-        unit="м",
-        unit_price=30.0,
-        total_price=round(cut_length_m * 30.0, 2)
-    ))
-    
+    breakdown.append(
+        CostBreakdownItem(
+            name="Распил ЛДСП",
+            quantity=round(cut_length_m, 1),
+            unit="м",
+            unit_price=30.0,
+            total_price=round(cut_length_m * 30.0, 2),
+        )
+    )
+
     # Кромление (сумма длин кромки)
     edge_length_m = sum(b.get("length_m", 0) for b in edge_bands)
-    breakdown.append(CostBreakdownItem(
-        name="Кромление",
-        quantity=round(edge_length_m, 1),
-        unit="м",
-        unit_price=40.0,
-        total_price=round(edge_length_m * 40.0, 2)
-    ))
-    
+    breakdown.append(
+        CostBreakdownItem(
+            name="Кромление",
+            quantity=round(edge_length_m, 1),
+            unit="м",
+            unit_price=40.0,
+            total_price=round(edge_length_m * 40.0, 2),
+        )
+    )
+
     # Сборка и присадка (оценка)
     parts_count = len(panels)
-    breakdown.append(CostBreakdownItem(
-        name="Присадка (сверление)",
-        quantity=parts_count,
-        unit="дет",
-        unit_price=50.0,
-        total_price=parts_count * 50.0
-    ))
+    breakdown.append(
+        CostBreakdownItem(
+            name="Присадка (сверление)",
+            quantity=parts_count,
+            unit="дет",
+            unit_price=50.0,
+            total_price=parts_count * 50.0,
+        )
+    )
 
     # Суммируем
     materials_cost = sum(i.total_price for i in breakdown if "ЛДСП" in i.name or "Кромка" in i.name)
-    hardware_cost = sum(i.total_price for i in breakdown if "Петля" in i.name or "Направляющие" in i.name or "Ручка" in i.name or "Фурнитура" in i.name or "Крепёж" in i.name or "Опора" in i.name)
-    operations_cost = sum(i.total_price for i in breakdown if "Распил" in i.name or "Кромление" in i.name or "Присадка" in i.name)
-    
+    hardware_cost = sum(
+        i.total_price
+        for i in breakdown
+        if "Петля" in i.name
+        or "Направляющие" in i.name
+        or "Ручка" in i.name
+        or "Фурнитура" in i.name
+        or "Крепёж" in i.name
+        or "Опора" in i.name
+    )
+    operations_cost = sum(
+        i.total_price
+        for i in breakdown
+        if "Распил" in i.name or "Кромление" in i.name or "Присадка" in i.name
+    )
+
     total_cost = materials_cost + hardware_cost + operations_cost
 
     return CostEstimateResponse(
@@ -3191,6 +3372,7 @@ async def calculate_order_cost(
 # Smart Hardware Rules v1.0 — шаблоны
 # ============================================================================
 
+
 @router.get("/hardware/templates", response_model=TemplatesListResponse)
 async def get_hardware_templates():
     """
@@ -3202,4 +3384,3 @@ async def get_hardware_templates():
     slides = [SlideTemplateInfo(**t) for t in list_slide_templates()]
 
     return TemplatesListResponse(hinges=hinges, slides=slides)
-

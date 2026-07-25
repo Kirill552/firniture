@@ -1,29 +1,22 @@
-'use client';
-
-import React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { LANDING_COPY } from './landing-copy';
-import { DraftingSheet } from './drafting-sheet';
 
-/**
- * Первый экран: слева оффер и один CTA, справа — готовый чертёжный лист.
- * Асимметрия, крупная типографика, ступенчатое появление при загрузке.
- * H1 и описание — из LANDING_COPY (проверяются тестами копирайта).
- */
+import { LANDING_COPY } from './landing-copy';
+
 export function LandingHero() {
   const { heroOverline, h1, heroDescription, ctaPrimary, ctaHint } = LANDING_COPY;
 
   return (
-    <div className="grid grid-cols-1 items-center gap-x-14 gap-y-12 pb-16 pt-14 lg:grid-cols-12 lg:pb-24 lg:pt-20">
+    <div className="grid grid-cols-1 items-center gap-x-8 gap-y-10 pb-16 pt-14 lg:grid-cols-12 lg:pb-20 lg:pt-16">
       {/* Левая колонка */}
-      <div className="lg:col-span-6">
+      <div className="lg:col-span-5">
         <div
           data-rise
           style={{ animationDelay: '0.05s' }}
-          className="mb-6 inline-flex items-center gap-3 border border-[#b3a88f] bg-[#fbf8f1]/60 px-3 py-1.5"
+          className="mb-6 inline-flex items-center gap-2 border border-[#d7dde2] bg-white px-3 py-1.5 rounded-full text-xs font-semibold text-[#171a1d]"
         >
-          <span className="h-2 w-2 bg-[#d8352a]" />
-          <span className="font-tech text-[11px] uppercase tracking-[1.5px] text-[#544c3f]">
+          <span className="h-2 w-2 rounded-full bg-[#c7ff00]" />
+          <span className="text-[11px] uppercase tracking-[1.5px] text-[#66707a]">
             {heroOverline}
           </span>
         </div>
@@ -31,7 +24,7 @@ export function LandingHero() {
         <h1
           data-rise
           style={{ animationDelay: '0.14s' }}
-          className="font-display mb-7 max-w-[15ch] text-[46px] font-extrabold leading-[0.94] tracking-[-2px] text-[#17130d] sm:text-[58px] xl:text-[68px]"
+          className="mb-7 max-w-[15ch] text-[46px] font-extrabold leading-[0.98] tracking-[-2px] text-[#171a1d] sm:text-[58px] xl:text-[68px]"
         >
           {h1}
         </h1>
@@ -39,7 +32,7 @@ export function LandingHero() {
         <p
           data-rise
           style={{ animationDelay: '0.24s' }}
-          className="mb-9 max-w-[46ch] text-[18px] leading-[1.55] text-[#544c3f]"
+          className="mb-9 max-w-[46ch] text-[16px] md:text-[18px] leading-[1.55] text-[#66707a]"
         >
           {heroDescription}
         </p>
@@ -47,35 +40,29 @@ export function LandingHero() {
         <div data-rise style={{ animationDelay: '0.34s' }}>
           <Link
             href="/new"
-            className="group inline-flex h-14 w-fit items-center gap-3 bg-[#d8352a] px-8 text-[17px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#c22e24] hover:shadow-[6px_6px_0_#17130d] active:translate-y-0 active:shadow-none"
+            className="group inline-flex h-14 w-fit items-center gap-3 bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] px-8 text-[17px] font-bold rounded-xl active:scale-[0.98] transition-all duration-150 cursor-pointer shadow-sm"
           >
             {ctaPrimary}
             <span className="transition-transform group-hover:translate-x-1">→</span>
           </Link>
-          <p className="mt-4 flex max-w-[52ch] items-start gap-2.5 text-[13px] leading-snug text-[#8c8373]">
-            <span className="mt-1.5 h-px w-6 shrink-0 bg-[#d8352a]" />
+          <p className="mt-4 flex max-w-[52ch] items-start gap-2.5 text-[12px] leading-relaxed text-[#66707a]">
+            <span className="mt-2 h-px w-6 shrink-0 bg-[#d7dde2]" />
             {ctaHint}
           </p>
         </div>
       </div>
 
-      {/* Правая колонка — чертёжный лист */}
-      <div data-rise style={{ animationDelay: '0.3s' }} className="lg:col-span-6">
-        <div className="hardline hardshadow relative bg-[#fbf8f1] p-2.5">
-          <DraftingSheet stage={2} progress={1} hero />
-          {/* «Луч сканирования» поверх листа как знак распознавания */}
-          <div className="pointer-events-none absolute inset-2.5 overflow-hidden">
-            <div className="scan-sweep h-full w-16 bg-gradient-to-r from-transparent via-[#d8352a]/12 to-transparent" />
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-between">
-          <span className="font-tech flex items-center gap-2.5 text-[11px] uppercase tracking-[1px] text-[#8c8373]">
-            <span className="h-px w-7 bg-[#d8352a]" /> вход: один эскиз или PDF
-          </span>
-          <span className="font-tech text-[11px] uppercase tracking-[1px] text-[#8c8373]">
-            .jpg · .png · .pdf
-          </span>
-        </div>
+      {/* Утверждённый визуал: эскиз → детали → собранная кухня */}
+      <div data-rise style={{ animationDelay: '0.3s' }} className="lg:col-span-7">
+        <Image
+          src="/hero-kitchen-seamless.webp"
+          width={919}
+          height={800}
+          priority
+          sizes="(min-width: 1024px) 58vw, 100vw"
+          alt="Эскиз, детали и собранная кухня"
+          className="h-auto w-full select-none object-contain [mask-image:linear-gradient(to_right,transparent_0%,black_4%,black_100%)]"
+        />
       </div>
     </div>
   );

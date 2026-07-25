@@ -120,6 +120,14 @@ def prerequisite_migrations(alembic_cfg, sync_engine):
         _stamp(sync_engine, alembic_cfg, "base")
         _upgrade(sync_engine, alembic_cfg, PREREQUISITE_REVISION)
     elif current is None:
+        if _prerequisite_tables_exist(sync_engine):
+            # Таблицы созданы через metadata.create_all (например, guest-тестами
+            # после drop_all в test_bom_manufacturing_persistence). Такая схема
+            # отличается от alembic-схемы деталями (nullability settings и т.п.),
+            # поэтому пересоздаём БД чисто через миграции.
+            with sync_engine.begin() as conn:
+                conn.execute(text("DROP SCHEMA public CASCADE"))
+                conn.execute(text("CREATE SCHEMA public"))
         _upgrade(sync_engine, alembic_cfg, PREREQUISITE_REVISION)
     elif current == PREREQUISITE_REVISION:
         pass  # already at the right revision

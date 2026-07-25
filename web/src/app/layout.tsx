@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { AnalyticsProvider } from "@/components/analytics/analytics-provider";
+import { AnalyticsConsent } from "@/components/analytics/analytics-consent";
+import { FeatureFlagsProvider } from "@/features/mvp";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Onest } from "next/font/google";
 import "./globals.css";
@@ -36,14 +39,19 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            <ErrorBoundary>
-              <AuthLayout>
-                {/* AnimatedLayout отключен для отладки блокировки BOM */}
-                {/* <AnimatedLayout> */}
-                  {children}
-                {/* </AnimatedLayout> */}
-              </AuthLayout>
-            </ErrorBoundary>
+            <FeatureFlagsProvider>
+              <AnalyticsProvider>
+                <ErrorBoundary>
+                  <AuthLayout>
+                    {/* AnimatedLayout отключен для отладки блокировки BOM */}
+                    {/* <AnimatedLayout> */}
+                      {children}
+                    {/* </AnimatedLayout> */}
+                  </AuthLayout>
+                </ErrorBoundary>
+                <AnalyticsConsent />
+              </AnalyticsProvider>
+            </FeatureFlagsProvider>
             <ReactQueryDevtools initialIsOpen={false} />
             <Toaster />
           </QueryProvider>

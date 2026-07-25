@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     GUEST_UPLOAD_DAILY_WINDOW_SECONDS: int = 86400
     GUEST_UPLOAD_CONCURRENCY_TTL: int = 60  # seconds for analysis lock
     GUEST_GRANT_TTL_SECONDS: int = 900  # 15 minutes
+    GUEST_DRAFT_TTL_SECONDS: int = 604800  # 7 days
+    MVP_MACHINE_FEATURES_ENABLED: bool = False
     VISION_PIPELINE_TIMEOUT_SECONDS: int = 45
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024  # 10 MB decoded
     MAX_BASE64_BYTES: int = 14 * 1024 * 1024  # ~14 MB for base64 field

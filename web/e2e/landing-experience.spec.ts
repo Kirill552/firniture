@@ -11,11 +11,21 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
     await expect(cta).toHaveAttribute('href', '/new');
   });
 
+  test('hero uses the approved kitchen reference without a WebGL canvas', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    await expect(
+      page.getByRole('img', { name: 'Эскиз, детали и собранная кухня' }),
+    ).toBeVisible();
+    await expect(page.locator('main section:first-of-type canvas')).toHaveCount(0);
+  });
+
   test('header anchors and login link present', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByRole('link', { name: 'Как работает' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Возможности' })).toBeVisible();
+    await expect(page.locator('header').getByRole('link', { name: 'Как работает' })).toBeVisible();
+    await expect(page.locator('header').getByRole('link', { name: 'Возможности' })).toBeVisible();
 
     const login = page.locator('header').getByRole('link', { name: 'Войти' });
     await expect(login).toBeVisible();
@@ -30,6 +40,31 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
     await expect(page.getByText('Сверьте спецификацию')).toBeVisible();
     // Точное совпадение исключает абзац с похожей формулировкой.
     await expect(page.getByText('Скачайте DXF и PDF', { exact: true })).toBeVisible();
+  });
+
+  test('scroll advances the process visual through stages 1, 3 and 5', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    const story = page.getByTestId('process-story');
+    await expect(story).toHaveAttribute('data-active-stage', '1');
+
+    await page.locator('#stage-3').evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      window.scrollTo(0, window.scrollY + rect.top - window.innerHeight * 0.25);
+    });
+    await expect(story).toHaveAttribute('data-active-stage', '3');
+
+    await page.locator('#stage-5').evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      window.scrollTo(0, window.scrollY + rect.top - window.innerHeight * 0.25);
+    });
+    await expect(story).toHaveAttribute('data-active-stage', '5');
+
+    const sheetBox = await page.locator('[data-scene-mode="svg"]').boundingBox();
+    expect(sheetBox).not.toBeNull();
+    expect(sheetBox!.y).toBeGreaterThanOrEqual(88);
+    expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual(900);
   });
 
   test('DXF and PDF visible in stage 5 area and result section', async ({ page }) => {
@@ -64,7 +99,7 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
     await expect(page.locator('body')).toContainText(/загрузить|эскиз|файл|drop/i);
   });
 
-  test('mobile viewport shows content and SVG fallback', async ({ page }) => {
+  test('mobile viewport shows content and the static reference visual', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/');
 
@@ -75,7 +110,7 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
     const content = await page.textContent('body');
     expect(content).toContain('DXF');
     expect(content).toContain('PDF');
-    await expect(page.locator('[data-scene-mode="svg"]')).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Эскиз, детали и собранная кухня' })).toBeVisible();
     await expect(page.locator('canvas')).toHaveCount(0);
   });
 
@@ -85,7 +120,7 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
 
     await expect(page.getByText('Сверьте спецификацию')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Загрузить эскиз' }).first()).toBeVisible();
-    await expect(page.locator('[data-scene-mode="svg"]')).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Эскиз, детали и собранная кухня' })).toBeVisible();
     await expect(page.locator('canvas')).toHaveCount(0);
   });
 
@@ -98,7 +133,7 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
     await expect(page.locator('#main')).toBeFocused();
   });
 
-  test('mobile scroll does not request additional JavaScript chunks', async ({ page }) => {
+  test('mobile scroll does not load the removed WebGL scene', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const scripts: string[] = [];
     page.on('response', (response) => {
@@ -106,10 +141,10 @@ test.describe('Landing experience (Tasks 3-5 visual)', () => {
     });
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    const beforeScroll = scripts.length;
     await page.locator('#how').scrollIntoViewIfNeeded();
     await page.waitForTimeout(250);
-    expect(scripts.length).toBe(beforeScroll);
+
+    expect(scripts.filter((url) => /three|fiber|drei|hero-kitchen-scene/i.test(url))).toEqual([]);
     await expect(page.locator('canvas')).toHaveCount(0);
   });
 

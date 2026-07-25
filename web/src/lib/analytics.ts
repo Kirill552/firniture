@@ -36,6 +36,27 @@ export function setConsent(status: ConsentStatus): void {
 
 // ─── Event allowlist (discriminated union) ───────────────────────────────────
 
+export const ANALYTICS_EVENT_NAMES = [
+  'order_created',
+  'order_reviewed',
+  'bom_approved',
+  'cam_validation_completed',
+  'artifact_downloaded',
+  'landing_cta_clicked',
+  'guest_analysis_completed',
+  'guest_draft_created',
+  'clarification_completed',
+  'auth_gate_viewed',
+  'auth_mode_selected',
+  'magic_link_requested',
+  'magic_link_verified',
+  'guest_draft_claimed',
+  'guest_draft_claim_failed',
+  'pilot_artifact_requested',
+] as const
+
+export type AnalyticsEventName = typeof ANALYTICS_EVENT_NAMES[number]
+
 export interface OrderCreatedEvent {
   name: 'order_created'
   properties: {
@@ -75,18 +96,114 @@ export interface ArtifactDownloadedEvent {
   properties: {
     order_id: string
     artifact_type: string
-    job_kind: string
+    job_kind?: string
   }
 }
 
-/** Closed union — only these five event names are trackable. */
+export interface LandingCtaClickedEvent {
+  name: 'landing_cta_clicked'
+  properties: {
+    entry_point?: string
+  }
+}
+
+export interface GuestAnalysisCompletedEvent {
+  name: 'guest_analysis_completed'
+  properties: {
+    order_id: string
+    input_type: string
+    status: string
+  }
+}
+
+export interface GuestDraftCreatedEvent {
+  name: 'guest_draft_created'
+  properties: {
+    order_id: string
+  }
+}
+
+export interface ClarificationCompletedEvent {
+  name: 'clarification_completed'
+  properties: {
+    order_id: string
+    status: string
+  }
+}
+
+export interface AuthGateViewedEvent {
+  name: 'auth_gate_viewed'
+  properties: {
+    order_id: string
+    entry_point: string
+  }
+}
+
+export interface AuthModeSelectedEvent {
+  name: 'auth_mode_selected'
+  properties: {
+    auth_mode: string
+    entry_point: string
+  }
+}
+
+export interface MagicLinkRequestedEvent {
+  name: 'magic_link_requested'
+  properties: {
+    auth_mode: string
+    entry_point?: string
+  }
+}
+
+export interface MagicLinkVerifiedEvent {
+  name: 'magic_link_verified'
+  properties: {
+    auth_mode: string
+    is_returning_user: boolean
+  }
+}
+
+export interface GuestDraftClaimedEvent {
+  name: 'guest_draft_claimed'
+  properties: {
+    order_id: string
+  }
+}
+
+export interface GuestDraftClaimFailedEvent {
+  name: 'guest_draft_claim_failed'
+  properties: {
+    order_id: string
+    failure_code: string
+  }
+}
+
+export interface PilotArtifactRequestedEvent {
+  name: 'pilot_artifact_requested'
+  properties: {
+    order_id: string
+    artifact_type: string
+  }
+}
+
+/** Closed union — only allowed event names are trackable. */
 export type AnalyticsEvent =
   | OrderCreatedEvent
   | OrderReviewedEvent
   | BomApprovedEvent
   | CamValidationCompletedEvent
   | ArtifactDownloadedEvent
-
+  | LandingCtaClickedEvent
+  | GuestAnalysisCompletedEvent
+  | GuestDraftCreatedEvent
+  | ClarificationCompletedEvent
+  | AuthGateViewedEvent
+  | AuthModeSelectedEvent
+  | MagicLinkRequestedEvent
+  | MagicLinkVerifiedEvent
+  | GuestDraftClaimedEvent
+  | GuestDraftClaimFailedEvent
+  | PilotArtifactRequestedEvent
 // ─── Event property envelope ────────────────────────────────────────────────
 
 /**
@@ -128,6 +245,15 @@ const REDACTED_KEYS: Record<string, true> = {
   sketch_content: true,
   image_url: true,
   image_data: true,
+  // Identity / credentials
+  email: true,
+  factory_name: true,
+  prompt: true,
+  ocr_text: true,
+  dialogue: true,
+  token: true,
+  cookie: true,
+  session_id: true,
 }
 
 export type RedactedProperties = Record<string, unknown>

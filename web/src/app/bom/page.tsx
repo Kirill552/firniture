@@ -1,5 +1,6 @@
 "use client"
 
+import { useFeatureFlags } from "@/features/mvp"
 import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
@@ -65,6 +66,7 @@ function EmptyBomState() {
 }
 
 export default function BomPage() {
+  const { machineFeaturesEnabled } = useFeatureFlags()
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')
@@ -1064,13 +1066,15 @@ export default function BomPage() {
       />
 
       {/* Machine Profile Modal */}
-      <MachineProfileModal
-        open={showProfileModal}
-        onOpenChange={setShowProfileModal}
-        currentProfile={machineProfile}
-        onSelectProfile={handleProfileSelected}
-        isFirstTime={isFirstTimeProfile}
-      />
+      {machineFeaturesEnabled && (
+        <MachineProfileModal
+          open={showProfileModal}
+          onOpenChange={setShowProfileModal}
+          currentProfile={machineProfile}
+          onSelectProfile={handleProfileSelected}
+          isFirstTime={isFirstTimeProfile}
+        />
+      )}
 
       {/* Floating status indicator для needsRecalculation */}
       {needsRecalculation && (

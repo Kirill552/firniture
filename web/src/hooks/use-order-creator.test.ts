@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { getUploadErrorMessage } from "./upload-errors";
@@ -19,5 +21,18 @@ describe("getUploadErrorMessage", () => {
     expect(getUploadErrorMessage(503, { detail: "stack trace" })).toBe(
       "Проверка временно недоступна. Попробуйте позже."
     );
+  });
+});
+
+describe("useOrderCreator source checks", () => {
+  it("includes authRequired state handling on guest confirm", () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "./use-order-creator.ts"),
+      "utf8"
+    );
+    
+    expect(source).toContain("authRequired: boolean;");
+    expect(source).toContain("authRequired: false");
+    expect(source).toContain("authRequired: true");
   });
 });

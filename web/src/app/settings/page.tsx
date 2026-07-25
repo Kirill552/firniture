@@ -1,5 +1,6 @@
 'use client'
 
+import { useFeatureFlags } from "@/features/mvp"
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { getAuthHeader } from "@/lib/auth"
@@ -44,14 +45,15 @@ const MACHINE_PROFILES = [
 
 export default function SettingsPage() {
   const searchParams = useSearchParams()
+  const { machineFeaturesEnabled } = useFeatureFlags()
   const initialTab = searchParams.get('tab') || 'factory'
+  const activeTab = (initialTab === 'machine' && !machineFeaturesEnabled) ? 'factory' : initialTab
   const { toast } = useToast()
 
   const [settings, setSettings] = useState<FactorySettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
   // Локальное состояние для формы
   const [formData, setFormData] = useState<Partial<FactorySettings['settings']> & { factory_name?: string }>({})
 
@@ -190,16 +192,18 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Настройки фабрики, станка и параметров генерации</p>
       </div>
 
-      <Tabs defaultValue={initialTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue={activeTab} className="space-y-6">
+        <TabsList className={`grid w-full ${machineFeaturesEnabled ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabsTrigger value="factory" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">Фабрика</span>
           </TabsTrigger>
-          <TabsTrigger value="machine" className="flex items-center gap-2">
-            <Cpu className="h-4 w-4" />
-            <span className="hidden sm:inline">Станок</span>
-          </TabsTrigger>
+          {machineFeaturesEnabled && (
+            <TabsTrigger value="machine" className="flex items-center gap-2">
+              <Cpu className="h-4 w-4" />
+              <span className="hidden sm:inline">Станок</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="materials" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Материалы</span>
@@ -245,40 +249,42 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* Вкладка: Станок */}
-        <TabsContent value="machine">
-          <Card>
-            <CardHeader>
-              <CardTitle>Профиль станка</CardTitle>
-              <CardDescription>Выберите профиль вашего ЧПУ станка для корректной генерации G-code</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="machine_profile">Профиль ЧПУ</Label>
-                <Select
-                  value={formData.machine_profile || 'weihong'}
-                  onValueChange={(value) => updateField('machine_profile', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите профиль" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MACHINE_PROFILES.map((profile) => (
-                      <SelectItem key={profile.value} value={profile.value}>
-                        <div className="flex flex-col">
-                          <span>{profile.label}</span>
-                          <span className="text-xs text-muted-foreground">{profile.description}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {settings?.defaults_used.includes('machine_profile') && (
-                  <p className="text-xs text-amber-600">Используется значение по умолчанию</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {machineFeaturesEnabled && (
+          <TabsContent value="machine">
+            <Card>
+              <CardHeader>
+                <CardTitle>Профиль станка</CardTitle>
+                <CardDescription>Выберите профиль вашего ЧПУ станка для корректной генерации G-code</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="machine_profile">Профиль ЧПУ</Label>
+                  <Select
+                    value={formData.machine_profile || 'weihong'}
+                    onValueChange={(value) => updateField('machine_profile', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите профиль" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MACHINE_PROFILES.map((profile) => (
+                        <SelectItem key={profile.value} value={profile.value}>
+                          <div className="flex flex-col">
+                            <span>{profile.label}</span>
+                            <span className="text-xs text-muted-foreground">{profile.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {settings?.defaults_used.includes('machine_profile') && (
+                    <p className="text-xs text-amber-600">Используется значение по умолчанию</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Вкладка: Материалы */}
         <TabsContent value="materials">
@@ -389,100 +395,102 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>G-code параметры</CardTitle>
-                <CardDescription>Параметры обработки для ЧПУ станка</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="spindle_speed">Скорость шпинделя (об/мин)</Label>
-                    <Input
-                      id="spindle_speed"
-                      type="number"
-                      value={formData.spindle_speed || ''}
-                      onChange={(e) => updateField('spindle_speed', parseInt(e.target.value) || null)}
-                      placeholder="18000"
-                    />
-                    {settings?.defaults_used.includes('spindle_speed') && (
-                      <p className="text-xs text-amber-600">По умолчанию</p>
-                    )}
+            {machineFeaturesEnabled && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>G-code параметры</CardTitle>
+                  <CardDescription>Параметры обработки для ЧПУ станка</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="spindle_speed">Скорость шпинделя (об/мин)</Label>
+                      <Input
+                        id="spindle_speed"
+                        type="number"
+                        value={formData.spindle_speed || ''}
+                        onChange={(e) => updateField('spindle_speed', parseInt(e.target.value) || null)}
+                        placeholder="18000"
+                      />
+                      {settings?.defaults_used.includes('spindle_speed') && (
+                        <p className="text-xs text-amber-600">По умолчанию</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tool_diameter">Диаметр фрезы (мм)</Label>
+                      <Input
+                        id="tool_diameter"
+                        type="number"
+                        value={formData.tool_diameter || ''}
+                        onChange={(e) => updateField('tool_diameter', parseFloat(e.target.value) || null)}
+                        placeholder="6"
+                      />
+                      {settings?.defaults_used.includes('tool_diameter') && (
+                        <p className="text-xs text-amber-600">По умолчанию</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tool_diameter">Диаметр фрезы (мм)</Label>
-                    <Input
-                      id="tool_diameter"
-                      type="number"
-                      value={formData.tool_diameter || ''}
-                      onChange={(e) => updateField('tool_diameter', parseFloat(e.target.value) || null)}
-                      placeholder="6"
-                    />
-                    {settings?.defaults_used.includes('tool_diameter') && (
-                      <p className="text-xs text-amber-600">По умолчанию</p>
-                    )}
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="feed_rate_cutting">Подача резки (мм/мин)</Label>
-                    <Input
-                      id="feed_rate_cutting"
-                      type="number"
-                      value={formData.feed_rate_cutting || ''}
-                      onChange={(e) => updateField('feed_rate_cutting', parseInt(e.target.value) || null)}
-                      placeholder="3000"
-                    />
-                    {settings?.defaults_used.includes('feed_rate_cutting') && (
-                      <p className="text-xs text-amber-600">По умолчанию</p>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="feed_rate_cutting">Подача резки (мм/мин)</Label>
+                      <Input
+                        id="feed_rate_cutting"
+                        type="number"
+                        value={formData.feed_rate_cutting || ''}
+                        onChange={(e) => updateField('feed_rate_cutting', parseInt(e.target.value) || null)}
+                        placeholder="3000"
+                      />
+                      {settings?.defaults_used.includes('feed_rate_cutting') && (
+                        <p className="text-xs text-amber-600">По умолчанию</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="feed_rate_plunge">Подача врезания (мм/мин)</Label>
+                      <Input
+                        id="feed_rate_plunge"
+                        type="number"
+                        value={formData.feed_rate_plunge || ''}
+                        onChange={(e) => updateField('feed_rate_plunge', parseInt(e.target.value) || null)}
+                        placeholder="1500"
+                      />
+                      {settings?.defaults_used.includes('feed_rate_plunge') && (
+                        <p className="text-xs text-amber-600">По умолчанию</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="feed_rate_plunge">Подача врезания (мм/мин)</Label>
-                    <Input
-                      id="feed_rate_plunge"
-                      type="number"
-                      value={formData.feed_rate_plunge || ''}
-                      onChange={(e) => updateField('feed_rate_plunge', parseInt(e.target.value) || null)}
-                      placeholder="1500"
-                    />
-                    {settings?.defaults_used.includes('feed_rate_plunge') && (
-                      <p className="text-xs text-amber-600">По умолчанию</p>
-                    )}
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cut_depth">Глубина за проход (мм)</Label>
-                    <Input
-                      id="cut_depth"
-                      type="number"
-                      value={formData.cut_depth || ''}
-                      onChange={(e) => updateField('cut_depth', parseFloat(e.target.value) || null)}
-                      placeholder="8"
-                    />
-                    {settings?.defaults_used.includes('cut_depth') && (
-                      <p className="text-xs text-amber-600">По умолчанию</p>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cut_depth">Глубина за проход (мм)</Label>
+                      <Input
+                        id="cut_depth"
+                        type="number"
+                        value={formData.cut_depth || ''}
+                        onChange={(e) => updateField('cut_depth', parseFloat(e.target.value) || null)}
+                        placeholder="8"
+                      />
+                      {settings?.defaults_used.includes('cut_depth') && (
+                        <p className="text-xs text-amber-600">По умолчанию</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="safe_height">Безопасная высота (мм)</Label>
+                      <Input
+                        id="safe_height"
+                        type="number"
+                        value={formData.safe_height || ''}
+                        onChange={(e) => updateField('safe_height', parseFloat(e.target.value) || null)}
+                        placeholder="5"
+                      />
+                      {settings?.defaults_used.includes('safe_height') && (
+                        <p className="text-xs text-amber-600">По умолчанию</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="safe_height">Безопасная высота (мм)</Label>
-                    <Input
-                      id="safe_height"
-                      type="number"
-                      value={formData.safe_height || ''}
-                      onChange={(e) => updateField('safe_height', parseFloat(e.target.value) || null)}
-                      placeholder="5"
-                    />
-                    {settings?.defaults_used.includes('safe_height') && (
-                      <p className="text-xs text-amber-600">По умолчанию</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
       </Tabs>

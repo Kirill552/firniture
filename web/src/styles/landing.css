@@ -1,0 +1,43 @@
+/* Custom visual styling for the light studio landing page */
+
+.landing-root {
+  background-color: var(--brand-bg);
+  color: var(--brand-ink);
+  font-family: var(--font-onest), sans-serif;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: var(--brand-lime);
+  color: var(--brand-ink);
+  padding: 8px 16px;
+  z-index: 100;
+  font-weight: 600;
+  transition: top 0.2s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Scroll Story active state lime highlight */
+.stage-card-active-line {
+  height: 2px;
+  background-color: var(--brand-lime);
+  width: 24px;
+  transition: width 0.3s ease-out;
+}
+
+.stage-card-inactive-line {
+  height: 2px;
+  background-color: var(--brand-line);
+  width: 8px;
+}
+
+/* Micro-interactions: scale down on press */
+.active-press:active {
+  transform: scale(0.98);
+  transition: transform 100ms var(--ease-out);
+}

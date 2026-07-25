@@ -1,5 +1,7 @@
 "use client"
 
+import { useRouter } from "next/navigation"
+import { useFeatureFlags } from "@/features/mvp"
 import { useState, useMemo, useEffect } from "react"
 import {
   useReactTable,
@@ -134,6 +136,8 @@ function DXFViewer({ url, jobType }: { url?: string; jobType?: CAMJobType }) {
 }
 
 export default function CamPage() {
+  const router = useRouter()
+  const { machineFeaturesEnabled, isLoading: isFlagsLoading } = useFeatureFlags()
   const { toast } = useToast()
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -143,6 +147,11 @@ export default function CamPage() {
   const [jobs, setJobs] = useState<CAMJob[]>([])
   const [isLoadingDownloadUrl, setIsLoadingDownloadUrl] = useState(false)
 
+  useEffect(() => {
+    if (!isFlagsLoading && !machineFeaturesEnabled) {
+      router.replace('/orders')
+    }
+  }, [isFlagsLoading, machineFeaturesEnabled, router])
   // Load CAM jobs from API
   useEffect(() => {
     const loadJobs = async () => {
@@ -435,6 +444,17 @@ export default function CamPage() {
     })
   }
 
+  if (isFlagsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[100dvh] bg-[#f3f6f8]">
+        <div className="text-sm text-[#66707a]">Загрузка...</div>
+      </div>
+    )
+  }
+
+  if (!machineFeaturesEnabled) {
+    return null
+  }
   if (isLoading) {
     return (
       <div className="p-6 w-full space-y-6">

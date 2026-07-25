@@ -211,6 +211,12 @@ def _cleanup_aiohttp_sessions() -> None:
                 pass
     _active_sessions.clear()
 
+@pytest.fixture(autouse=True, scope="function")
+async def _cleanup_database_pool() -> AsyncGenerator[None, None]:
+    yield
+    from api.database import engine
+    await engine.dispose()
+
 
 # ── Test environment markers ────────────────────────────────────────
 

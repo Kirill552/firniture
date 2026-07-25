@@ -38,6 +38,8 @@ from .auth import router as auth_router
 from .routers import dialogue_router
 from .routers import router as api_v1
 from .routes.manufacturing import router as manufacturing_router
+from .routes.product_analytics import router as analytics_router
+from .mvp_features import router as features_router
 
 app = FastAPI(title="Furniture AI API", version="0.1.0")
 
@@ -217,3 +219,5 @@ app.include_router(api_v1)
 app.include_router(dialogue_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(manufacturing_router)
+app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(features_router, prefix="/api/v1")

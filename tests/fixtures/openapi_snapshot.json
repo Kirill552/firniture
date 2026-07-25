@@ -1,6 +1,26 @@
 {
   "components": {
     "schemas": {
+      "AnalyticsEventPayload": {
+        "properties": {
+          "name": {
+            "description": "Имя события аналитики",
+            "title": "Name",
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": true,
+            "description": "Свойства события",
+            "title": "Properties",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AnalyticsEventPayload",
+        "type": "object"
+      },
       "ApprovalDecision": {
         "description": "Решение технолога.",
         "enum": [
@@ -569,6 +589,25 @@
           "height_mm"
         ],
         "title": "CalculatedPanel",
+        "type": "object"
+      },
+      "ClaimDraftResponse": {
+        "description": "Ответ привязки анонимного черновика к аккаунту.",
+        "properties": {
+          "claimed": {
+            "title": "Claimed",
+            "type": "boolean"
+          },
+          "order_id": {
+            "title": "Order Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claimed",
+          "order_id"
+        ],
+        "title": "ClaimDraftResponse",
         "type": "object"
       },
       "ClaimRequest": {
@@ -1527,6 +1566,20 @@
           "updated_fields"
         ],
         "title": "FactorySettingsUpdateResponse",
+        "type": "object"
+      },
+      "FeaturesResponse": {
+        "description": "Ответ о доступных функциях (feature flags).",
+        "properties": {
+          "machine_features_enabled": {
+            "title": "Machine Features Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "machine_features_enabled"
+        ],
+        "title": "FeaturesResponse",
         "type": "object"
       },
       "FieldSource": {
@@ -2556,6 +2609,28 @@
             "format": "email",
             "title": "Email",
             "type": "string"
+          },
+          "entry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry"
+          },
+          "return_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return To"
           }
         },
         "required": [
@@ -2806,6 +2881,12 @@
             "title": "Gap Mm",
             "type": "number"
           },
+          "order_id": {
+            "description": "ID заказа",
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
           "order_info": {
             "anyOf": [
               {
@@ -2855,6 +2936,7 @@
           }
         },
         "required": [
+          "order_id",
           "panels"
         ],
         "title": "PDFCuttingMapRequest",
@@ -3082,11 +3164,33 @@
             "title": "Email",
             "type": "string"
           },
+          "entry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry"
+          },
           "factory_name": {
             "maxLength": 255,
             "minLength": 2,
             "title": "Factory Name",
             "type": "string"
+          },
+          "return_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return To"
           }
         },
         "required": [
@@ -3398,6 +3502,61 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/auth/claim-guest-draft": {
+      "post": {
+        "description": "Привязать анонимный черновик к аккаунту вошедшего пользователя.",
+        "operationId": "claim_guest_draft_api_v1_auth_claim_guest_draft_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "ar_guest_draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ar Guest Draft"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimDraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Guest Draft",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/claim-guest-order": {
       "post": {
         "description": "Claim гостевого заказа после логина.\n\nВалидация capability-токена и проверка привязки к фабрике:\nТокен должен быть подписан, не истёкшим, не UUID-only.\nФабрика токена должна совпадать с фабрикой залогиненного пользователя.",
@@ -3602,6 +3761,24 @@
       "post": {
         "description": "Сгенерировать полный BOM (панели + фурнитура) для изделия.\n\nОбъединяет:\n1. Расчёт панелей через калькулятор\n2. Подбор фурнитуры через RAG\n3. Расчёт количества фурнитуры\n\nЭто endpoint для прямого вызова, без диалога с AI.",
         "operationId": "generate_bom_endpoint_api_v1_bom_generate_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "ar_guest_draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ar Guest Draft"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3686,7 +3863,6 @@
     },
     "/api/v1/cam/drilling": {
       "post": {
-        "description": "Создать задачу генерации G-code присадки.\n\nГенерирует G-code напрямую из BOM заказа, минуя DXF.\nВозвращает ZIP архив с .nc файлами (по одному на панель).",
         "operationId": "create_drilling_job_api_v1_cam_drilling_post",
         "requestBody": {
           "content": {
@@ -3774,7 +3950,6 @@
     },
     "/api/v1/cam/gcode": {
       "post": {
-        "description": "Создаёт задачу генерации G-code из DXF артефакта.\n\nПараметры берутся из: запрос > настройки фабрики > дефолты профиля станка.\n\n## Процесс:\n1. Получает DXF файл по artifact_id\n2. Применяет профиль станка и пользовательские параметры\n3. Конвертирует геометрию DXF в G-code\n4. Сохраняет результат как новый артефакт\n\n## Пример запроса:\n```json\n{\n    \"dxf_artifact_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"machine_profile\": \"weihong\",\n    \"cut_depth\": 18.0\n}\n```\n\nЗадача ставится в очередь. Проверяйте статус через GET /cam/jobs/{job_id}.",
         "operationId": "create_gcode_job_api_v1_cam_gcode_post",
         "requestBody": {
           "content": {
@@ -4065,7 +4240,6 @@
     },
     "/api/v1/cam/machine-profiles": {
       "get": {
-        "description": "Получить список доступных профилей станков ЧПУ.\n\nПрофили включают настройки для популярных систем управления:\n- **weihong** — Weihong NCStudio — ~30-35% рынка России, популярен для малого/среднего бизнеса\n- **syntec** — Syntec — ~20-25% рынка России, FANUC-совместимый\n- **fanuc** — Fanuc (ISO 6983, ГОСТ 20999-83) — ~15-20% рынка, промышленный стандарт\n- **dsp** — DSP — ~8-12% рынка, бюджетный сегмент\n- **homag** — Homag — ~2-3% рынка, премиум мебельное оборудование",
         "operationId": "list_machine_profiles_api_v1_cam_machine_profiles_get",
         "responses": {
           "200": {
@@ -4108,6 +4282,24 @@
       "post": {
         "description": "Принимает текущую историю диалога и возвращает потоковый ответ от ИИ-технолога.\n\nЕсли AI_API_KEY не задан — использует mock ответы для локальной разработки.",
         "operationId": "dialogue_clarify_api_v1_dialogue_clarify_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "ar_guest_draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ar Guest Draft"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4153,6 +4345,24 @@
       "post": {
         "description": "Диалог с ИИ-технологом с поддержкой Function Calling.\n\nМодель может вызывать инструменты для:\n- Поиска фурнитуры в каталоге (find_hardware)\n- Проверки совместимости (check_hardware_compatibility)\n- Получения детальной информации (get_hardware_details)\n- Расчёта количества (calculate_hardware_qty)\n\nВозвращает JSON с результатами, включая вызовы инструментов.",
         "operationId": "dialogue_clarify_with_tools_api_v1_dialogue_clarify_with_tools_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "ar_guest_draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ar Guest Draft"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4191,6 +4401,28 @@
         "summary": "Dialogue Clarify With Tools",
         "tags": [
           "Dialogue"
+        ]
+      }
+    },
+    "/api/v1/features": {
+      "get": {
+        "description": "Получить статус доступных экспериментальных функций (feature flags).",
+        "operationId": "get_features_api_v1_features_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeaturesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Features",
+        "tags": [
+          "Features"
         ]
       }
     },
@@ -5198,6 +5430,45 @@
         "summary": "Calculate Panels Endpoint"
       }
     },
+    "/api/v1/product-analytics/events": {
+      "post": {
+        "operationId": "track_product_event_api_v1_product_analytics_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyticsEventPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Track Product Event",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/api/v1/settings": {
       "get": {
         "description": "Получить настройки фабрики.\n\nВозвращает merged настройки (сохранённые + дефолты) и список полей,\nгде использованы дефолтные значения.\n\nТребует авторизации.",
@@ -5222,7 +5493,6 @@
         "summary": "Get Settings"
       },
       "patch": {
-        "description": "Обновить настройки фабрики (частично).\n\nПередайте только те поля, которые хотите изменить.\nЧтобы сбросить поле к дефолту, передайте `null`.\n\nТребует авторизации (только owner может менять factory_name).",
         "operationId": "update_settings_api_v1_settings_patch",
         "requestBody": {
           "content": {

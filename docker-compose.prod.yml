@@ -77,6 +77,7 @@ services:
       AI_CHAT_MODEL: ${AI_CHAT_MODEL:-deepseek/deepseek-chat-v3-0324}
       AI_VISION_MODEL: ${AI_VISION_MODEL:-google/gemini-2.0-flash-001}
       AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      MVP_MACHINE_FEATURES_ENABLED: ${MVP_MACHINE_FEATURES_ENABLED:-false}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       RUSENDER_API_KEY: ${RUSENDER_API_KEY:-}
@@ -126,6 +127,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET:-mebel-ai-artifacts}
       S3_PRESIGNED_TTL_SECONDS: 900
+      MVP_MACHINE_FEATURES_ENABLED: ${MVP_MACHINE_FEATURES_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
