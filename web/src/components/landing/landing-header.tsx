@@ -12,16 +12,16 @@ export function LandingHeader() {
   const { brand, navHow, navCapabilities, navLogin } = LANDING_COPY;
 
   return (
-    <header className="sticky top-0 z-50 border-b-2 border-[#17130d] bg-[#ece4d5]/95 backdrop-blur-sm">
-      <div className="mx-auto flex h-[68px] max-w-[1280px] items-center justify-between px-6">
+    <header className="sticky top-0 z-50 border-b border-[#d7dde2] bg-[#f3f6f8]/95 backdrop-blur-md">
+      <div className="mx-auto flex h-[64px] max-w-[1280px] items-center justify-between px-6">
         <Link href="/" className="group flex items-center gap-3">
-          <span className="relative flex h-9 w-9 items-center justify-center border-2 border-[#17130d] bg-[#fbf8f1]">
-            <span className="font-display text-[15px] font-extrabold tracking-[-1px] text-[#17130d]">АР</span>
-            <span className="absolute -right-[3px] -top-[3px] h-2 w-2 bg-[#d8352a]" />
+          <span className="relative flex h-8 w-8 items-center justify-center border border-[#d7dde2] bg-white rounded-lg">
+            <span className="text-[14px] font-extrabold tracking-[-1px] text-[#171a1d]">АР</span>
+            <span className="absolute -right-[2px] -top-[2px] h-2 w-2 rounded-full bg-[#c7ff00]" />
           </span>
           <span className="flex flex-col leading-none">
-            <span className="font-display text-[19px] font-bold tracking-[-0.6px] text-[#17130d]">{brand}</span>
-            <span className="font-tech mt-0.5 text-[9px] uppercase tracking-[1.5px] text-[#8c8373]">
+            <span className="text-[17px] font-bold tracking-[-0.6px] text-[#171a1d]">{brand}</span>
+            <span className="font-mono mt-0.5 text-[8.5px] uppercase tracking-[1.5px] text-[#66707a]">
               обмер · спецификация · DXF
             </span>
           </span>
@@ -30,19 +30,19 @@ export function LandingHeader() {
         <nav className="flex items-center gap-1 sm:gap-2">
           <a
             href="#how"
-            className="font-tech hidden px-3 py-2 text-[13px] uppercase tracking-[0.5px] text-[#544c3f] transition-colors hover:text-[#d8352a] sm:inline-block"
+            className="font-mono hidden px-3 py-2 text-[12px] uppercase tracking-[0.5px] text-[#66707a] transition-colors hover:text-[#171a1d] sm:inline-block"
           >
             {navHow}
           </a>
           <a
             href="#capabilities"
-            className="font-tech hidden px-3 py-2 text-[13px] uppercase tracking-[0.5px] text-[#544c3f] transition-colors hover:text-[#d8352a] sm:inline-block"
+            className="font-mono hidden px-3 py-2 text-[12px] uppercase tracking-[0.5px] text-[#66707a] transition-colors hover:text-[#171a1d] sm:inline-block"
           >
             {navCapabilities}
           </a>
           <Link
             href="/login"
-            className="font-tech ml-1 border-2 border-[#17130d] bg-[#fbf8f1] px-4 py-2 text-[13px] uppercase tracking-[0.5px] text-[#17130d] transition-all hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#17130d]"
+            className="ml-1 border border-[#d7dde2] bg-white px-4 py-1.5 text-xs font-semibold text-[#171a1d] rounded-lg hover:bg-[#f3f6f8] active:scale-[0.98] transition-all duration-150 cursor-pointer"
           >
             {navLogin}
           </Link>

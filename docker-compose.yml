@@ -53,7 +53,7 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
       REDIS_URL: redis://redis:6379/0
-      GUEST_UPLOAD_SECRET: ${GUEST_UPLOAD_SECRET:-}
+      GUEST_UPLOAD_SECRET: ${GUEST_UPLOAD_SECRET:-local-test-guest-secret-at-least-32-characters}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
       S3_ENDPOINT_URL: http://minio:9000
       S3_REGION: us-east-1
@@ -66,6 +66,7 @@ services:
       AI_CHAT_MODEL: ${AI_CHAT_MODEL:-deepseek/deepseek-chat-v3-0324}
       AI_VISION_MODEL: ${AI_VISION_MODEL:-google/gemini-2.0-flash-001}
       AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      MVP_MACHINE_FEATURES_ENABLED: ${MVP_MACHINE_FEATURES_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +95,7 @@ services:
       S3_SECRET_KEY: minio123
       S3_BUCKET: artifacts
       S3_PRESIGNED_TTL_SECONDS: 900
+      MVP_MACHINE_FEATURES_ENABLED: ${MVP_MACHINE_FEATURES_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy

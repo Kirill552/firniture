@@ -11,6 +11,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
+import { useFeatureFlags } from "@/features/mvp"
+
 interface SearchResult {
   id: string
   title: string
@@ -135,6 +137,7 @@ export function GlobalSearch() {
   const [loading, setLoading] = React.useState(false)
   const [selectedIndex, setSelectedIndex] = React.useState(0)
   const router = useRouter()
+  const { machineFeaturesEnabled } = useFeatureFlags()
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -163,7 +166,8 @@ export function GlobalSearch() {
     try {
       // Smart fuzzy search with AI-like scoring
       const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 1)
-      const scoredResults = mockSearchResults.map(item => {
+      const filteredMockResults = mockSearchResults.filter(item => item.url !== "/cam" || machineFeaturesEnabled)
+      const scoredResults = filteredMockResults.map(item => {
         let score = 0
         const searchableText = [
           item.title,

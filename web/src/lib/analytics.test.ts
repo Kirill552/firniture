@@ -293,21 +293,43 @@ describe('track – no sink', () => {
 // ─── Event type compile-time check ──────────────────────────────────────────
 
 describe('event type allowlist', () => {
-  it('all five event names are assignable to AnalyticsEvent', () => {
+  it('all allowed event names are assignable to AnalyticsEvent', () => {
     const events: AnalyticsEvent[] = [
       { name: 'order_created', properties: { order_id: '1', input_type: 'text', has_sketch: false } },
       { name: 'order_reviewed', properties: { order_id: '1', input_type: 'image' } },
       { name: 'bom_approved', properties: { order_id: '1', item_count: 3 } },
       { name: 'cam_validation_completed', properties: { order_id: '1', job_kind: 'DXF', status: 'Completed' } },
       { name: 'artifact_downloaded', properties: { order_id: '1', artifact_type: 'DXF', job_kind: 'DXF' } },
+      { name: 'landing_cta_clicked', properties: { entry_point: 'hero' } },
+      { name: 'guest_analysis_completed', properties: { order_id: '1', input_type: 'image', status: 'success' } },
+      { name: 'guest_draft_created', properties: { order_id: '1' } },
+      { name: 'clarification_completed', properties: { order_id: '1', status: 'success' } },
+      { name: 'auth_gate_viewed', properties: { order_id: '1', entry_point: 'save-draft' } },
+      { name: 'auth_mode_selected', properties: { auth_mode: 'register', entry_point: 'save-draft' } },
+      { name: 'magic_link_requested', properties: { auth_mode: 'register', entry_point: 'save-draft' } },
+      { name: 'magic_link_verified', properties: { auth_mode: 'register', is_returning_user: false } },
+      { name: 'guest_draft_claimed', properties: { order_id: '1' } },
+      { name: 'guest_draft_claim_failed', properties: { order_id: '1', failure_code: 'EXPIRED' } },
+      { name: 'pilot_artifact_requested', properties: { order_id: '1', artifact_type: 'PDF' } },
     ]
-    expect(events).toHaveLength(5)
+    expect(events).toHaveLength(16)
     expect(events.map((e) => e.name)).toEqual([
       'order_created',
       'order_reviewed',
       'bom_approved',
       'cam_validation_completed',
       'artifact_downloaded',
+      'landing_cta_clicked',
+      'guest_analysis_completed',
+      'guest_draft_created',
+      'clarification_completed',
+      'auth_gate_viewed',
+      'auth_mode_selected',
+      'magic_link_requested',
+      'magic_link_verified',
+      'guest_draft_claimed',
+      'guest_draft_claim_failed',
+      'pilot_artifact_requested',
     ])
   })
 

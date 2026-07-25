@@ -60,13 +60,19 @@ async function fetchAPI<T>(
   const url = `${API_BASE_URL}${API_PREFIX}${endpoint}`
 
   try {
+    const headers: Record<string, string> = {
+      ...(skipAuth ? {} : getAuthHeader()),
+      ...(options?.headers as Record<string, string> | undefined),
+    }
+
+    if (options?.body) {
+      headers['Content-Type'] = 'application/json'
+    }
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(skipAuth ? {} : getAuthHeader()),
-        ...options?.headers,
-      },
+      credentials: 'include',
+      headers,
     })
 
     if (!response.ok) {
@@ -99,10 +105,14 @@ async function fetchAPI<T>(
 export interface RegisterRequest {
   email: string
   factory_name: string
+  return_to?: string
+  entry?: string
 }
 
 export interface LoginRequest {
   email: string
+  return_to?: string
+  entry?: string
 }
 
 export interface VerifyRequest {
@@ -112,6 +122,11 @@ export interface VerifyRequest {
 export interface MessageResponse {
   message: string
   dev_magic_link?: string  // Только в dev режиме (mock email)
+}
+
+export interface ClaimDraftResponse {
+  claimed: boolean
+  order_id: string
 }
 
 /**
@@ -157,6 +172,14 @@ export const apiClient = {
    */
   async getMe(): Promise<AuthUser> {
     return fetchAPI<AuthUser>('/auth/me')
+  },
+  /**
+   * Привязать гостевой черновик к аккаунту вошедшего пользователя
+   */
+  async claimGuestDraft(): Promise<ClaimDraftResponse> {
+    return fetchAPI<ClaimDraftResponse>('/auth/claim-guest-draft', {
+      method: 'POST',
+    })
   },
 
   // ============================================================================

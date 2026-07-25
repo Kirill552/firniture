@@ -35,7 +35,9 @@ class EmailClient:
         email: str,
         token: str,
         user_name: str | None = None,
-        is_registration: bool = False
+        is_registration: bool = False,
+        return_to: str | None = None,
+        entry: str | None = None,
     ) -> str | None:
         """
         Отправить Magic Link для входа/регистрации.
@@ -50,6 +52,12 @@ class EmailClient:
             UUID письма от RuSender или None в mock режиме
         """
         magic_url = f"{self.frontend_url}/login/verify?token={token}"
+        if return_to:
+            import urllib.parse
+            magic_url += f"&returnTo={urllib.parse.quote(return_to)}"
+        if entry:
+            import urllib.parse
+            magic_url += f"&entry={urllib.parse.quote(entry)}"
 
         subject = "Регистрация в АвтоРаскрой" if is_registration else "Вход в АвтоРаскрой"
         action_text = "Завершить регистрацию" if is_registration else "Войти в АвтоРаскрой"
@@ -135,7 +143,9 @@ async def send_magic_link(
     email: str,
     token: str,
     user_name: str | None = None,
-    is_registration: bool = False
+    is_registration: bool = False,
+    return_to: str | None = None,
+    entry: str | None = None,
 ) -> str | None:
     """Удобная функция для отправки magic link."""
-    return await email_client.send_magic_link(email, token, user_name, is_registration)
+    return await email_client.send_magic_link(email, token, user_name, is_registration, return_to, entry)

@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-
 from api.guest_access import (
     GuestScope,
     decode_capability_token,
@@ -350,3 +350,40 @@ def claim_guest_order_access(
         scopes=token.scopes,
         token_id=token.token_id,
     )
+
+
+def enforce_order_access(
+    order: Any,
+    current_user: Any | None,
+    guest_draft_cookie: str | None,
+    guest_draft_secret: str,
+) -> None:
+    """
+    Проверить доступ к конкретному заказу (order).
+
+    1. Если у заказа задан factory_id:
+       - Требуется авторизованный пользователь с тем же factory_id.
+    2. Если у заказа factory_id IS None (гостевой черновик):
+       - Требуется наличие валидного подписанного cookie 'ar_guest_draft',
+         содержащего order_id, совпадающий с id проверяемого заказа.
+    """
+    if order.factory_id is not None:
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="Требуется авторизация")
+        if order.factory_id != current_user.factory_id:
+            raise HTTPException(status_code=403, detail="Нет доступа к ресурсу")
+    else:
+        if not guest_draft_cookie:
+            raise HTTPException(status_code=403, detail="Нет доступа к черновику")
+
+        from api.guest_drafts import verify_guest_draft_token
+        payload = verify_guest_draft_token(guest_draft_cookie, guest_draft_secret)
+        if not payload:
+            raise HTTPException(status_code=403, detail="Нет доступа к черновику")
+
+        order_id_str = str(order.id)
+        token_order_id_str = str(payload["order_id"])
+
+        if order_id_str != token_order_id_str:
+            raise HTTPException(status_code=403, detail="Нет доступа к этому черновику")
+

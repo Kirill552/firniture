@@ -10,11 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class FieldSource(str, Enum):
     """Источник значения поля."""
-    OCR = "ocr"           # Найдено на изображении
-    INFERRED = "inferred" # Выведено из контекста
-    DEFAULT = "default"   # Подставлено значение по умолчанию
-    USER = "user"         # Введено пользователем
-    AI = "ai"             # Уточнено через AI-чат
+
+    OCR = "ocr"  # Найдено на изображении
+    INFERRED = "inferred"  # Выведено из контекста
+    DEFAULT = "default"  # Подставлено значение по умолчанию
+    USER = "user"  # Введено пользователем
+    AI = "ai"  # Уточнено через AI-чат
+
 
 from api.constants import (
     DEFAULT_CUT_DEPTH,
@@ -123,7 +125,7 @@ class ValidationApproveResponse(BaseModel):
 class CAMJobRequest(BaseModel):
     product_config_id: str
     order_id: str | None = None
-    dxf_job_id: str | None = None # For G-code jobs
+    dxf_job_id: str | None = None  # For G-code jobs
     context: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -150,8 +152,10 @@ class DialogueMessageBase(BaseModel):
     role: Literal["user", "assistant"]
     content: str
 
+
 class DialogueMessageCreate(DialogueMessageBase):
     pass
+
 
 class DialogueMessage(DialogueMessageBase):
     id: UUID
@@ -160,6 +164,7 @@ class DialogueMessage(DialogueMessageBase):
     timestamp: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class DialogueTurnRequest(BaseModel):
     order_id: UUID
@@ -190,11 +195,20 @@ class ZIPJobRequest(BaseModel):
 # Vision OCR - извлечение параметров из изображений
 # ============================================================================
 
+
 class FurnitureType(BaseModel):
     """Тип мебельного изделия."""
+
     category: Literal[
-        "навесной_шкаф", "напольный_шкаф", "тумба", "пенал",
-        "столешница", "фасад", "полка", "ящик", "другое"
+        "навесной_шкаф",
+        "напольный_шкаф",
+        "тумба",
+        "пенал",
+        "столешница",
+        "фасад",
+        "полка",
+        "ящик",
+        "другое",
     ]
     subcategory: str | None = None
     description: str | None = None
@@ -202,6 +216,7 @@ class FurnitureType(BaseModel):
 
 class ExtractedDimensions(BaseModel):
     """Извлечённые размеры изделия."""
+
     width_mm: int | None = Field(None, description="Ширина в мм")
     height_mm: int | None = Field(None, description="Высота в мм")
     depth_mm: int | None = Field(None, description="Глубина в мм")
@@ -210,7 +225,10 @@ class ExtractedDimensions(BaseModel):
 
 class ExtractedMaterial(BaseModel):
     """Извлечённый материал."""
-    type: Literal["ЛДСП", "МДФ", "массив", "фанера", "ДВП", "стекло", "металл", "другое"] | None = None
+
+    type: Literal["ЛДСП", "МДФ", "массив", "фанера", "ДВП", "стекло", "металл", "другое"] | None = (
+        None
+    )
     color: str | None = None
     texture: str | None = None
     brand: str | None = None
@@ -218,6 +236,7 @@ class ExtractedMaterial(BaseModel):
 
 class ExtractedFurnitureParams(BaseModel):
     """Структурированные параметры мебели, извлечённые из изображения."""
+
     furniture_type: FurnitureType | None = None
     dimensions: ExtractedDimensions | None = None
     body_material: ExtractedMaterial | None = Field(None, description="Материал корпуса")
@@ -235,7 +254,9 @@ class ExtractedFurnitureParams(BaseModel):
     # Уверенность распознавания
     confidence: float = Field(0.0, ge=0.0, le=1.0, description="Уверенность распознавания (0-1)")
     needs_clarification: bool = Field(False, description="Требуется уточнение от пользователя")
-    clarification_questions: list[str] | None = Field(default=None, description="Вопросы для уточнения")
+    clarification_questions: list[str] | None = Field(
+        default=None, description="Вопросы для уточнения"
+    )
 
     @field_validator("clarification_questions", mode="before")
     @classmethod
@@ -246,6 +267,7 @@ class ExtractedFurnitureParams(BaseModel):
 
 class GuestUploadErrorCode(str, Enum):
     """Коды ошибок для публичной загрузки (guest upload)."""
+
     payload_too_large = "payload_too_large"
     invalid_base64 = "invalid_base64"
     unsupported_file_type = "unsupported_file_type"
@@ -260,6 +282,7 @@ class GuestUploadErrorCode(str, Enum):
 
 class UploadErrorDetail(BaseModel):
     """Единый envelope ошибок для upload routes. Используется в HTTPException.detail."""
+
     code: GuestUploadErrorCode
     message: str
     retry_after_seconds: int | None = None
@@ -267,23 +290,29 @@ class UploadErrorDetail(BaseModel):
 
 class ImageExtractRequest(BaseModel):
     """Запрос на извлечение параметров из изображения или PDF."""
+
     image_base64: str = Field(
         ...,
         max_length=14 * 1024 * 1024,  # ~14MB base64 (guard against chunked oversized)
         description="Изображение или PDF в формате base64",
     )
-    image_mime_type: Literal["image/jpeg", "image/png", "image/webp", "application/pdf"] = "image/jpeg"
+    image_mime_type: Literal["image/jpeg", "image/png", "image/webp", "application/pdf"] = (
+        "image/jpeg"
+    )
     order_id: UUID | None = Field(None, description="ID заказа для привязки")
     language_hint: Literal["ru", "en", "auto"] = "ru"
 
 
 class ImageExtractResponse(BaseModel):
     """Ответ с извлечёнными параметрами."""
+
     success: bool
     parameters: ExtractedFurnitureParams | None = None
 
     # Если требуется уточнение - предлагаем перейти в диалог
-    fallback_to_dialogue: bool = Field(False, description="Рекомендуется перейти в диалог для уточнения")
+    fallback_to_dialogue: bool = Field(
+        False, description="Рекомендуется перейти в диалог для уточнения"
+    )
     dialogue_prompt: str | None = Field(None, description="Начальный промпт для диалога")
 
     # Метаданные
@@ -292,14 +321,26 @@ class ImageExtractResponse(BaseModel):
     error: str | None = None
 
     # Новые поля для валидации модулей
-    error_type: Literal[
-        "multiple_modules", "file_too_large", "unsupported_format", "ocr_failed",
-        "not_furniture_source", "payload_too_large", "invalid_base64", "mime_mismatch", "invalid_pdf", "image_too_large",
-        "unsupported_file_type", "service_unavailable"
-    ] | None = Field(
-        None, description="Тип ошибки для программной обработки"
+    error_type: (
+        Literal[
+            "multiple_modules",
+            "file_too_large",
+            "unsupported_format",
+            "ocr_failed",
+            "not_furniture_source",
+            "payload_too_large",
+            "invalid_base64",
+            "mime_mismatch",
+            "invalid_pdf",
+            "image_too_large",
+            "unsupported_file_type",
+            "service_unavailable",
+        ]
+        | None
+    ) = Field(None, description="Тип ошибки для программной обработки")
+    module_count: int | None = Field(
+        None, description="Количество модулей на изображении (если определено)"
     )
-    module_count: int | None = Field(None, description="Количество модулей на изображении (если определено)")
 
     # Источники полей (NEW)
     field_sources: dict[str, FieldSource] | None = Field(
@@ -309,14 +350,13 @@ class ImageExtractResponse(BaseModel):
         default_factory=list, description="Поля, требующие проверки пользователем"
     )
     recognized_count: int = Field(0, description="Количество распознанных полей (не default)")
-    suggested_prompt: str | None = Field(
-        None, description="Предлагаемый промпт для AI-уточнения"
-    )
+    suggested_prompt: str | None = Field(None, description="Предлагаемый промпт для AI-уточнения")
 
     # Разрешение выдаётся только после успешной проверки, даже при низкой уверенности.
     # Оно позволяет один раз создать анонимный заказ; иначе значение отсутствует.
     guest_upload_grant: str | None = Field(
-        None, description="Одноразовый подписанный grant для /orders/anonymous (scope=create_anonymous_order)"
+        None,
+        description="Одноразовый подписанный grant для /orders/anonymous (scope=create_anonymous_order)",
     )
 
 
@@ -324,8 +364,10 @@ class ImageExtractResponse(BaseModel):
 # CAM - генерация DXF и G-code (P1)
 # ============================================================================
 
+
 class PanelInput(BaseModel):
     """Панель для генерации DXF."""
+
     name: str = Field(..., description="Название панели (напр. 'Боковина левая')")
     width_mm: float = Field(..., gt=0, description="Ширина в мм")
     height_mm: float = Field(..., gt=0, description="Высота в мм")
@@ -342,7 +384,7 @@ class PanelInput(BaseModel):
     # Присадка (точки сверления)
     drilling_points: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Точки присадки: [{'x': 50, 'y': 37, 'diameter': 5, 'depth': 12, 'side': 'face', 'hardware_type': 'confirmat'}, ...]"
+        description="Точки присадки: [{'x': 50, 'y': 37, 'diameter': 5, 'depth': 12, 'side': 'face', 'hardware_type': 'confirmat'}, ...]",
     )
 
     notes: str = Field("", description="Комментарий")
@@ -350,6 +392,7 @@ class PanelInput(BaseModel):
 
 class DXFJobRequest(BaseModel):
     """Запрос на генерацию DXF."""
+
     order_id: UUID | None = Field(None, description="ID заказа")
     panels: list[PanelInput] = Field(..., min_length=1, description="Список панелей")
 
@@ -367,6 +410,7 @@ class DXFJobRequest(BaseModel):
 
 class DXFJobResponse(BaseModel):
     """Ответ на создание DXF задачи."""
+
     job_id: UUID
     status: Literal["created", "processing"] = "created"
     panels_count: int
@@ -375,6 +419,7 @@ class DXFJobResponse(BaseModel):
 
 class CAMJobStatus(BaseModel):
     """Статус CAM задачи."""
+
     job_id: UUID
     job_kind: Literal["DXF", "GCODE", "ZIP", "DRILLING"]
     status: Literal["Created", "Processing", "Completed", "Failed"]
@@ -391,6 +436,7 @@ class CAMJobStatus(BaseModel):
 
 class CAMJobListItem(BaseModel):
     """Краткая информация о CAM задаче для списка."""
+
     job_id: UUID
     job_kind: Literal["DXF", "GCODE", "ZIP", "DRILLING"]
     status: Literal["Created", "Processing", "Completed", "Failed"]
@@ -401,12 +447,14 @@ class CAMJobListItem(BaseModel):
 
 class CAMJobsListResponse(BaseModel):
     """Список CAM задач."""
+
     jobs: list[CAMJobListItem]
     total: int
 
 
 class ArtifactDownload(BaseModel):
     """Информация для скачивания артефакта."""
+
     artifact_id: UUID
     type: Literal["DXF", "GCODE", "ZIP"]
     filename: str
@@ -419,8 +467,10 @@ class ArtifactDownload(BaseModel):
 # G-code генерация (P2)
 # ============================================================================
 
+
 class MachineProfileInfo(BaseModel):
     """Информация о профиле станка для российского рынка."""
+
     id: str = Field(..., description="Идентификатор профиля (weihong, syntec, fanuc, dsp, homag)")
     name: str = Field(..., description="Название профиля")
     machine_type: str = Field(..., description="Тип системы ЧПУ")
@@ -432,24 +482,31 @@ class MachineProfileInfo(BaseModel):
 
 class MachineProfilesList(BaseModel):
     """Список доступных профилей станков."""
+
     profiles: list[MachineProfileInfo]
 
 
 class GCodeJobRequest(BaseModel):
     """Запрос на генерацию G-code из DXF артефакта."""
+
     dxf_artifact_id: UUID = Field(..., description="ID DXF артефакта для конвертации")
     order_id: UUID | None = Field(None, description="ID заказа")
 
     # Профиль станка (если не задан — берётся из настроек фабрики или дефолт weihong)
     machine_profile: Literal["weihong", "syntec", "fanuc", "dsp", "homag"] | None = Field(
-        None,
-        description="Профиль станка ЧПУ. Если не задан — используется из настроек фабрики"
+        None, description="Профиль станка ЧПУ. Если не задан — используется из настроек фабрики"
     )
 
     # Переопределение параметров профиля
-    spindle_speed: int | None = Field(None, ge=1000, le=30000, description="Скорость шпинделя (об/мин)")
-    feed_rate_cutting: int | None = Field(None, ge=100, le=15000, description="Подача резки (мм/мин)")
-    feed_rate_plunge: int | None = Field(None, ge=100, le=5000, description="Подача врезания (мм/мин)")
+    spindle_speed: int | None = Field(
+        None, ge=1000, le=30000, description="Скорость шпинделя (об/мин)"
+    )
+    feed_rate_cutting: int | None = Field(
+        None, ge=100, le=15000, description="Подача резки (мм/мин)"
+    )
+    feed_rate_plunge: int | None = Field(
+        None, ge=100, le=5000, description="Подача врезания (мм/мин)"
+    )
     cut_depth: float | None = Field(None, ge=1, le=50, description="Глубина резки (мм)")
     safe_height: float | None = Field(None, ge=1, le=50, description="Безопасная высота (мм)")
     tool_diameter: float | None = Field(None, ge=1, le=20, description="Диаметр фрезы (мм)")
@@ -460,6 +517,7 @@ class GCodeJobRequest(BaseModel):
 
 class GCodeJobResponse(BaseModel):
     """Ответ на создание G-code задачи."""
+
     job_id: UUID
     status: Literal["created", "processing"] = "created"
     machine_profile: str = Field(..., description="Используемый профиль станка")
@@ -468,13 +526,14 @@ class GCodeJobResponse(BaseModel):
 
 class DirectGCodeRequest(BaseModel):
     """Запрос на прямую генерацию G-code из панелей (без DXF артефакта)."""
+
     order_id: UUID | None = Field(None, description="ID заказа")
     panels: list[PanelInput] = Field(..., min_length=1, description="Список панелей")
 
     # Профиль станка (российский рынок)
     machine_profile: Literal["weihong", "syntec", "fanuc", "dsp", "homag"] = Field(
         "weihong",
-        description="Профиль станка ЧПУ (weihong=NCStudio 30-35%, syntec=KDT/WoodTec 20-25%, fanuc=премиум 15-20%, dsp=бюджетный 8-12%, homag=премиум мебельный)"
+        description="Профиль станка ЧПУ (weihong=NCStudio 30-35%, syntec=KDT/WoodTec 20-25%, fanuc=премиум 15-20%, dsp=бюджетный 8-12%, homag=премиум мебельный)",
     )
 
     # Параметры листа
@@ -494,8 +553,10 @@ class DirectGCodeRequest(BaseModel):
 # Финализация заказа (Phase 2)
 # ============================================================================
 
+
 class HardwareSpec(BaseModel):
     """Спецификация фурнитуры."""
+
     type: str = Field(..., description="Тип фурнитуры (петля, ручка, направляющая)")
     sku: str | None = Field(None, description="Артикул")
     name: str | None = Field(None, description="Название")
@@ -504,6 +565,7 @@ class HardwareSpec(BaseModel):
 
 class MaterialSpec(BaseModel):
     """Спецификация материала."""
+
     type: str = Field(..., description="Тип материала (ЛДСП, МДФ)")
     thickness_mm: float | None = Field(None, description="Толщина в мм")
     color: str | None = Field(None, description="Цвет")
@@ -512,6 +574,7 @@ class MaterialSpec(BaseModel):
 
 class DimensionsSpec(BaseModel):
     """Габариты изделия."""
+
     width_mm: float = Field(..., gt=0, description="Ширина в мм")
     height_mm: float = Field(..., gt=0, description="Высота в мм")
     depth_mm: float = Field(..., gt=0, description="Глубина в мм")
@@ -519,6 +582,7 @@ class DimensionsSpec(BaseModel):
 
 class FinalizeOrderRequest(BaseModel):
     """Запрос на финализацию заказа после диалога."""
+
     furniture_type: str = Field(..., description="Тип мебели")
     dimensions: DimensionsSpec
     body_material: MaterialSpec | None = None
@@ -533,6 +597,7 @@ class FinalizeOrderRequest(BaseModel):
 
 class FinalizeOrderResponse(BaseModel):
     """Ответ после финализации."""
+
     success: bool
     order_id: str
     product_config_id: str
@@ -541,6 +606,7 @@ class FinalizeOrderResponse(BaseModel):
 
 class ProductConfigResponse(BaseModel):
     """Ответ с конфигурацией продукта."""
+
     id: str
     name: str | None
     width_mm: float
@@ -556,6 +622,7 @@ class ProductConfigResponse(BaseModel):
 
 class OrderWithProductsResponse(BaseModel):
     """Ответ с заказом и продуктами."""
+
     id: str
     customer_ref: str | None
     notes: str | None
@@ -569,8 +636,10 @@ class OrderWithProductsResponse(BaseModel):
 # Поиск фурнитуры (Hardware Search)
 # ============================================================================
 
+
 class HardwareSearchItem(BaseModel):
     """Элемент результата поиска фурнитуры."""
+
     sku: str
     name: str | None
     description: str | None
@@ -584,6 +653,7 @@ class HardwareSearchItem(BaseModel):
 
 class HardwareSearchResponse(BaseModel):
     """Ответ на поиск фурнитуры."""
+
     items: list[HardwareSearchItem]
     total: int = Field(..., description="Общее количество найденных позиций")
     query: str = Field(..., description="Исходный запрос")
@@ -629,9 +699,15 @@ class FactorySettings(BaseModel):
     gap_mm: float | None = Field(None, ge=0, le=50, description="Зазор на пропил (мм)")
 
     # G-code
-    spindle_speed: int | None = Field(None, ge=1000, le=30000, description="Скорость шпинделя (об/мин)")
-    feed_rate_cutting: int | None = Field(None, ge=100, le=15000, description="Подача резки (мм/мин)")
-    feed_rate_plunge: int | None = Field(None, ge=100, le=5000, description="Подача врезания (мм/мин)")
+    spindle_speed: int | None = Field(
+        None, ge=1000, le=30000, description="Скорость шпинделя (об/мин)"
+    )
+    feed_rate_cutting: int | None = Field(
+        None, ge=100, le=15000, description="Подача резки (мм/мин)"
+    )
+    feed_rate_plunge: int | None = Field(
+        None, ge=100, le=5000, description="Подача врезания (мм/мин)"
+    )
     cut_depth: float | None = Field(None, ge=1, le=50, description="Глубина за проход (мм)")
     safe_height: float | None = Field(None, ge=1, le=100, description="Безопасная высота (мм)")
     tool_diameter: float | None = Field(None, ge=1, le=30, description="Диаметр фрезы (мм)")
@@ -686,18 +762,21 @@ class FactorySettingsUpdateResponse(BaseModel):
 # Калькулятор панелей (Panel Calculator)
 # ============================================================================
 
+
 class CabinetType(str, Enum):
     """Типы корпусной мебели."""
-    WALL = "wall"           # Навесной шкаф
-    BASE = "base"           # Напольная тумба
-    BASE_SINK = "base_sink" # Тумба под мойку
-    DRAWER = "drawer"       # Тумба с ящиками
-    TALL = "tall"           # Пенал
-    CORNER = "corner"       # Угловой шкаф
+
+    WALL = "wall"  # Навесной шкаф
+    BASE = "base"  # Напольная тумба
+    BASE_SINK = "base_sink"  # Тумба под мойку
+    DRAWER = "drawer"  # Тумба с ящиками
+    TALL = "tall"  # Пенал
+    CORNER = "corner"  # Угловой шкаф
 
 
 class CalculatedPanel(BaseModel):
     """Рассчитанная панель."""
+
     name: str = Field(..., description="Название панели (Боковина левая, Дно и т.д.)")
     width_mm: float = Field(..., gt=0, description="Ширина в мм")
     height_mm: float = Field(..., gt=0, description="Высота в мм")
@@ -718,6 +797,7 @@ class CalculatedPanel(BaseModel):
 
 class CalculatePanelsRequest(BaseModel):
     """Запрос на расчёт панелей."""
+
     cabinet_type: CabinetType
     width_mm: int = Field(..., gt=0, le=3000, description="Ширина корпуса")
     height_mm: int = Field(..., gt=0, le=3000, description="Высота корпуса")
@@ -736,6 +816,7 @@ class CalculatePanelsRequest(BaseModel):
 
 class CalculatePanelsResponse(BaseModel):
     """Ответ с рассчитанными панелями."""
+
     success: bool = True
     cabinet_type: str
     dimensions: dict[str, int] = Field(..., description="Габариты {width, height, depth}")
@@ -753,6 +834,7 @@ class CalculatePanelsResponse(BaseModel):
 
 class HardwareRecommendation(BaseModel):
     """Рекомендация по фурнитуре."""
+
     type: str = Field(..., description="Тип фурнитуры")
     sku: str | None = Field(None, description="Артикул из каталога")
     name: str = Field(..., description="Название")
@@ -763,13 +845,16 @@ class HardwareRecommendation(BaseModel):
 
 class GenerateBOMRequest(BaseModel):
     """Запрос на генерацию полного BOM."""
+
     order_id: UUID | None = None
     cabinet_type: CabinetType
     width_mm: int = Field(..., gt=0, le=3000)
     height_mm: int = Field(..., gt=0, le=3000)
     depth_mm: int = Field(..., gt=0, le=1000)
     material: str = Field("ЛДСП 16мм")
-    thickness_mm: float | None = Field(None, gt=0, description="Толщина материала в мм (если не указано — берём из настроек)")
+    thickness_mm: float | None = Field(
+        None, gt=0, description="Толщина материала в мм (если не указано — берём из настроек)"
+    )
     shelf_count: int = Field(1, ge=0)
     door_count: int = Field(1, ge=0)
     drawer_count: int = Field(0, ge=0)
@@ -777,6 +862,7 @@ class GenerateBOMRequest(BaseModel):
 
 class GenerateBOMResponse(BaseModel):
     """Полный BOM с панелями и фурнитурой."""
+
     success: bool = True
     order_id: UUID | None = None
 
@@ -799,8 +885,10 @@ class GenerateBOMResponse(BaseModel):
 # Layout Preview (предпросмотр раскладки без генерации DXF)
 # ============================================================================
 
+
 class LayoutPanelInput(BaseModel):
     """Упрощённая панель для preview (только размеры)."""
+
     name: str = Field(..., description="Название панели")
     width_mm: float = Field(..., gt=0, description="Ширина в мм")
     height_mm: float = Field(..., gt=0, description="Высота в мм")
@@ -808,6 +896,7 @@ class LayoutPanelInput(BaseModel):
 
 class LayoutPreviewRequest(BaseModel):
     """Запрос на предпросмотр раскладки."""
+
     panels: list[LayoutPanelInput] = Field(..., min_length=1, description="Список панелей")
 
     # Параметры листа
@@ -818,6 +907,7 @@ class LayoutPreviewRequest(BaseModel):
 
 class PlacedPanelInfo(BaseModel):
     """Информация о размещённой панели."""
+
     name: str
     x: float = Field(..., description="X координата левого нижнего угла")
     y: float = Field(..., description="Y координата левого нижнего угла")
@@ -828,9 +918,12 @@ class PlacedPanelInfo(BaseModel):
 
 class LayoutPreviewResponse(BaseModel):
     """Ответ с раскладкой панелей (без генерации файла)."""
+
     success: bool = True
     placed_panels: list[PlacedPanelInfo]
-    unplaced_panels: list[str] = Field(default_factory=list, description="Названия панелей, которые не поместились")
+    unplaced_panels: list[str] = Field(
+        default_factory=list, description="Названия панелей, которые не поместились"
+    )
 
     # Статистика
     sheet_width_mm: float
@@ -847,8 +940,11 @@ class LayoutPreviewResponse(BaseModel):
 # PDF Cutting Map (карта раскроя)
 # ============================================================================
 
+
 class PDFCuttingMapRequest(BaseModel):
     """Запрос на генерацию PDF карты раскроя."""
+
+    order_id: UUID = Field(..., description="ID заказа")
     panels: list[LayoutPanelInput] = Field(..., min_length=1, description="Список панелей")
 
     # Параметры листа (если не указаны — берутся из настроек фабрики)
@@ -864,27 +960,27 @@ class PDFCuttingMapRequest(BaseModel):
 # Drilling G-code
 # =============================================================================
 
+
 class DrillingGcodeRequest(BaseModel):
     """Запрос на генерацию G-code присадки."""
+
     order_id: UUID
     machine_profile: str = Field(
-        default="weihong",
-        description="Профиль станка: weihong, syntec, fanuc, dsp, homag"
+        default="weihong", description="Профиль станка: weihong, syntec, fanuc, dsp, homag"
     )
     output_format: Literal["zip", "single"] = Field(
-        default="zip",
-        description="zip — архив с файлами по панелям, single — один файл"
+        default="zip", description="zip — архив с файлами по панелям, single — один файл"
     )
 
 
 class DrillingGcodeResponse(BaseModel):
     """Ответ на запрос G-code присадки."""
+
     job_id: UUID
     status: str
     panels_count: int
     estimated_files: list[str] = Field(
-        default_factory=list,
-        description="Список ожидаемых файлов в архиве"
+        default_factory=list, description="Список ожидаемых файлов в архиве"
     )
 
 
@@ -892,8 +988,10 @@ class DrillingGcodeResponse(BaseModel):
 # Cost Estimation
 # =============================================================================
 
+
 class CostBreakdownItem(BaseModel):
     """Детализация стоимости."""
+
     name: str = Field(..., description="Название позиции")
     quantity: float = Field(..., description="Количество")
     unit: str = Field(..., description="Ед. изм.")
@@ -903,6 +1001,7 @@ class CostBreakdownItem(BaseModel):
 
 class CostEstimateResponse(BaseModel):
     """Ответ с расчётом себестоимости."""
+
     total_cost: float = Field(..., description="Общая себестоимость")
     currency: str = Field("RUB", description="Валюта")
     breakdown: list[CostBreakdownItem] = Field(..., description="Детализация")
@@ -915,8 +1014,10 @@ class CostEstimateResponse(BaseModel):
 # Smart Hardware Rules v1.0 — присадка
 # ============================================================================
 
+
 class DrillPointSchema(BaseModel):
     """Точка сверления для UI и DXF."""
+
     x: float = Field(..., description="X координата от левого края панели (мм)")
     y: float = Field(..., description="Y координата от нижнего края панели (мм)")
     diameter: float = Field(..., description="Диаметр отверстия (мм)")
@@ -931,40 +1032,36 @@ class DrillPointSchema(BaseModel):
 
 class HardwarePresetsSchema(BaseModel):
     """Выбранные пресеты фурнитуры."""
-    hinge_template: str = Field(
-        "hinge_35mm_overlay",
-        description="ID шаблона петли"
-    )
-    slide_template: str = Field(
-        "slide_ball_h45",
-        description="ID шаблона направляющих"
-    )
+
+    hinge_template: str = Field("hinge_35mm_overlay", description="ID шаблона петли")
+    slide_template: str = Field("slide_ball_h45", description="ID шаблона направляющих")
 
 
 class BOMWithDrillingResponse(BaseModel):
     """BOM с координатами присадки."""
+
     panels: list[dict] = Field(..., description="Список панелей")
     hardware: list[dict] = Field(..., description="Список фурнитуры")
     fasteners: list[dict] = Field(default_factory=list, description="Крепёж")
     edge_bands: list[dict] = Field(default_factory=list, description="Кромка")
     drill_points: list[DrillPointSchema] = Field(
-        default_factory=list,
-        description="Координаты присадки для превью"
+        default_factory=list, description="Координаты присадки для превью"
     )
     presets: HardwarePresetsSchema = Field(
-        default_factory=HardwarePresetsSchema,
-        description="Текущие пресеты фурнитуры"
+        default_factory=HardwarePresetsSchema, description="Текущие пресеты фурнитуры"
     )
 
 
 class UpdatePresetsRequest(BaseModel):
     """Запрос на обновление пресетов фурнитуры."""
+
     hinge_template: str | None = None
     slide_template: str | None = None
 
 
 class HingeTemplateInfo(BaseModel):
     """Информация о шаблоне петли для UI."""
+
     id: str
     name: str
     type: str
@@ -973,6 +1070,7 @@ class HingeTemplateInfo(BaseModel):
 
 class SlideTemplateInfo(BaseModel):
     """Информация о шаблоне направляющих для UI."""
+
     id: str
     name: str
     type: str
@@ -982,8 +1080,10 @@ class SlideTemplateInfo(BaseModel):
 
 class TemplatesListResponse(BaseModel):
     """Список доступных шаблонов."""
+
     hinges: list[HingeTemplateInfo]
     slides: list[SlideTemplateInfo]
+
 
 # ============================================================================
 # Manufacturing Revision persistence (Task 7)
@@ -992,9 +1092,11 @@ class TemplatesListResponse(BaseModel):
 
 class ManufacturingRevisionCreate(BaseModel):
     """Запрос на создание новой ревизии спецификации обработки."""
+
     order_id: UUID = Field(..., description="ID заказа")
     spec: dict[str, Any] = Field(
-        ..., description="Полная ManufacturingSpec в виде dict (panels + operations + edges + slots)"
+        ...,
+        description="Полная ManufacturingSpec в виде dict (panels + operations + edges + slots)",
     )
     provenance: dict[str, Any] = Field(
         default_factory=dict,
@@ -1004,9 +1106,8 @@ class ManufacturingRevisionCreate(BaseModel):
 
 class ManufacturingRevisionUpdate(BaseModel):
     """Запрос на обновление существующей ревизии (optimistic concurrency)."""
-    spec: dict[str, Any] = Field(
-        ..., description="Обновлённая ManufacturingSpec в виде dict"
-    )
+
+    spec: dict[str, Any] = Field(..., description="Обновлённая ManufacturingSpec в виде dict")
     expected_revision: int = Field(
         ..., ge=1, description="Ожидаемый номер ревизии (409 при mismatch)"
     )
@@ -1018,6 +1119,7 @@ class ManufacturingRevisionUpdate(BaseModel):
 
 class ManufacturingRevisionResponse(BaseModel):
     """Ответ с полной ревизией спецификации обработки."""
+
     id: UUID
     order_id: UUID | None = None
     revision_number: int
@@ -1029,3 +1131,9 @@ class ManufacturingRevisionResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FeaturesResponse(BaseModel):
+    """Ответ о доступных функциях (feature flags)."""
+
+    machine_features_enabled: bool

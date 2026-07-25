@@ -19,7 +19,7 @@ import { useAuth } from "@/components/auth-provider"
 export function AppBar() {
   const { user, logout } = useAuth()
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b border-[#d7dde2] bg-white/90 backdrop-blur-md">
       <div className="w-full flex h-14 items-center px-6">
         <div className="flex w-full flex-1 items-center justify-between">
           {/* Левая часть — пустая, можно добавить breadcrumbs */}
@@ -27,8 +27,7 @@ export function AppBar() {
 
           {/* Правая часть — действия */}
           <div className="flex items-center gap-3">
-            <ThemeToggle />
-
+            {/* ThemeToggle убран из пилотной навигации */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">

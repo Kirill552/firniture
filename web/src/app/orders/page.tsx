@@ -179,8 +179,8 @@ const OrdersPageInner = () => {
         <div className="flex items-center gap-2">
           <DateRangeFilter value={dateRange} onChange={setDateRange} />
           <Link href="/new">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
+            <Button className="bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] font-semibold border-0 active:scale-[0.98] transition-all duration-150 cursor-pointer shadow-sm">
+              <Plus className="h-4 w-4 mr-1.5" />
               Новый заказ
             </Button>
           </Link>

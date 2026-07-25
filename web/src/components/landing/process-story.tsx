@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
-import type { StageId } from './landing-copy';
+import { STAGES, type StageId } from './landing-copy';
 import { ProcessStageCopy } from './process-stage-copy';
 import { DraftingSheet } from './drafting-sheet';
 import { resolveStageProgress } from './stage-progress';
@@ -34,13 +34,24 @@ export function ProcessStory({ className }: ProcessStoryProps) {
   const calculateProgress = useCallback((): number => {
     const el = storyRef.current;
     if (!el) return 0;
-    const rect = el.getBoundingClientRect();
+
+    const stageElements = Array.from(el.querySelectorAll<HTMLElement>('li[id^="stage-"]'));
+    if (stageElements.length !== STAGES.length) return 0;
+
     const windowH = window.innerHeight || 800;
-    const start = rect.top - windowH * 0.3;
-    const end = rect.bottom - windowH * 0.75;
-    const total = Math.max(1, end - start);
-    const current = -start;
-    return Math.max(0, Math.min(1, current / total));
+    const controlY = windowH * 0.35;
+    let activeIndex = 0;
+
+    for (let index = 1; index < stageElements.length; index += 1) {
+      if (stageElements[index].getBoundingClientRect().top <= controlY) activeIndex = index;
+    }
+
+    const currentTop = stageElements[activeIndex].getBoundingClientRect().top;
+    const nextTop = stageElements[activeIndex + 1]?.getBoundingClientRect().top;
+    const span = nextTop === undefined ? windowH * 0.5 : nextTop - currentTop;
+    const local = Math.max(0, Math.min(1, (controlY - currentTop) / Math.max(1, span)));
+
+    return Math.min(1, (activeIndex + local) / STAGES.length);
   }, []);
 
   const handleScroll = useCallback(() => {
@@ -71,10 +82,10 @@ export function ProcessStory({ className }: ProcessStoryProps) {
   const sheetProgress = reduceMotion ? 1 : localProgress;
 
   return (
-    <div ref={storyRef} className={className}>
+    <div ref={storyRef} className={className} data-testid="process-story" data-active-stage={activeStage}>
       <div className="grid grid-cols-1 items-start gap-x-16 gap-y-12 lg:grid-cols-12">
-        {/* Левая колонка — текст этапов (всегда в DOM) */}
-        <div className="lg:col-span-5">
+        {/* Левая колонка — текст этапов и финальная зона удержания */}
+        <div className="lg:col-span-5 lg:pb-[32vh]">
           <ProcessStageCopy activeStage={activeStage} />
         </div>
 
@@ -84,14 +95,14 @@ export function ProcessStory({ className }: ProcessStoryProps) {
             {/* Гигантский номер этапа за листом */}
             <div
               aria-hidden
-              className="font-display pointer-events-none absolute -left-3 -top-16 select-none text-[150px] font-extrabold leading-none tracking-tighter text-[#17130d]/[0.06]"
+              className="font-display pointer-events-none absolute -left-3 -top-16 select-none text-[150px] font-extrabold leading-none tracking-tighter text-[var(--brand-ink)]/[0.05]"
             >
               0{activeStage}
             </div>
 
             <div
               data-scene-mode="svg"
-              className="hardline hardshadow relative bg-[#fbf8f1] p-2"
+              className="relative bg-white border border-[#d7dde2] shadow-sm rounded-xl p-2.5"
             >
               <DraftingSheet stage={activeStage} progress={sheetProgress} />
             </div>
@@ -102,15 +113,15 @@ export function ProcessStory({ className }: ProcessStoryProps) {
                 {([1, 2, 3, 4, 5] as StageId[]).map((s) => (
                   <span
                     key={s}
-                    className="h-1.5 transition-all duration-300"
+                    className="h-1.5 transition-all duration-300 rounded-full"
                     style={{
                       width: s === activeStage ? 28 : 12,
-                      background: s === activeStage ? '#d8352a' : '#cec4ae',
+                      background: s === activeStage ? '#c7ff00' : '#d7dde2',
                     }}
                   />
                 ))}
               </div>
-              <span className="font-tech text-[11px] uppercase tracking-[1.5px] text-[#8c8373]">
+              <span className="font-mono text-[10px] uppercase tracking-[1.5px] text-[#66707a]">
                 прокрутите — чертёж пройдёт все этапы
               </span>
             </div>
@@ -118,5 +129,5 @@ export function ProcessStory({ className }: ProcessStoryProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }

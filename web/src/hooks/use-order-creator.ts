@@ -23,8 +23,8 @@ interface OrderCreatorState {
   isChatLoading: boolean;
   recognizedCount: number;
   suggestedPrompt: string | null;
-  // Гостевой grant хранится только в памяти текущего сценария, не в localStorage.
   guestUploadGrant: string | null;
+  authRequired: boolean;
 }
 
 const DEFAULT_PARAMS: Partial<OrderCreatorParams> = {
@@ -55,6 +55,7 @@ export function useOrderCreator() {
     recognizedCount: 0,
     suggestedPrompt: null,
     guestUploadGrant: null,
+    authRequired: false,
   });
 
   const createAnonymousOrder = useCallback(async (grant?: string | null): Promise<string> => {
@@ -331,7 +332,7 @@ export function useOrderCreator() {
 
   // Подтверждение и создание заказа
   const confirm = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true }));
+    setState((prev) => ({ ...prev, isLoading: true, authRequired: false }));
 
     try {
       if (!areRequiredParamsReady(state.params)) {
@@ -364,14 +365,27 @@ export function useOrderCreator() {
         throw new Error(errText || "Не удалось сформировать спецификацию");
       }
 
-      // Reset loading before navigation (component will unmount)
-      setState((prev) => ({ ...prev, isLoading: false }));
-      router.push(`/bom?orderId=${orderId}`);
+      const authHeader = getAuthHeader();
+      const isAuthed = !!authHeader.Authorization;
+
+      if (isAuthed) {
+        // Reset loading before navigation (component will unmount)
+        setState((prev) => ({ ...prev, isLoading: false }));
+        router.push(`/bom?orderId=${orderId}`);
+      } else {
+        // Guest: show auth gate overlay instead of redirecting
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          authRequired: true,
+        }));
+      }
     } catch (err) {
       setState((prev) => ({
         ...prev,
         error: err instanceof Error ? err.message : "Ошибка",
         isLoading: false,
+        authRequired: false,
       }));
     }
   }, [ensureAnonymousOrder, router, state.orderId, state.params]);

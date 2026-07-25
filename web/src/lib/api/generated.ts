@@ -20,6 +20,14 @@ export type GuestScope = 'read:order' | 'read:bom' | '*'
 
 // Schema interfaces
 
+/** AnalyticsEventPayload */
+export interface AnalyticsEventPayload {
+  /** Имя события аналитики */
+  name: string
+  /** Свойства события */
+  properties?: Record<string, unknown>
+}
+
 /** ApprovalRequest — Запрос на approve/reject.
 
 expected_revision — optimistic concurrency.
@@ -150,6 +158,12 @@ export interface CalculatedPanel {
   thickness_mm?: number
   /** Ширина в мм */
   width_mm: number
+}
+
+/** ClaimDraftResponse — Ответ привязки анонимного черновика к аккаунту. */
+export interface ClaimDraftResponse {
+  claimed: boolean
+  order_id: string
 }
 
 /** ClaimRequest — Запрос claim гостевого заказа после логина. */
@@ -352,6 +366,11 @@ export interface FactorySettingsUpdateResponse {
   success?: boolean
   /** Обновлённые поля */
   updated_fields: string[]
+}
+
+/** FeaturesResponse — Ответ о доступных функциях (feature flags). */
+export interface FeaturesResponse {
+  machine_features_enabled: boolean
 }
 
 /** FinalizeOrderResponse — Ответ после финализации. */
@@ -572,6 +591,8 @@ export interface LayoutPreviewResponse {
 /** LoginRequest — Запрос на вход (отправка magic link). */
 export interface LoginRequest {
   email: string
+  entry?: string | null
+  return_to?: string | null
 }
 
 /** MachineProfileInfo — Информация о профиле станка для российского рынка. */
@@ -632,6 +653,8 @@ export interface OrderWithProductsResponse {
 export interface PDFCuttingMapRequest {
   /** Зазор на пропил (мм) */
   gap_mm?: number
+  /** ID заказа */
+  order_id: string
   /** Информация о заказе для заголовка */
   order_info?: string | null
   /** Список панелей */
@@ -701,7 +724,9 @@ export interface ProductConfigResponse {
 /** RegisterRequest — Запрос на регистрацию фабрики. */
 export interface RegisterRequest {
   email: string
+  entry?: string | null
   factory_name: string
+  return_to?: string | null
 }
 
 /** SlideTemplateInfo — Информация о шаблоне направляющих для UI. */
@@ -774,6 +799,11 @@ export interface _LegacyApprovalRequest {
 }
 
 // API endpoint contracts
+
+/** POST /api/v1/auth/claim-guest-draft - Claim Guest Draft */
+export interface claim_guest_draft_api_v1_auth_claim_guest_draft_post {
+  response: ClaimDraftResponse
+}
 
 /** POST /api/v1/auth/claim-guest-order - Claim Guest Order */
 export interface claim_guest_order_api_v1_auth_claim_guest_order_post {
@@ -883,6 +913,11 @@ export interface dialogue_clarify_api_v1_dialogue_clarify_post {
 export interface dialogue_clarify_with_tools_api_v1_dialogue_clarify_with_tools_post {
   body: DialogueTurnRequest
   response: void
+}
+
+/** GET /api/v1/features - Get Features */
+export interface get_features_api_v1_features_get {
+  response: FeaturesResponse
 }
 
 /** GET /api/v1/hardware/search - Search Hardware */
@@ -1012,6 +1047,12 @@ export interface validate_manufacturing_api_v1_orders__order_id__manufacturing_v
 export interface calculate_panels_endpoint_api_v1_panels_calculate_post {
   body: CalculatePanelsRequest
   response: CalculatePanelsResponse
+}
+
+/** POST /api/v1/product-analytics/events - Track Product Event */
+export interface track_product_event_api_v1_product_analytics_events_post {
+  body: AnalyticsEventPayload
+  response: void
 }
 
 /** GET /api/v1/settings - Get Settings */

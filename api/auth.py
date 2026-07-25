@@ -14,7 +14,7 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
@@ -27,6 +27,7 @@ from api.access_control import (
     resolve_guest_identity_strict,
 )
 from api.database import get_db
+from api.guest_drafts import clear_guest_draft_cookie, verify_guest_draft_token
 from api.models import Factory, MagicToken, User
 from api.settings import settings
 from shared.email import send_magic_link
@@ -47,12 +48,15 @@ class RegisterRequest(BaseModel):
     """Запрос на регистрацию фабрики."""
     email: EmailStr
     factory_name: str = Field(..., min_length=2, max_length=255)
+    return_to: str | None = None
+    entry: str | None = None
 
 
 class LoginRequest(BaseModel):
     """Запрос на вход (отправка magic link)."""
     email: EmailStr
-
+    return_to: str | None = None
+    entry: str | None = None
 
 class VerifyRequest(BaseModel):
     """Проверка magic token."""
@@ -246,7 +250,13 @@ async def register(
     await db.commit()
 
     # Отправляем email
-    email_result = await send_magic_link(request.email, token, is_registration=True)
+    email_result = await send_magic_link(
+        request.email,
+        token,
+        is_registration=True,
+        return_to=request.return_to,
+        entry=request.entry,
+    )
 
     # В dev режиме возвращаем ссылку для удобства тестирования
     dev_link = None
@@ -287,7 +297,12 @@ async def login(
         await db.commit()
 
         # Отправляем email
-        email_result = await send_magic_link(request.email, token)
+        email_result = await send_magic_link(
+            request.email,
+            token,
+            return_to=request.return_to,
+            entry=request.entry,
+        )
 
         # В dev режиме возвращаем ссылку
         if email_result and email_result.startswith("mock:"):
@@ -442,3 +457,61 @@ async def claim_guest_order(
         guest_identity=guest_identity,
         message="Гостевой заказ успешно привязан",
     )
+
+
+class ClaimDraftResponse(BaseModel):
+    """Ответ привязки анонимного черновика к аккаунту."""
+    claimed: bool
+    order_id: str
+
+
+@router.post("/claim-guest-draft", response_model=ClaimDraftResponse)
+async def claim_guest_draft(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    ar_guest_draft: str | None = Cookie(None),
+):
+    """
+    Привязать анонимный черновик к аккаунту вошедшего пользователя.
+    """
+    if not ar_guest_draft:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Отсутствует cookie с гостевым черновиком",
+        )
+
+    payload = verify_guest_draft_token(ar_guest_draft, settings.GUEST_UPLOAD_SECRET)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Недействительный или просроченный токен гостевого черновика",
+        )
+
+    order_id = payload["order_id"]
+
+    from api.models import Order
+    order = await db.get(Order, UUID(order_id) if isinstance(order_id, str) else order_id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Заказ не найден",
+        )
+
+    if order.factory_id == user.factory_id and order.created_by_id == user.id:
+        clear_guest_draft_cookie(response)
+        return ClaimDraftResponse(claimed=True, order_id=str(order.id))
+
+    if order.factory_id is not None or order.created_by_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Заказ уже привязан к другому пользователю",
+        )
+
+    order.factory_id = user.factory_id
+    order.created_by_id = user.id
+    await db.commit()
+
+    clear_guest_draft_cookie(response)
+
+    return ClaimDraftResponse(claimed=True, order_id=str(order.id))

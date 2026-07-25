@@ -14,15 +14,15 @@ import { NestingLayout } from './nesting-layout';
  */
 
 const C = {
-  ink: '#17130d',
-  graphite: '#544c3f',
-  muted: '#8c8373',
-  line: '#cec4ae',
-  lineStrong: '#b3a88f',
-  red: '#d8352a',
-  sheet: '#fbf8f1',
-  door: '#efe7d6',
-  hatch: '#e7dec9',
+  ink: 'var(--brand-ink)',
+  graphite: '#4b545c',
+  muted: 'var(--brand-muted)',
+  line: 'var(--brand-line)',
+  lineStrong: '#aeb8c0',
+  accent: '#789b00',
+  sheet: 'var(--brand-bg)',
+  door: '#e8edf0',
+  hatch: '#dde4e8',
 };
 
 // Геометрия элевации корпуса
@@ -61,7 +61,7 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
     >
       <defs>
         <marker id="ar-a" markerWidth="9" markerHeight="9" refX="5" refY="4.5" orient="auto">
-          <path d="M1,1 L7,4.5 L1,8" fill="none" stroke={C.red} strokeWidth="1.2" />
+          <path d="M1,1 L7,4.5 L1,8" fill="none" stroke={C.accent} strokeWidth="1.2" />
         </marker>
         <pattern id="ar-hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
           <line x1="0" y1="0" x2="0" y2="7" stroke={C.lineStrong} strokeWidth="0.7" />
@@ -82,7 +82,7 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
       <text x="36" y="46" fontSize="12" fontFamily="var(--font-tech), monospace" fill={C.muted} letterSpacing="1.5">
         ЭТАП 0{eff} / 05
       </text>
-      <line x1="36" y1="54" x2="150" y2="54" stroke={C.red} strokeWidth="2" />
+      <line x1="36" y1="54" x2="150" y2="54" stroke={C.accent} strokeWidth="2" />
 
       {/* ==================== СТАДИЯ 1 — набросок ==================== */}
       <g style={{ opacity: show(1), transition: 'opacity 0.45s ease' }}>
@@ -150,7 +150,7 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
         <line x1={X1} y1={BODY.y} x2={X1} y2={78} stroke={C.lineStrong} strokeWidth="0.8" />
         <line
           x1={BODY.x} y1={86} x2={X1} y2={86}
-          stroke={C.red} strokeWidth="1.3" markerStart="url(#ar-a)" markerEnd="url(#ar-a)"
+          stroke={C.accent} strokeWidth="1.3" markerStart="url(#ar-a)" markerEnd="url(#ar-a)"
           pathLength={1} strokeDasharray={1} strokeDashoffset={1 - dimDraw}
         />
         <rect x={200} y={78} width={44} height={17} fill={C.sheet} />
@@ -161,7 +161,7 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
         <line x1={BODY.x} y1={Y1} x2={70} y2={Y1} stroke={C.lineStrong} strokeWidth="0.8" />
         <line
           x1={62} y1={BODY.y} x2={62} y2={Y1}
-          stroke={C.red} strokeWidth="1.3" markerStart="url(#ar-a)" markerEnd="url(#ar-a)"
+          stroke={C.accent} strokeWidth="1.3" markerStart="url(#ar-a)" markerEnd="url(#ar-a)"
           pathLength={1} strokeDasharray={1} strokeDashoffset={1 - dimDraw}
         />
         <g transform="translate(52 246)">
@@ -184,14 +184,14 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
       <g style={{ opacity: show(3), transition: 'opacity 0.4s ease' }}>
         <rect
           x={REVEAL + 2} y={BODY.y + T + 2} width={X1 - T - 2 - (REVEAL + 2)} height={BODY.h - 2 * T - 4}
-          fill="none" stroke={C.red} strokeWidth="2.4" strokeDasharray="7 4"
+          fill="none" stroke={C.accent} strokeWidth="2.4" strokeDasharray="7 4"
         />
         <g data-blink>
-          <circle cx={X1 - 6} cy={BODY.y + 8} r={13} fill={C.red} />
+          <circle cx={X1 - 6} cy={BODY.y + 8} r={13} fill={C.accent} />
           <text x={X1 - 6} y={BODY.y + 13} fontSize="16" fontFamily="var(--font-display), sans-serif" fontWeight="700" fill="#fff" textAnchor="middle">?</text>
         </g>
         <g transform={`translate(96 ${Y1 + 16})`}>
-          <rect x={0} y={0} width={330} height={30} fill="#fff" stroke={C.red} strokeWidth="1.6" />
+          <rect x={0} y={0} width={330} height={30} fill="#fff" stroke={C.accent} strokeWidth="1.6" />
           <text x={12} y={20} fontSize="13" fontFamily="var(--font-golos), sans-serif" fontWeight="600" fill={C.ink}>
             Фасад накладной или вкладной?
           </text>
@@ -210,7 +210,7 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
       {/* ==================== СТАДИЯ 5 — раскрой ==================== */}
       <g style={{ opacity: show(5), transition: 'opacity 0.45s ease' }}>
         {eff === 5 && (
-          <NestingLayout progress={drawn} ink={C.ink} sheet={C.sheet} line={C.line} red={C.red} muted={C.muted} />
+          <NestingLayout progress={drawn} ink={C.ink} sheet={C.sheet} line={C.line} red={C.accent} muted={C.muted} />
         )}
         {/* Мини-превью корпуса */}
         <g transform="translate(70 96) scale(0.42)">
@@ -220,7 +220,7 @@ export function DraftingSheet({ stage, progress, hero = false }: DraftingSheetPr
         </g>
         <StampBadge x={70} y={224} label="DXF" />
         <StampBadge x={150} y={224} label="PDF" />
-        <text x={70} y={300} fontSize="11" fontFamily="var(--font-tech), monospace" fill={C.red}>
+        <text x={70} y={300} fontSize="11" fontFamily="var(--font-tech), monospace" fill={C.accent}>
           после входа и подтверждения
         </text>
       </g>
@@ -265,7 +265,7 @@ function PartsLedger() {
           <line x1={0} y1={20} x2={252} y2={20} stroke={C.line} strokeWidth="0.8" />
         </g>
       ))}
-      <text x={12} y={178} fontSize="12" fontFamily="var(--font-tech), monospace" fill={C.red}>7 деталей · 12 присадок</text>
+      <text x={12} y={178} fontSize="12" fontFamily="var(--font-tech), monospace" fill={C.accent}>7 деталей · 12 присадок</text>
     </g>
   );
 }
