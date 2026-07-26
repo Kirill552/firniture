@@ -23,6 +23,7 @@
 - [Тарифы](https://avtoraskroy.ru/pricing): стоимость полного цикла
 - [Статьи](https://avtoraskroy.ru/blog): практические гайды для мебельных технологов
 - [Присадка петель 35 мм](https://avtoraskroy.ru/blog/prisadka-petel): разметка, отступ K, система 32 мм
+- [Карта раскроя ЛДСП](https://avtoraskroy.ru/blog/karta-raskroya-ldsp): пропил 4 мм, припуски, текстура, процент использования листа 2800×2070
 - [Оферта](https://avtoraskroy.ru/oferta) · [Политика конфиденциальности](https://avtoraskroy.ru/privacy)
 
 ## Контакты

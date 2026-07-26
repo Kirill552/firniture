@@ -5,7 +5,7 @@ const BASE_URL = 'https://avtoraskroy.ru';
 /** Sitemap для Яндекса и Google: публичные страницы + статьи. */
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages = ['', '/pricing', '/oferta', '/privacy', '/blog'];
-  const articles = ['/blog/prisadka-petel'];
+  const articles = ['/blog/prisadka-petel', '/blog/karta-raskroya-ldsp'];
 
   return [...staticPages, ...articles].map((path) => ({
     url: `${BASE_URL}${path}`,
