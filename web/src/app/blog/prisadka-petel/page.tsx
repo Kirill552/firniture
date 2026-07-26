@@ -20,6 +20,37 @@ const articleJsonLd = {
   inLanguage: 'ru',
 };
 
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'На каком расстоянии от края фасада сверлить чашку петли?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Blum задаёт расстояние K от края фасада до края чашки в диапазоне 3–7 мм. Центр отверстия ø35 мм получается на K + 17,5 мм, то есть 20,5–24,5 мм от края. Чем больше K, тем меньше дверь накрывает боковину.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Какая глубина сверления чашки под петлю 35 мм?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'У большинства петель 110°, включая Blum CLIP top, глубина 13 мм. У отдельных моделей на 107° бывает 11,5–12 мм. При ЛДСП 16 мм ограничитель глубины на сверле обязателен.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Сколько петель ставить на фасад?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'До 900 мм высоты хватает двух петель, до 1200 мм ставят три, до 2000 мм четыре, выше пять. Вес важнее высоты: тяжёлый МДФ требует больше петель, а фасад шире 600 мм просит дополнительную даже при малой высоте.',
+      },
+    },
+  ],
+};
+
 /**
  * Статья «Присадка петель» — кластер ~4300 показов/мес (Wordstat).
  * Практический гайд: размеры из реальных шаблонов присадки (drilling_templates).
@@ -30,6 +61,10 @@ export default function PrisadkaPetelPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
       <div className="mx-auto max-w-[760px] px-6 py-16">
         <nav className="text-[12px] text-[#66707a]">
