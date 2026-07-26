@@ -22,8 +22,11 @@
 - [Главная](https://avtoraskroy.ru/): оффер, пять этапов работы, FAQ со schema.org FAQPage
 - [Тарифы](https://avtoraskroy.ru/pricing): стоимость полного цикла
 - [Статьи](https://avtoraskroy.ru/blog): практические гайды для мебельных технологов
-- [Присадка петель 35 мм](https://avtoraskroy.ru/blog/prisadka-petel): разметка, отступ K, система 32 мм
-- [Карта раскроя ЛДСП](https://avtoraskroy.ru/blog/karta-raskroya-ldsp): пропил 4 мм, припуски, текстура, процент использования листа 2800×2070
+- [Присадка петель 35 мм](https://avtoraskroy.ru/blog/prisadka-petel): отступ K 3–7 мм, система 32 мм, число петель по высоте и весу фасада
+- [Карта раскроя ЛДСП](https://avtoraskroy.ru/blog/karta-raskroya-ldsp): пропил 3,2–4,4 мм, припуски, текстура, лист 2800×2070
+- [Толщина кромки ПВХ](https://avtoraskroy.ru/blog/kromka-pvh-tolshchina): 0,4 / 1 / 2 мм, вычитание из размера детали, расчёт метража
+- [Спецификация мебели](https://avtoraskroy.ru/blog/specifikaciya-mebeli): состав деталировки, ГОСТ 16371-2014 и ЕСКД, ревизии и статусы
+- [DXF для ЧПУ](https://avtoraskroy.ru/blog/dxf-dlya-chpu): версии R12/R2013, слои, $INSUNITS, переход в G-code по ISO 6983
 - [Оферта](https://avtoraskroy.ru/oferta) · [Политика конфиденциальности](https://avtoraskroy.ru/privacy)
 
 ## Контакты
