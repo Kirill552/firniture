@@ -21,7 +21,7 @@ const AuthContext = createContext<AuthContextType>({
 /**
  * Публичные пути, не требующие авторизации
  */
-const publicPaths = ['/', '/login', '/login/verify', '/signup', '/welcome', '/new']
+const publicPaths = ['/', '/login', '/login/verify', '/signup', '/welcome', '/new', '/oferta', '/privacy']
 
 function isPublicPath(pathname: string): boolean {
   return publicPaths.some(path => {

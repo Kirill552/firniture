@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   STAGES,
   LANDING_COPY,
+  FAQ_ITEMS,
+  FOOTER_COLUMNS,
   containsForbidden,
   FORBIDDEN,
   type StageId,
@@ -61,6 +63,32 @@ describe('landing-copy', () => {
   it('FORBIDDEN list is defined and contains expected', () => {
     expect(FORBIDDEN.length).toBeGreaterThan(3);
     expect(FORBIDDEN.some((p) => p.includes('30'))).toBe(true);
+  });
+
+  it('FAQ содержит 6-10 честных вопросов без запрещённых фраз', () => {
+    expect(FAQ_ITEMS.length).toBeGreaterThanOrEqual(6);
+    expect(FAQ_ITEMS.length).toBeLessThanOrEqual(10);
+    FAQ_ITEMS.forEach((item) => {
+      expect(item.question.length).toBeGreaterThan(10);
+      expect(item.answer.length).toBeGreaterThan(40);
+      expect(containsForbidden(item.question)).toBe(false);
+      expect(containsForbidden(item.answer)).toBe(false);
+    });
+    // Вопросы уникальны (schema.org FAQPage не любит дубли)
+    const questions = FAQ_ITEMS.map((i) => i.question);
+    expect(new Set(questions).size).toBe(questions.length);
+  });
+
+  it('футер ссылается только на существующие маршруты и якоря лендинга', () => {
+    const routes = FOOTER_COLUMNS.flatMap((c) => c.links.map((l) => l.href));
+    expect(routes.length).toBeGreaterThan(4);
+    routes.forEach((href) => {
+      expect(href).toMatch(/^\/(#\w+)?[\w/]*$/);
+    });
+    // Юридические страницы обязательны (152-ФЗ, доверие Яндекса)
+    expect(routes).toContain('/oferta');
+    expect(routes).toContain('/privacy');
+    expect(routes).toContain('/pricing');
   });
 
   it('progress mapper ranges map 0..1 to stages 1-5 correctly (simulated)', () => {

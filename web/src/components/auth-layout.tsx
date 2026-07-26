@@ -15,7 +15,7 @@ interface AuthLayoutProps {
 export default function AuthLayout({ children }: AuthLayoutProps) {
   const pathname = usePathname()
 
-  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup', '/welcome', '/new']
+  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup', '/welcome', '/new', '/oferta', '/privacy']
 
   const isPublic = publicPaths.some(path => {
     if (path === pathname) return true

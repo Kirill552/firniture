@@ -11,6 +11,8 @@ const publicPaths = [
   '/signup',  // legacy, редирект на /login
   '/new',     // Vision-first freemium (без авторизации)
   '/welcome', // Онбординг для новых пользователей
+  '/oferta',  // Публичная оферта (SEO, юридика)
+  '/privacy', // Политика конфиденциальности (152-ФЗ)
 ]
 
 /**
