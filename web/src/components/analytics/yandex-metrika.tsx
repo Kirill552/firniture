@@ -11,7 +11,7 @@ declare global {
 }
 
 /** ID счётчика Метрики (публичный, виден в исходнике страницы). */
-const COUNTER_ID = Number(process.env.NEXT_PUBLIC_YM_COUNTER_ID) || 111048722
+export const YM_COUNTER_ID = Number(process.env.NEXT_PUBLIC_YM_COUNTER_ID) || 111048722
 
 /** Загружает tag.js один раз. Вызов идёт только после согласия пользователя. */
 function loadCounter(): void {
@@ -29,7 +29,7 @@ function loadCounter(): void {
   document.head.appendChild(script)
 
   // defer: сервис сам шлёт hit при смене маршрута (App Router не перезагружает страницу)
-  window.ym(COUNTER_ID, 'init', {
+  window.ym(YM_COUNTER_ID, 'init', {
     defer: true,
     clickmap: true,
     trackLinks: true,
@@ -48,12 +48,12 @@ export function YandexMetrika() {
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    if (!COUNTER_ID || consent !== 'granted') return
+    if (!YM_COUNTER_ID || consent !== 'granted') return
 
     loadCounter()
 
     const query = searchParams.toString()
-    window.ym?.(COUNTER_ID, 'hit', query ? `${pathname}?${query}` : pathname)
+    window.ym?.(YM_COUNTER_ID, 'hit', query ? `${pathname}?${query}` : pathname)
   }, [consent, pathname, searchParams])
 
   return null

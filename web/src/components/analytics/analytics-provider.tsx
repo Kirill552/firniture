@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { getConsent, setConsent, registerSink, unregisterSink, type ConsentStatus, type AnalyticsEvent } from '@/lib/analytics'
+import { YM_COUNTER_ID } from './yandex-metrika'
 
 interface AnalyticsContextType {
   consent: ConsentStatus
@@ -35,6 +36,9 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
           }).catch((err) => {
             console.error('Failed to send analytics event', err)
           })
+
+          // Дублируем событие целью Метрики: воронка считается без ручной разметки
+          window.ym?.(YM_COUNTER_ID, 'reachGoal', event.name)
         } catch (e) {
           console.error('Error in analytics sink', e)
         }
