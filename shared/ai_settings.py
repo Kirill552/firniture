@@ -14,6 +14,14 @@ class AISettings(BaseSettings):
     ai_vision_model: str = "google/gemini-2.0-flash-001"
     ai_embedding_model: str = "openai/text-embedding-3-small"
 
+    # Embeddings: отдельный провайдер (опционально). Если не задано — ai_base_url.
+    # Нужно, когда chat/vision и embeddings живут у разных провайдеров
+    # (напр. Gonka для LLM + Cloud.ru bge-m3 для векторов).
+    ai_embedding_base_url: str | None = None
+    ai_embedding_api_key: str | None = None
+    # Размерность векторной колонки hardware_items.embedding (миграция 1536→1024 под bge-m3)
+    ai_embedding_dim: int = 1024
+
     # Параметры генерации
     ai_temperature: float = 0.3
     ai_max_tokens: int = 2000

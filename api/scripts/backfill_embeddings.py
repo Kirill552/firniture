@@ -18,7 +18,7 @@ from sqlalchemy.future import select
 from api.database import SessionLocal
 from api.models import HardwareItem
 from shared.embeddings import (
-    EMBED_VERSION,
+    get_embed_version,
     _content_fingerprint,
     concat_hardware_item_text,
     embed_batch,
@@ -42,7 +42,7 @@ async def main(
         force: Перегенерировать все, даже актуальные
     """
     logger.info("Запуск создания embeddings через AI API...")
-    logger.info(f"Версия модели: {EMBED_VERSION}")
+    logger.info(f"Версия модели: {get_embed_version()}")
 
     async with SessionLocal() as session:
         # Выбираем элементы
@@ -68,7 +68,7 @@ async def main(
             if not force and (
                 item.embedding is not None
                 and item.content_hash == fingerprint
-                and item.embedding_version == EMBED_VERSION
+                and item.embedding_version == get_embed_version()
             ):
                 continue
 
@@ -104,7 +104,7 @@ async def main(
                     batch_items, embeddings, batch_fingerprints, strict=True
                 ):
                     item.embedding = emb
-                    item.embedding_version = EMBED_VERSION
+                    item.embedding_version = get_embed_version()
                     item.content_hash = fingerprint
                     item.indexed_at = datetime.now(UTC)
 

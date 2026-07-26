@@ -91,6 +91,20 @@ class AIClient:
         suffix = path.lstrip("/")
         return f"{base}/{suffix}"
 
+    def _embedding_url(self, path: str) -> str:
+        """URL embeddings API: отдельный провайдер, если задан."""
+        base = (self.settings.ai_embedding_base_url or self.settings.ai_base_url).rstrip("/")
+        suffix = path.lstrip("/")
+        return f"{base}/{suffix}"
+
+    def _embedding_headers(self) -> dict[str, str]:
+        """Заголовки для embeddings API (может отличаться от LLM-провайдера)."""
+        key = self.settings.ai_embedding_api_key or self.settings.ai_api_key
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key}",
+        }
+
     def _model(self, model: str | None, kind: str = "chat") -> str:
         """Получить имя модели по типу задачи."""
         if model:
@@ -108,15 +122,17 @@ class AIClient:
         method: str,
         url: str,
         json_data: dict[str, Any],
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """HTTP-запрос с retry (5xx — повтор, 4xx — сразу ошибка)."""
         session = await self._ensure_session()
         last_error: Exception | None = None
+        req_headers = headers or self._headers()
 
         for attempt in range(self.settings.ai_max_retries + 1):
             try:
                 async with session.request(
-                    method, url, json=json_data, headers=self._headers(),
+                    method, url, json=json_data, headers=req_headers,
                 ) as resp:
                     if resp.status == 200:
                         return await resp.json()
@@ -313,18 +329,18 @@ class AIClient:
         """Получить эмбеддинг одного текста."""
         resolved = self._model(model, "embedding")
         payload = {"model": resolved, "input": text}
-        url = self._api_url("/embeddings")
+        url = self._embedding_url("/embeddings")
 
-        data = await self._request("POST", url, payload)
+        data = await self._request("POST", url, payload, headers=self._embedding_headers())
         return data["data"][0]["embedding"]
 
     async def embed_batch(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         """Получить эмбеддинги для списка текстов."""
         resolved = self._model(model, "embedding")
         payload = {"model": resolved, "input": texts}
-        url = self._api_url("/embeddings")
+        url = self._embedding_url("/embeddings")
 
-        data = await self._request("POST", url, payload)
+        data = await self._request("POST", url, payload, headers=self._embedding_headers())
         # Сортируем по index, т.к. API может вернуть в другом порядке
         sorted_data = sorted(data["data"], key=lambda d: d["index"])
         return [d["embedding"] for d in sorted_data]

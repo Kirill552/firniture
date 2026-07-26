@@ -6,6 +6,12 @@ from typing import Any
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
+
+
+def _embedding_dim_orm() -> int:
+    """Размерность векторной колонки из настроек (избегаем хардкода 1536)."""
+    from shared.ai_settings import AISettings
+    return AISettings().ai_embedding_dim
 from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -162,8 +168,8 @@ class HardwareItem(Base):
     version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     supplier_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="SET NULL"))
     
-    # Поля для векторного поиска (1536 dim, OpenAI text-embedding-3-small)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    # Поля для векторного поиска (размерность из AISettings.ai_embedding_dim)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(_embedding_dim_orm()), nullable=True)
     embedding_version: Mapped[str | None] = mapped_column(String(40), nullable=True)  # Версия модели эмбеддингов
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Хеш контента для проверки актуальности
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Время индексации

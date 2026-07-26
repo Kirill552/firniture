@@ -59,20 +59,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # В откате вернем массив, удалим vector и индекс
-    # Добавим обратно embedding_array
-    op.add_column("hardware_items", sa.Column("embedding_array", postgresql.ARRAY(sa.Float()), nullable=True))
-
-    # Заполним embedding_array из vector (вектор -> массив)
-    op.execute(
-        """
-        UPDATE hardware_items
-        SET embedding_array = CASE
-            WHEN embedding IS NOT NULL THEN ARRAY(SELECT * FROM unnest(embedding))
-            ELSE NULL
-        END
-        """
-    )
+    # В откате вернём массив-колонку (данные не восстанавливаем: unnest(vector)
+    # не существует, backfill пересоздаст embeddings). IF NOT EXISTS — колонка
+    # могла остаться после downgrade 0005.
+    op.execute("ALTER TABLE hardware_items ADD COLUMN IF NOT EXISTS embedding_array double precision[]")
 
     # Удалим индекс и столбец vector
     op.execute("DROP INDEX IF EXISTS ix_hardware_items_embedding_ivfflat")

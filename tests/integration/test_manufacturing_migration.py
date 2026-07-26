@@ -144,6 +144,10 @@ def prerequisite_migrations(alembic_cfg, sync_engine):
     with sync_engine.begin() as conn:
         conn.execute(text("TRUNCATE orders, cam_jobs CASCADE"))
     yield
+    # После класса миграционных тестов БД должна остаться на head:
+    # иначе последующие тесты (pilot/cost) получают схему без новых миграций
+    # (ORM читает размерность/колонки из актуальных настроек и моделей).
+    _upgrade(sync_engine, alembic_cfg, "head")
 
 
 def _table_exists(engine, table_name: str) -> bool:

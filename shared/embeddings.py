@@ -14,10 +14,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Размерность вектора
+def _embedding_dim() -> int:
+    """Актуальная размерность векторов (из настроек embeddings-провайдера)."""
+    from shared.ai_settings import AISettings
+    return AISettings().ai_embedding_dim
+
+
+# Размерность вектора по умолчанию (fallback, если нет доступа к настройкам)
 EMBEDDING_DIM = 1536
 
-# Версия модели для отслеживания изменений
+
+def get_embed_version() -> str:
+    """Версия embeddings-модели для отслеживания переэмбеддинга."""
+    from shared.ai_settings import AISettings
+    s = AISettings()
+    return f"{s.ai_embedding_model}-{_embedding_dim()}"
+
+
+# Версия модели для отслеживания изменений (legacy-константа для импортов)
 EMBED_VERSION = "openai-3-small-v1"
 
 
@@ -57,7 +71,7 @@ async def embed_text(text: str, model_type: str = "doc") -> list[float]:
     """Получить embedding через AI API. Без ключа — синтетический детерминированный fallback (не production)."""
     from shared.ai_settings import AISettings
     if not AISettings().ai_api_key:
-        return _fallback_embedding(text)
+        return _fallback_embedding(text, dim=_embedding_dim())
     from shared.ai_client import get_ai_client
     client = get_ai_client()
     return await client.embed_text(text)
@@ -72,7 +86,7 @@ async def embed_batch(texts: list[str]) -> list[list[float]]:
     """Batch embedding через AI API. Без ключа — синтетический детерминированный fallback (не production)."""
     from shared.ai_settings import AISettings
     if not AISettings().ai_api_key:
-        return [_fallback_embedding(t) for t in texts]
+        return [_fallback_embedding(t, dim=_embedding_dim()) for t in texts]
     from shared.ai_client import get_ai_client
     client = get_ai_client()
     return await client.embed_batch(texts)

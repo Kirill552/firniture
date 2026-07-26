@@ -30,6 +30,27 @@ BOM_PARAMS = {
 DXF_PAYLOAD_PANELS = [{"name": "Боковина", "width_mm": 500.0, "height_mm": 400.0}]
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _ensure_schema() -> None:
+    """Гарантирует схему БД: test_bom_manufacturing_persistence дропает все
+    таблицы в teardown, поэтому к этому файлу БД может прийти пустой."""
+    import os
+
+    from sqlalchemy import create_engine, text
+
+    from api.database import Base
+
+    url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql+asyncpg://test_user:test_only_password@127.0.0.1:5434/furniture_ai_test",
+    ).replace("+asyncpg", "+psycopg")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        Base.metadata.create_all(conn)
+    engine.dispose()
+
+
 async def _create_order(client: AsyncClient, headers: dict) -> UUID:
     resp = await client.post(
         "/api/v1/orders",

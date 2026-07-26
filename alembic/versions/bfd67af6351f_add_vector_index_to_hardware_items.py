@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.execute("SET lock_timeout = '10s'")
     with op.get_context().autocommit_block():
         op.execute("""
-            CREATE INDEX CONCURRENTLY idx_hardware_items_embedding
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hardware_items_embedding
             ON hardware_items
             USING ivfflat (embedding vector_cosine_ops)
             WITH (lists = 100);

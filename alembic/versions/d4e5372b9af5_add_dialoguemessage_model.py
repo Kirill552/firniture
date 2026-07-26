@@ -59,8 +59,8 @@ def downgrade() -> None:
     op.alter_column('panels', 'product_id',
                existing_type=sa.UUID(),
                nullable=True)
-    op.create_index(op.f('ix_hardware_items_embedding_ivfflat'), 'hardware_items', ['embedding'], unique=False, postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_with={'lists': '100'}, postgresql_using='ivfflat')
-    op.create_index(op.f('idx_hardware_items_embedding'), 'hardware_items', ['embedding'], unique=False, postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_with={'lists': '100'}, postgresql_using='ivfflat')
+    op.execute("CREATE INDEX IF NOT EXISTS ix_hardware_items_embedding_ivfflat ON hardware_items USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_hardware_items_embedding ON hardware_items USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
     op.alter_column('cam_jobs', 'status',
                existing_type=sa.Enum('Created', 'Processing', 'Completed', 'Failed', name='job_status', native_enum=False),
                type_=sa.VARCHAR(length=20),

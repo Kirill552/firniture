@@ -25,14 +25,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Восстановим embedding_array и перенесём данные обратно из vector
+    # Данные не восстанавливаем: unnest(vector) в PG не существует, а backfill
+    # embeddings всё равно пересоздаёт векторы. Восстанавливаем только колонку.
     op.execute("ALTER TABLE hardware_items ADD COLUMN IF NOT EXISTS embedding_array double precision[]")
-    op.execute(
-        """
-        UPDATE hardware_items
-        SET embedding_array = CASE
-            WHEN embedding IS NOT NULL THEN ARRAY(SELECT * FROM unnest(embedding))
-            ELSE embedding_array
-        END
-        """
-    )
