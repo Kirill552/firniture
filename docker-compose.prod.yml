@@ -77,6 +77,10 @@ services:
       AI_CHAT_MODEL: ${AI_CHAT_MODEL:-deepseek/deepseek-chat-v3-0324}
       AI_VISION_MODEL: ${AI_VISION_MODEL:-google/gemini-2.0-flash-001}
       AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      # Embeddings: отдельный провайдер (Cloud.ru bge-m3)
+      AI_EMBEDDING_BASE_URL: ${AI_EMBEDDING_BASE_URL:-}
+      AI_EMBEDDING_API_KEY: ${AI_EMBEDDING_API_KEY:-}
+      AI_EMBEDDING_DIM: ${AI_EMBEDDING_DIM:-1024}
       MVP_MACHINE_FEATURES_ENABLED: ${MVP_MACHINE_FEATURES_ENABLED:-false}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
