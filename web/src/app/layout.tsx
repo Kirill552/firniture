@@ -20,6 +20,7 @@ const onest = Onest({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://avtoraskroy.ru"),
   title: "АвтоРаскрой",
   description: "Умный раскрой и присадка для мебельных фабрик",
   // Верификация вебмастеров (Яндекс + Google Search Console)
