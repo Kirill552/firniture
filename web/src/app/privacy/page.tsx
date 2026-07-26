@@ -98,6 +98,31 @@ export default function PrivacyPage() {
           </section>
 
           <section>
+            <h2 className="mb-3 text-[18px] font-bold">
+              5.1. Сервисы веб-аналитики
+            </h2>
+            <p>
+              После согласия в баннере аналитики на страницах подключается
+              Яндекс.Метрика (ООО «ЯНДЕКС», серверы на территории России).
+              Метрика сохраняет cookie и собирает обезличенные сведения о
+              посещении: страницы, источник перехода, тип устройства,
+              действия в интерфейсе, запись сессии в Вебвизоре без ввода
+              персональных данных. Условия использования Метрики опубликованы
+              на{' '}
+              <a
+                href="https://yandex.ru/legal/metrica_termsofuse/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline decoration-[#d7dde2] underline-offset-4"
+              >
+                yandex.ru/legal/metrica_termsofuse
+              </a>
+              . Без согласия счётчик не загружается; отозвать согласие можно,
+              очистив cookie сайта или отклонив баннер повторно.
+            </p>
+          </section>
+
+          <section>
             <h2 className="mb-3 text-[18px] font-bold">6. Права субъекта данных</h2>
             <p>
               Вы вправе запросить уточнение, блокирование или удаление своих

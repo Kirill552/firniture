@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { AnalyticsProvider } from "@/components/analytics/analytics-provider";
 import { AnalyticsConsent } from "@/components/analytics/analytics-consent";
+import { YandexMetrika } from "@/components/analytics/yandex-metrika";
+import { Suspense } from "react";
 import { FeatureFlagsProvider } from "@/features/mvp";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Onest } from "next/font/google";
@@ -56,6 +58,9 @@ export default function RootLayout({
                   </AuthLayout>
                 </ErrorBoundary>
                 <AnalyticsConsent />
+                <Suspense fallback={null}>
+                  <YandexMetrika />
+                </Suspense>
               </AnalyticsProvider>
             </FeatureFlagsProvider>
             <ReactQueryDevtools initialIsOpen={false} />
