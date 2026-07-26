@@ -66,3 +66,4 @@ nul[{}]command
 # RuVector intelligence data
 .ruvector/
 .claude/statusline.sh
+.trash-claude-redesing/
