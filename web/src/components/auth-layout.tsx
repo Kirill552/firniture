@@ -15,12 +15,13 @@ interface AuthLayoutProps {
 export default function AuthLayout({ children }: AuthLayoutProps) {
   const pathname = usePathname()
 
-  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup', '/welcome', '/new', '/oferta', '/privacy']
+  const publicPaths = ['/', '/login', '/login/verify', '/pricing', '/signup', '/welcome', '/new', '/oferta', '/privacy', '/blog']
 
   const isPublic = publicPaths.some(path => {
     if (path === pathname) return true
     if (path === '/login' && pathname.startsWith('/login/')) return true
     if (path === '/new' && pathname.startsWith('/new/')) return true
+    if (path === '/blog' && pathname.startsWith('/blog/')) return true
     return false
   })
 

@@ -83,7 +83,7 @@ describe('landing-copy', () => {
     const routes = FOOTER_COLUMNS.flatMap((c) => c.links.map((l) => l.href));
     expect(routes.length).toBeGreaterThan(4);
     routes.forEach((href) => {
-      expect(href).toMatch(/^\/(#\w+)?[\w/]*$/);
+      expect(href).toMatch(/^\/(#\w+)?[\w/-]*$/);
     });
     // Юридические страницы обязательны (152-ФЗ, доверие Яндекса)
     expect(routes).toContain('/oferta');

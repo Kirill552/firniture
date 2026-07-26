@@ -13,6 +13,7 @@ const publicPaths = [
   '/welcome', // Онбординг для новых пользователей
   '/oferta',  // Публичная оферта (SEO, юридика)
   '/privacy', // Политика конфиденциальности (152-ФЗ)
+  '/blog',    // Статьи (SEO)
 ]
 
 /**
@@ -24,6 +25,7 @@ function isPublicPath(pathname: string): boolean {
     // Поддержка вложенных путей для /login/* и /new/*
     if (path === '/login' && pathname.startsWith('/login/')) return true
     if (path === '/new' && pathname.startsWith('/new/')) return true
+    if (path === '/blog' && pathname.startsWith('/blog/')) return true
     return false
   })
 }

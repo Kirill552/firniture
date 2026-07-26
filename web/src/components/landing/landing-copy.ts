@@ -150,6 +150,13 @@ export const FOOTER_COLUMNS = [
       { href: "/privacy", label: "Политика конфиденциальности" },
     ],
   },
+  {
+    title: "Статьи",
+    links: [
+      { href: "/blog", label: "Все статьи" },
+      { href: "/blog/prisadka-petel", label: "Присадка петель 35 мм" },
+    ],
+  },
 ] as const;
 
 export const FOOTER_TAGLINE =
