@@ -287,7 +287,7 @@ export function useOrderCreator() {
 
       const response = await fetch("/api/v1/dialogue/clarify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
           order_id: orderId,
           messages: [{ role: "user", content: text }],
@@ -342,10 +342,11 @@ export function useOrderCreator() {
       // Используем уже созданный заказ (для OCR/диалога), либо создаём новый.
       const orderId = state.orderId || (await ensureAnonymousOrder());
 
-      // Сгенерировать BOM
+      // Сгенерировать BOM (авторизация обязательна: заказ может быть
+      // привязан к фабрике залогиненного пользователя — иначе 401)
       const bomResponse = await fetch("/api/v1/bom/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
           order_id: orderId,
           cabinet_type: state.params.cabinet_type || "base",
