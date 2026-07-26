@@ -22,9 +22,10 @@ const onest = Onest({
 export const metadata: Metadata = {
   title: "АвтоРаскрой",
   description: "Умный раскрой и присадка для мебельных фабрик",
-  // Верификация вебмастеров (Яндекс; Google добавим после получения кода)
+  // Верификация вебмастеров (Яндекс + Google Search Console)
   other: {
     "yandex-verification": "85f3807d99849b7b",
+    "google-site-verification": "cmNCi3VhuOG1AwFtdorLt6AP-cFfZVLGZ0MiTeCynbI",
   },
 };
 
