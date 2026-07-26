@@ -443,6 +443,7 @@ export interface GenerateBOMResponse {
   dimensions: Record<string, number>
   edge_length_m: number
   hardware: HardwareRecommendation[]
+  manufacturing_revision?: number | null
   order_id?: string | null
   panels: CalculatedPanel[]
   success?: boolean

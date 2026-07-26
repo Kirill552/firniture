@@ -1958,6 +1958,17 @@
             "title": "Hardware",
             "type": "array"
           },
+          "manufacturing_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturing Revision"
+          },
           "order_id": {
             "anyOf": [
               {

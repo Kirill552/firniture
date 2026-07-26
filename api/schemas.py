@@ -876,6 +876,8 @@ class GenerateBOMResponse(BaseModel):
     total_panels: int
     total_area_m2: float
     edge_length_m: float
+    # Номер manufacturing revision, созданной этим расчётом (для approval-flow)
+    manufacturing_revision: int | None = None
     total_hardware_items: int
 
     warnings: list[str] = Field(default_factory=list)

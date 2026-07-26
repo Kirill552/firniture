@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getAuthHeader } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,7 @@ export function CostSummary({ orderId }: { orderId: string }) {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/v1/orders/${orderId}/cost`)
+    fetch(`/api/v1/orders/${orderId}/cost`, { headers: getAuthHeader() })
       .then((res) => {
         if (!res.ok) {
           // 401 или другие ошибки — просто не показываем компонент

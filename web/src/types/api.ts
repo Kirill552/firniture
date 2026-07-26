@@ -827,6 +827,10 @@ export interface FullBOM {
   door_count?: number
   drawer_count?: number
   shelf_count?: number
+  /** Approval-flow: актуальная manufacturing revision заказа */
+  manufacturing_revision?: number | null
+  /** Approval-flow: утверждённая технологом revision (export gate) */
+  approved_manufacturing_revision?: number | null
 }
 
 /** Запрос на обновление BOM */

@@ -872,6 +872,9 @@ async def get_order_bom(
             "hinge_template": "hinge_35mm_overlay",
             "slide_template": "slide_ball_h45",
         },
+        # Approval-flow: текущая и утверждённая manufacturing revision заказа
+        "manufacturing_revision": order.manufacturing_revision,
+        "approved_manufacturing_revision": order.approved_manufacturing_revision,
     }
 
 
@@ -1155,6 +1158,22 @@ async def recalculate_bom(
     product.params = params
     await db.commit()
 
+    # Approval-flow: пересчёт = новая manufacturing revision (старая approved устаревает)
+    await _sync_manufacturing_revision(
+        db,
+        order,
+        cabinet_type=cabinet_type,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        depth_mm=depth_mm,
+        thickness_mm=thickness_mm,
+        material=product.material,
+        shelf_count=shelf_count,
+        door_count=door_count,
+        drawer_count=drawer_count,
+        created_by=current_user.id,
+    )
+
     # Возвращаем обновлённый BOM
     return {
         "order_id": str(order_id),
@@ -1191,6 +1210,9 @@ async def recalculate_bom(
         "door_count": door_count,
         "drawer_count": drawer_count,
         "shelf_count": shelf_count,
+        # Approval-flow: после пересчёта фронт обязан подтвердить заново
+        "manufacturing_revision": order.manufacturing_revision,
+        "approved_manufacturing_revision": order.approved_manufacturing_revision,
     }
 
 
@@ -1440,6 +1462,72 @@ async def calculate_panels_endpoint(
 # ============================================================================
 
 
+async def _sync_manufacturing_revision(
+    db: AsyncSession,
+    order: Order,
+    *,
+    cabinet_type: str,
+    width_mm: float,
+    height_mm: float,
+    depth_mm: float,
+    thickness_mm: float,
+    material: str | None,
+    shelf_count: int,
+    door_count: int,
+    drawer_count: int,
+    hinge_sku: str | None = None,
+    slide_sku: str | None = None,
+    created_by: UUID | None = None,
+) -> int | None:
+    """Создать manufacturing revision для заказа и обновить SSOT на заказе.
+
+    Вызывается из bom/generate и bom/recalculate: каждый расчёт спецификации
+    — новая ревизия, поэтому approve относится к точному расчёту, а export
+    gate отклоняет устаревшие ревизии (409). Ошибка создания ревизии не
+    роняет основной расчёт — gate просто не пропустит export.
+    """
+    try:
+        from api.crud import create_manufacturing_revision
+        from api.manufacturing.spec_builder import (
+            CabinetInput as SpecCabinetInput,
+            CabinetType as SpecCabinetType,
+            build_spec,
+        )
+
+        build_result = build_spec(
+            SpecCabinetInput(
+                cabinet_type=SpecCabinetType(cabinet_type),
+                width_mm=width_mm,
+                height_mm=height_mm,
+                depth_mm=depth_mm,
+                thickness_mm=thickness_mm,
+                material=material,
+                shelf_count=shelf_count,
+                door_count=door_count,
+                drawer_count=drawer_count,
+                hinge_type=hinge_sku,
+                slide_type=slide_sku,
+            )
+        )
+        rev = await create_manufacturing_revision(
+            db,
+            order.id,
+            build_result.spec,
+            provenance=build_result.provenance,
+            created_by=created_by,
+        )
+        order.manufacturing_revision = rev.revision_number
+        order.manufacturing_status = "needs_review"
+        await db.commit()
+        return rev.revision_number
+    except Exception:
+        log.exception(
+            "[BOM] Не удалось создать manufacturing revision для заказа %s",
+            order.id,
+        )
+        return None
+
+
 @router.post("/bom/generate", response_model=GenerateBOMResponse)
 async def generate_bom_endpoint(
     req: GenerateBOMRequest,
@@ -1502,6 +1590,9 @@ async def generate_bom_endpoint(
 
     # 2. Подбор фурнитуры
     hardware_list: list[HardwareRecommendation] = []
+    # SKU для provenance manufacturing revision (approval-flow)
+    hinge_sku: str | None = None
+    slide_sku: str | None = None
 
     # Петли (если есть двери)
     if req.door_count > 0:
@@ -1519,6 +1610,7 @@ async def generate_bom_endpoint(
 
         if hinges.get("success") and hinges.get("items"):
             item = hinges["items"][0]
+            hinge_sku = item.get("sku")
             hardware_list.append(
                 HardwareRecommendation(
                     type="hinge",
@@ -1556,6 +1648,7 @@ async def generate_bom_endpoint(
 
         if slides.get("success") and slides.get("items"):
             item = slides["items"][0]
+            slide_sku = item.get("sku")
             hardware_list.append(
                 HardwareRecommendation(
                     type="slide",
@@ -1644,6 +1737,7 @@ async def generate_bom_endpoint(
     ]
 
     # Сохраняем в БД если указан order_id
+    manufacturing_revision_number: int | None = None
     if req.order_id:
         from sqlalchemy import select
 
@@ -1724,6 +1818,24 @@ async def generate_bom_endpoint(
                 db.add(panel)
 
             await db.commit()
+
+            # Approval-flow: revision из того же входа, что и расчёт панелей
+            manufacturing_revision_number = await _sync_manufacturing_revision(
+                db,
+                order,
+                cabinet_type=req.cabinet_type.value,
+                width_mm=req.width_mm,
+                height_mm=req.height_mm,
+                depth_mm=req.depth_mm,
+                thickness_mm=thickness,
+                material=req.material,
+                shelf_count=req.shelf_count,
+                door_count=req.door_count,
+                drawer_count=req.drawer_count,
+                hinge_sku=hinge_sku,
+                slide_sku=slide_sku,
+                created_by=current_user.id if current_user else None,
+            )
         else:
             raise HTTPException(status_code=404, detail="Order not found")
 
@@ -1743,6 +1855,7 @@ async def generate_bom_endpoint(
         edge_length_m=round(panel_result.edge_length_m, 1),
         total_hardware_items=sum(h.quantity for h in hardware_list),
         warnings=panel_result.warnings,
+        manufacturing_revision=manufacturing_revision_number,
     )
 
 

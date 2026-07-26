@@ -115,6 +115,8 @@ export default function BomPage() {
 
   // Smart Hardware Rules state
   const [confirmed, setConfirmed] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
+  const [approveError, setApproveError] = useState<string | null>(null)
   const [presets, setPresets] = useState({
     hinge_template: "hinge_35mm_overlay",
     slide_template: "slide_ball_h45",
@@ -165,6 +167,11 @@ export default function BomPage() {
         const data: FullBOM = await response.json()
         setBom(data)
         originalBomRef.current = JSON.parse(JSON.stringify(data)) // Deep copy
+        // Уже утверждённая ревизия — чекбокс отражает серверное состояние
+        setConfirmed(
+          data.approved_manufacturing_revision != null &&
+            data.approved_manufacturing_revision === data.manufacturing_revision
+        )
         setHasChanges(false)
         setNeedsRecalculation(false)
         setSaveStatus('idle')
@@ -480,6 +487,48 @@ export default function BomPage() {
   }
 
   // DXF generation
+  // Подтверждение спецификации = backend approve актуальной manufacturing revision.
+  // Без него export gate (PDF/DXF) отвечает 409.
+  const handleConfirmChange = async (checked: boolean) => {
+    if (!checked) {
+      setConfirmed(false)
+      return
+    }
+    if (!effectiveOrderId || !bom?.manufacturing_revision) {
+      setApproveError('Сначала рассчитайте спецификацию, чтобы появилась ревизия для подтверждения')
+      return
+    }
+    setIsApproving(true)
+    setApproveError(null)
+    try {
+      const res = await fetch(`/api/v1/orders/${effectiveOrderId}/manufacturing/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({
+          confirmed: true,
+          expected_revision: bom.manufacturing_revision,
+        }),
+      })
+      if (res.status === 409) {
+        setApproveError('Спецификация изменилась после расчёта — пересчитайте и подтвердите снова')
+        return
+      }
+      if (!res.ok) {
+        throw new Error(await res.text())
+      }
+      setConfirmed(true)
+      setBom((prev) =>
+        prev
+          ? { ...prev, approved_manufacturing_revision: prev.manufacturing_revision }
+          : prev
+      )
+    } catch {
+      setApproveError('Не удалось подтвердить спецификацию. Попробуйте ещё раз')
+    } finally {
+      setIsApproving(false)
+    }
+  }
+
   const handleGenerateDxf = async () => {
     if (!bom || !effectiveOrderId) return
 
@@ -1038,11 +1087,19 @@ export default function BomPage() {
             {/* Себестоимость */}
             {effectiveOrderId && <CostSummary orderId={effectiveOrderId} />}
 
-            {/* Подтверждение спецификации */}
+            {/* Подтверждение спецификации (backend approve для export gate) */}
             <ConfirmationCheckbox
               checked={confirmed}
-              onCheckedChange={setConfirmed}
+              onCheckedChange={handleConfirmChange}
             />
+            {isApproving && (
+              <p className="text-xs text-muted-foreground -mt-2 mb-2">
+                Подтверждаем ревизию на сервере…
+              </p>
+            )}
+            {approveError && (
+              <p className="text-xs text-red-600 -mt-2 mb-2">{approveError}</p>
+            )}
 
             {/* Paywall вместо бесплатной генерации */}
             {effectiveOrderId && (
