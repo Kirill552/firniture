@@ -35,9 +35,9 @@ from sqlalchemy import event  # noqa: E402
 
 @event.listens_for(engine.sync_engine, "connect")
 def _register_pgvector_codec(dbapi_connection, connection_record) -> None:
-    from pgvector.asyncpg import register_vector_async
+    from pgvector.asyncpg import register_vector
 
-    dbapi_connection.run_async(register_vector_async)
+    dbapi_connection.run_async(register_vector)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
