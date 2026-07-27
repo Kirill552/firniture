@@ -16,7 +16,7 @@ export function LandingFooter() {
   return (
     <div className="mx-auto max-w-[1280px] px-6 py-14">
       <div className="grid grid-cols-1 gap-10 md:grid-cols-12">
-        <div className="md:col-span-5">
+        <div className="md:col-span-4">
           <div className="text-[15px] font-extrabold tracking-[-0.5px] text-[#171a1d]">
             {LANDING_COPY.brand}
           </div>
@@ -35,7 +35,7 @@ export function LandingFooter() {
           <nav
             key={col.title}
             aria-label={`Подвал: ${col.title}`}
-            className="md:col-span-3"
+            className="md:col-span-2"
           >
             <div className="font-mono text-[10px] uppercase tracking-[2px] text-[#66707a]">
               {col.title}
@@ -55,7 +55,7 @@ export function LandingFooter() {
           </nav>
         ))}
 
-        <div className="md:col-span-1" />
+        <div className="md:col-span-2" />
       </div>
 
       <div className="mt-12 flex flex-col gap-3 border-t border-[#d7dde2] pt-6 text-[12px] text-[#66707a] md:flex-row md:items-center md:justify-between">

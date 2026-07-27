@@ -155,6 +155,10 @@ export const FOOTER_COLUMNS = [
     links: [
       { href: "/blog", label: "Все статьи" },
       { href: "/blog/prisadka-petel", label: "Присадка петель 35 мм" },
+      { href: "/blog/karta-raskroya-ldsp", label: "Карта раскроя ЛДСП" },
+      { href: "/blog/kromka-pvh-tolshchina", label: "Толщина кромки ПВХ" },
+      { href: "/blog/specifikaciya-mebeli", label: "Спецификация мебели" },
+      { href: "/blog/dxf-dlya-chpu", label: "DXF для ЧПУ" },
     ],
   },
 ] as const;
