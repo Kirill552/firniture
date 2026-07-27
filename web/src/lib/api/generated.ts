@@ -61,6 +61,15 @@ export interface ArtifactDownload {
   type: 'DXF' | 'GCODE' | 'ZIP'
 }
 
+/** BalanceResponse — Баланс фабрики: сколько заказов оплачено вперёд и почём. */
+export interface BalanceResponse {
+  free_first_available: boolean
+  pack_credits: number
+  pack_price_rub: number
+  pack_size: number
+  price_rub: number
+}
+
 /** CAMJobListItem — Краткая информация о CAM задаче для списка. */
 export interface CAMJobListItem {
   created_at: string
@@ -158,6 +167,18 @@ export interface CalculatedPanel {
   thickness_mm?: number
   /** Ширина в мм */
   width_mm: number
+}
+
+/** CheckoutResponse — Ответ обоих checkout-эндпоинтов. */
+export interface CheckoutResponse {
+  /** Сумма к оплате в рублях */
+  amount_rub: number
+  /** Страница оплаты ЮKassa */
+  confirmation_url: string
+  /** ID платежа в нашей БД */
+  payment_id: string
+  /** pending | succeeded | canceled */
+  status: string
 }
 
 /** ClaimDraftResponse — Ответ привязки анонимного черновика к аккаунту. */
@@ -635,6 +656,16 @@ export interface Order {
   updated_at: string
 }
 
+/** OrderAccessResponse — Состояние доступа к экспорту конкретного заказа. */
+export interface OrderAccessResponse {
+  access: boolean
+  free_first_available: boolean
+  pack_credits: number
+  price_rub: number
+  /** free_first | payment | pack | null */
+  reason: string | null
+}
+
 /** OrderCreate */
 export interface OrderCreate {
   customer_ref?: string | null
@@ -664,6 +695,12 @@ export interface PDFCuttingMapRequest {
   sheet_height_mm?: number | null
   /** Ширина листа (мм) */
   sheet_width_mm?: number | null
+}
+
+/** PackCheckoutRequest — Тело оплаты пакета. Необязательно: нужно только для возврата на заказ. */
+export interface PackCheckoutRequest {
+  /** Заказ, из которого пользователь ушёл платить */
+  order_id?: string | null
 }
 
 /** PanelInput — Панель для генерации DXF. */
@@ -790,6 +827,11 @@ export interface ValidationIssue {
 /** VerifyRequest — Проверка magic token. */
 export interface VerifyRequest {
   token: string
+}
+
+/** WebhookAck — Подтверждение приёма уведомления ЮKassa. */
+export interface WebhookAck {
+  ok?: boolean
 }
 
 /** _LegacyApprovalRequest — Тело совместимого revision-level approve/reject запроса. */
@@ -1048,6 +1090,34 @@ export interface validate_manufacturing_api_v1_orders__order_id__manufacturing_v
 export interface calculate_panels_endpoint_api_v1_panels_calculate_post {
   body: CalculatePanelsRequest
   response: CalculatePanelsResponse
+}
+
+/** GET /api/v1/payments/balance - Get Balance */
+export interface get_balance_api_v1_payments_balance_get {
+  response: BalanceResponse
+}
+
+/** GET /api/v1/payments/orders/{order_id}/access - Get Order Access */
+export interface get_order_access_api_v1_payments_orders__order_id__access_get {
+  order_id: string
+  response: OrderAccessResponse
+}
+
+/** POST /api/v1/payments/orders/{order_id}/checkout - Checkout Order */
+export interface checkout_order_api_v1_payments_orders__order_id__checkout_post {
+  order_id: string
+  response: CheckoutResponse
+}
+
+/** POST /api/v1/payments/packs/checkout - Checkout Pack */
+export interface checkout_pack_api_v1_payments_packs_checkout_post {
+  body: PackCheckoutRequest | null
+  response: CheckoutResponse
+}
+
+/** POST /api/v1/payments/webhook/yookassa - Yookassa Webhook */
+export interface yookassa_webhook_api_v1_payments_webhook_yookassa_post {
+  response: WebhookAck
 }
 
 /** POST /api/v1/product-analytics/events - Track Product Event */

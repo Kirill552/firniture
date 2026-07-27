@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     RUSENDER_API_KEY: str = ""  # Пустой = mock режим
     RUSENDER_SENDING_KEY_ID: str = ""  # Числовой ID ключа транзакционной отправки
     EMAIL_FROM: str = "noreply@avtoraskroy.ru"
+
+    # ЮKassa (приём платежей). Пустой YOOKASSA_SHOP_ID = MOCK-режим:
+    # checkout возвращает фейковый confirmation_url и пишет в лог, сеть не трогаем.
+    YOOKASSA_SHOP_ID: str = ""
+    YOOKASSA_SECRET_KEY: str = ""
+    YOOKASSA_RETURN_URL: str = ""  # Пусто — собираем из FRONTEND_URL
+
+    # Единица тарификации — один заказ целиком.
+    PRICE_ORDER_RUB: int = 890
+    PRICE_PACK10_RUB: int = 7900
+    PACK_SIZE: int = 10
     # Guest Capability Token (HMAC-SHA256 secret)
     GUEST_CAPABILITY_SECRET: str = ""  # Empty = no guest tokens allowed (fail closed)
 

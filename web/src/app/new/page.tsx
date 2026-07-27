@@ -99,7 +99,7 @@ export default function NewOrderPage() {
         <>
           <FileDropzone onFileSelect={analyzePhoto} isLoading={false} data-testid="photo-upload-dropzone" />
           <div className="mt-6 text-center">
-            <Button variant="link" onClick={goToManual} className="gap-2 text-[#171a1d] hover:text-[#171a1d]/80 text-sm font-semibold cursor-pointer" data-testid="manual-entry-button">
+            <Button variant="link" onClick={goToManual} className="gap-2 text-foreground hover:text-foreground/80 text-sm font-semibold cursor-pointer" data-testid="manual-entry-button">
               <Keyboard className="h-4 w-4" />
               Ввести вручную
             </Button>
@@ -109,9 +109,9 @@ export default function NewOrderPage() {
 
       {/* Mode: Processing */}
       {mode === "processing" && (
-        <div className="flex flex-col items-center justify-center h-64 gap-4 bg-white rounded-xl border border-[#d7dde2] p-6 shadow-sm">
-          <Loader2 className="h-10 w-10 animate-spin text-[#171a1d]" />
-          <p className="text-sm text-[#66707a]">Анализируем изображение...</p>
+        <div className="flex flex-col items-center justify-center h-64 gap-4 bg-card rounded-xl border border-border p-6 shadow-sm">
+          <Loader2 className="h-10 w-10 animate-spin text-foreground" />
+          <p className="text-sm text-muted-foreground">Анализируем изображение...</p>
         </div>
       )}
 
@@ -143,11 +143,10 @@ export default function NewOrderPage() {
 
       {/* Mode: Manual */}
       {mode === "manual" && (
-        <Card className="bg-white border border-[#d7dde2] rounded-xl shadow-sm overflow-hidden">
+        <Card className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
           <CardHeader className="p-6 pb-4">
-            <CardTitle className="text-lg font-bold text-[#171a1d]">Параметры изделия</CardTitle>
-            <CardDescription className="text-xs text-[#66707a]">
-              Выберите тип и укажите размеры
+            <CardTitle className="text-lg font-bold text-foreground">Параметры изделия</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 pt-0 space-y-6">
@@ -174,12 +173,12 @@ export default function NewOrderPage() {
                   }}
                   min={100}
                   max={3000}
-                  className="h-10 border-[#d7dde2] focus-visible:ring-[#c7ff00] text-sm rounded-lg"
+                  className="h-10 border-border focus-visible:ring-ring text-sm rounded-lg"
                   data-testid="input-width-mm"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-[#171a1d]">Высота, мм</Label>
+                <Label className="text-xs font-semibold text-foreground">Высота, мм</Label>
                 <Input
                   type="number"
                   value={params.height_mm != null ? params.height_mm : ""}
@@ -190,12 +189,12 @@ export default function NewOrderPage() {
                   }}
                   min={100}
                   max={3000}
-                  className="h-10 border-[#d7dde2] focus-visible:ring-[#c7ff00] text-sm rounded-lg"
+                  className="h-10 border-border focus-visible:ring-ring text-sm rounded-lg"
                   data-testid="input-height-mm"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-[#171a1d]">Глубина, мм</Label>
+                <Label className="text-xs font-semibold text-foreground">Глубина, мм</Label>
                 <Input
                   type="number"
                   value={params.depth_mm != null ? params.depth_mm : ""}
@@ -206,7 +205,7 @@ export default function NewOrderPage() {
                   }}
                   min={100}
                   max={1200}
-                  className="h-10 border-[#d7dde2] focus-visible:ring-[#c7ff00] text-sm rounded-lg"
+                  className="h-10 border-border focus-visible:ring-ring text-sm rounded-lg"
                   data-testid="input-depth-mm"
                 />
               </div>
@@ -215,15 +214,15 @@ export default function NewOrderPage() {
             {/* Material */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-[#171a1d]">Материал</Label>
+                <Label className="text-xs font-semibold text-foreground">Материал</Label>
                 <Select
                   value={params.material || "ЛДСП"}
                   onValueChange={(v) => updateParam("material", v)}
                 >
-                  <SelectTrigger className="h-10 border-[#d7dde2] focus:ring-[#c7ff00] text-sm bg-white rounded-lg" data-testid="select-material">
+                  <SelectTrigger className="h-10 border-border focus:ring-ring text-sm bg-card rounded-lg" data-testid="select-material">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-white border-[#d7dde2] rounded-lg">
+                  <SelectContent className="bg-card border-border rounded-lg">
                     {MATERIALS.map((m) => (
                       <SelectItem key={m.value} value={m.value} className="text-sm cursor-pointer">
                         {m.label}
@@ -233,15 +232,15 @@ export default function NewOrderPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-[#171a1d]">Толщина</Label>
+                <Label className="text-xs font-semibold text-foreground">Толщина</Label>
                 <Select
                   value={String(params.thickness_mm || 16)}
                   onValueChange={(v) => updateParam("thickness_mm", parseInt(v))}
                 >
-                  <SelectTrigger className="h-10 border-[#d7dde2] focus:ring-[#c7ff00] text-sm bg-white rounded-lg" data-testid="select-thickness-mm">
+                  <SelectTrigger className="h-10 border-border focus:ring-ring text-sm bg-card rounded-lg" data-testid="select-thickness-mm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-white border-[#d7dde2] rounded-lg">
+                  <SelectContent className="bg-card border-border rounded-lg">
                     {THICKNESSES.map((t) => (
                       <SelectItem key={t.value} value={t.value} className="text-sm cursor-pointer">
                         {t.label}
@@ -262,7 +261,7 @@ export default function NewOrderPage() {
                 !params.height_mm ||
                 !params.depth_mm
               }
-              className="w-full h-10 bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] font-semibold transition-all duration-150 rounded-lg cursor-pointer text-xs active:scale-[0.98] mt-2"
+              className="w-full h-10 cursor-pointer text-xs mt-2"
               data-testid="confirm-manual-button"
             >
               {isLoading ? (
@@ -284,7 +283,7 @@ export default function NewOrderPage() {
       {/* Back link */}
       <div className="mt-8 text-center">
         <Link href="/">
-          <Button variant="ghost" size="sm" className="text-[#66707a] hover:text-[#171a1d] hover:bg-transparent cursor-pointer font-semibold">
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hover:bg-transparent cursor-pointer font-semibold">
             <ArrowLeft className="mr-2 h-4 w-4" />
             На главную
           </Button>

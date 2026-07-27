@@ -12,7 +12,7 @@ export function AiExplanation({ pros, cons, confidence }: AiExplanationProps) {
   const confidenceColor = confidence > 0.9 ? "bg-green-500" : confidence > 0.75 ? "bg-yellow-500" : "bg-red-500";
 
   return (
-    <Card className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+    <Card className="bg-muted p-3 rounded-lg">
       <div className="flex justify-between items-center mb-2">
         <h4 className="font-semibold text-sm">AI-анализ</h4>
         <div className="flex items-center">

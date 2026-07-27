@@ -53,6 +53,9 @@ export const ANALYTICS_EVENT_NAMES = [
   'guest_draft_claimed',
   'guest_draft_claim_failed',
   'pilot_artifact_requested',
+  'payment_started',
+  'payment_succeeded',
+  'payment_second_succeeded',
 ] as const
 
 export type AnalyticsEventName = typeof ANALYTICS_EVENT_NAMES[number]
@@ -186,6 +189,34 @@ export interface PilotArtifactRequestedEvent {
   }
 }
 
+export interface PaymentStartedEvent {
+  name: 'payment_started'
+  properties: {
+    order_id: string
+    purchase_kind: string
+    amount_rub: number
+  }
+}
+
+export interface PaymentSucceededEvent {
+  name: 'payment_succeeded'
+  properties: {
+    order_id: string
+    purchase_kind: string
+    access_reason: string
+  }
+}
+
+/** Повторная покупка: у фабрики уже была оплата раньше. */
+export interface PaymentSecondSucceededEvent {
+  name: 'payment_second_succeeded'
+  properties: {
+    order_id: string
+    purchase_kind: string
+    pack_credits: number
+  }
+}
+
 /** Closed union — only allowed event names are trackable. */
 export type AnalyticsEvent =
   | OrderCreatedEvent
@@ -204,6 +235,10 @@ export type AnalyticsEvent =
   | GuestDraftClaimedEvent
   | GuestDraftClaimFailedEvent
   | PilotArtifactRequestedEvent
+  | PaymentStartedEvent
+  | PaymentSucceededEvent
+  | PaymentSecondSucceededEvent
+
 // ─── Event property envelope ────────────────────────────────────────────────
 
 /**

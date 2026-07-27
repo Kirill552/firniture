@@ -21,6 +21,7 @@ from api.database import SessionLocal
 from api.main import app
 from api.manufacturing.contracts import ManufacturingSpec, PanelSpec
 from api.models import Factory, ManufacturingRevision, Order, RevisionStatusEnum, User
+from api.payments.access import grant_access
 
 PANELS_PAYLOAD = [
     {"name": "Боковина", "width_mm": 500.0, "height_mm": 400.0},
@@ -122,12 +123,14 @@ async def test_pdf_export_unapproved_revision_returns_409(authenticated_client: 
 
 
 @pytest.mark.asyncio
-async def test_pdf_export_approved_revision_returns_pdf(authenticated_client: AsyncClient):
-    """Утверждённая ревизия позволяет получить PDF карты раскроя."""
+async def test_pdf_export_approved_revision_returns_pdf(authenticated_client: AsyncClient, mock_user):
+    """Утверждённая ревизия плюс оплаченный доступ дают PDF карты раскроя."""
     order_id = await _create_order(authenticated_client)
 
     async with SessionLocal() as db:
         await _create_revision(db, order_id, RevisionStatusEnum.APPROVED)
+        # Пейволл — отдельный контур, здесь проверяем только gate ревизии.
+        await grant_access(db, order_id, mock_user.factory_id, "payment")
 
     resp = await authenticated_client.post(
         "/api/v1/cam/cutting-map-pdf",

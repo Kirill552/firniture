@@ -26,6 +26,7 @@ from api.guest_upload import (
     validate_and_consume_grant,
 )
 from api.mocks.dialogue_mocks import are_ai_keys_available, generate_mock_dialogue_response
+from api.payments.access import ensure_export_allowed
 from api.routes.manufacturing import assert_order_export_gate
 from api.schemas import GuestUploadErrorCode, UploadErrorDetail
 from api.settings import settings
@@ -1941,6 +1942,8 @@ async def export_1c(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     enforce_factory_access(order.factory_id, current_user.factory_id)
+    # Пейволл: выгрузка спецификации в 1С — production-артефакт заказа.
+    await ensure_export_allowed(db, req.order_id, current_user.factory_id)
 
     # Получаем BOM items если есть
     bom_result = await db.execute(
@@ -2234,6 +2237,8 @@ async def create_dxf_job(
 
     # Task 8: gate PDF/DXF — 409 без утверждённой ревизии технологом
     await assert_order_export_gate(db, req.order_id)
+    # Пейволл: заказ оплачен, бесплатный первый или кредит пакета — иначе 402.
+    await ensure_export_allowed(db, req.order_id, current_user.factory_id)
 
     # Получаем настройки фабрики
     factory = await db.get(Factory, current_user.factory_id)
@@ -2423,6 +2428,8 @@ async def download_cam_artifact(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     enforce_factory_access(order.factory_id, current_user.factory_id)
+    # Пейволл: повторное скачивание оплаченного заказа ничего не списывает.
+    await ensure_export_allowed(db, job.order_id, current_user.factory_id)
 
     if job.status != JobStatusEnum.Completed:
         raise HTTPException(
@@ -2482,6 +2489,8 @@ async def stream_cam_file(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     enforce_factory_access(order.factory_id, current_user.factory_id)
+    # Пейволл: повторное скачивание оплаченного заказа ничего не списывает.
+    await ensure_export_allowed(db, job.order_id, current_user.factory_id)
 
     if job.status != JobStatusEnum.Completed:
         raise HTTPException(
@@ -2605,6 +2614,8 @@ async def create_gcode_job(
         raise HTTPException(status_code=400, detail="order_id не соответствует источнику DXF")
 
     target_order_id = source_dxf_job.order_id
+    # Пейволл: G-code считается тем же заказом, что и исходный DXF.
+    await ensure_export_allowed(db, target_order_id, current_user.factory_id)
 
     # Получаем настройки фабрики
     factory = await db.get(Factory, current_user.factory_id)
@@ -2709,6 +2720,8 @@ async def create_drilling_job(
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
     enforce_factory_access(order.factory_id, current_user.factory_id)
+    # Пейволл: файлы присадки — production-артефакт заказа.
+    await ensure_export_allowed(db, request.order_id, current_user.factory_id)
 
     # Получаем панели заказа через ProductConfig
     panels_query = await db.execute(
@@ -2916,6 +2929,8 @@ async def generate_cutting_map_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     enforce_factory_access(order.factory_id, current_user.factory_id)
     await assert_order_export_gate(db, req.order_id)
+    # Пейволл: карта раскроя — production-артефакт заказа.
+    await ensure_export_allowed(db, req.order_id, current_user.factory_id)
 
     # Получаем настройки фабрики
     factory = await db.get(Factory, current_user.factory_id)

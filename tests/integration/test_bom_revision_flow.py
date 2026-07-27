@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from api.database import SessionLocal
 from api.models import ManufacturingRevision, Order
+from api.payments.access import grant_access
 
 BOM_PARAMS = {
     "cabinet_type": "base",
@@ -63,7 +64,7 @@ async def _create_order(client: AsyncClient, headers: dict) -> UUID:
 
 @pytest.mark.asyncio
 async def test_bom_generate_creates_revision_and_approve_unlocks_export(
-    authenticated_client: AsyncClient, auth_headers: dict,
+    authenticated_client: AsyncClient, auth_headers: dict, mock_user,
 ):
     order_id = await _create_order(authenticated_client, auth_headers)
     payload = {**BOM_PARAMS, "order_id": str(order_id)}
@@ -114,13 +115,17 @@ async def test_bom_generate_creates_revision_and_approve_unlocks_export(
     )
     assert approved.status_code == 200, approved.text
 
-    # 7. После approve gate пропускает (job создаётся, а не 409)
+    # 7. После approve gate пропускает и job создаётся. Пейволл — отдельный
+    # контур, поэтому доступ к экспорту выдаём явно.
+    async with SessionLocal() as db:
+        await grant_access(db, order_id, mock_user.factory_id, "payment")
+
     dxf_allowed = await authenticated_client.post(
         "/api/v1/cam/dxf",
         json={"order_id": str(order_id), "panels": DXF_PAYLOAD_PANELS},
         headers=auth_headers,
     )
-    assert dxf_allowed.status_code != 409
+    assert dxf_allowed.status_code == 200, dxf_allowed.text
 
 
 @pytest.mark.asyncio

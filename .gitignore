@@ -67,3 +67,6 @@ nul[{}]command
 .ruvector/
 .claude/statusline.sh
 .trash-claude-redesing/
+
+# Временные скриншоты UI-проверок
+web/screenshots/

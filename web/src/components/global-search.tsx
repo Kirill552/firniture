@@ -253,13 +253,13 @@ export function GlobalSearch() {
     const colors: Record<string, string> = {
       "Заказы": "bg-blue-50 text-blue-700 border-blue-200",
       "Производство": "bg-green-50 text-green-700 border-green-200",
-      "Настройки": "bg-gray-50 text-gray-700 border-gray-200",
+      "Настройки": "bg-muted text-muted-foreground border-border",
       "Пользователи": "bg-purple-50 text-purple-700 border-purple-200",
       "Отчеты": "bg-orange-50 text-orange-700 border-orange-200",
       "Безопасность": "bg-red-50 text-red-700 border-red-200",
       "Каталог": "bg-teal-50 text-teal-700 border-teal-200"
     }
-    return colors[category] || "bg-gray-50 text-gray-700 border-gray-200"
+    return colors[category] || "bg-muted text-muted-foreground border-border"
   }
 
   const popularPages = [
@@ -313,7 +313,7 @@ export function GlobalSearch() {
                   exit={{ opacity: 0 }}
                   className="flex items-center gap-2 px-4 py-3"
                 >
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-600"></div>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-muted border-t-blue-600"></div>
                   <span className="text-sm text-muted-foreground">Поиск с помощью ИИ...</span>
                 </motion.div>
               )}

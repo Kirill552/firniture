@@ -6,40 +6,39 @@
   /* Типографика — Onest (отличный для кириллицы) */
   --font-sans: var(--font-onest), ui-sans-serif, system-ui, sans-serif;
 
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 
   /* ========================================
-   * SCANDINAVIAN INDUSTRIAL — Светлая тема
-   * Для мебельных технологов: чистота + функциональность
+   * SCANDINAVIAN INDUSTRIAL — Светлая тема (Unification with Landing)
    * ======================================== */
 
-  /* Основные цвета — тёплые, натуральные */
-  --color-background: oklch(0.985 0.004 75);        /* Тёплый белый (слоновая кость) */
-  --color-foreground: oklch(0.22 0.02 45);          /* Тёмно-коричневый (эспрессо) */
+  /* Основные цвета — холодный светло-серый и тёмный текст */
+  --color-background: oklch(0.971 0.004 236.50);    /* #f3f6f8 (холодный светло-серый) */
+  --color-foreground: oklch(0.216 0.007 248.17);    /* #171a1d (тёмно-серый) */
 
-  /* Карточки — чуть теплее фона */
-  --color-card: oklch(0.995 0.002 75);              /* Чистый белый с теплом */
-  --color-card-foreground: oklch(0.22 0.02 45);
+  /* Карточки — белые */
+  --color-card: oklch(1.000 0.000 89.88);          /* #ffffff (чистый белый) */
+  --color-card-foreground: oklch(0.216 0.007 248.17);
 
   /* Popover/Dropdown */
-  --color-popover: oklch(0.998 0.001 75);
-  --color-popover-foreground: oklch(0.22 0.02 45);
+  --color-popover: oklch(1.000 0.000 89.88);
+  --color-popover-foreground: oklch(0.216 0.007 248.17);
 
-  /* Primary — тёмное дерево (венге) */
-  --color-primary: oklch(0.28 0.04 45);             /* Венге */
-  --color-primary-foreground: oklch(0.97 0.005 75);
+  /* Primary — лаймовый акцент */
+  --color-primary: oklch(0.927 0.231 124.20);       /* #c7ff00 (лайм) */
+  --color-primary-foreground: oklch(0.216 0.007 248.17);
 
-  /* Secondary — светлое дерево (дуб) */
-  --color-secondary: oklch(0.94 0.015 75);          /* Светлый дуб */
-  --color-secondary-foreground: oklch(0.28 0.03 45);
+  /* Secondary — белая подложка */
+  --color-secondary: oklch(1.000 0.000 89.88);
+  --color-secondary-foreground: oklch(0.216 0.007 248.17);
 
-  /* Muted — пепельный */
-  --color-muted: oklch(0.95 0.008 75);
-  --color-muted-foreground: oklch(0.45 0.02 45);
+  /* Muted — холодный серый */
+  --color-muted: oklch(0.971 0.004 236.50);         /* #f3f6f8 */
+  --color-muted-foreground: oklch(0.540 0.020 248.19); /* #66707a */
 
-  /* Accent — терракота (индустриальный акцент) */
-  --color-accent: oklch(0.65 0.14 35);              /* Терракота */
-  --color-accent-foreground: oklch(0.98 0.005 75);
+  /* Accent — лаймовый акцент */
+  --color-accent: oklch(0.927 0.231 124.20);
+  --color-accent-foreground: oklch(0.216 0.007 248.17);
 
   /* Destructive — приглушённый красный */
   --color-destructive: oklch(0.55 0.2 25);
@@ -54,9 +53,9 @@
   --color-warning-foreground: oklch(0.25 0.02 45);
 
   /* Borders & Input */
-  --color-border: oklch(0.88 0.01 75);
-  --color-input: oklch(0.92 0.008 75);
-  --color-ring: oklch(0.55 0.08 45);
+  --color-border: oklch(0.894 0.009 242.85);        /* #d7dde2 */
+  --color-input: oklch(0.894 0.009 242.85);
+  --color-ring: oklch(0.927 0.231 124.20);
 
   /* Charts — натуральная палитра */
   --color-chart-1: oklch(0.55 0.12 45);   /* Дуб */
@@ -65,15 +64,15 @@
   --color-chart-4: oklch(0.75 0.15 75);   /* Янтарь */
   --color-chart-5: oklch(0.5 0.1 250);    /* Синий стальной */
 
-  /* Sidebar — чуть темнее основного фона */
-  --color-sidebar: oklch(0.97 0.006 75);
-  --color-sidebar-foreground: oklch(0.25 0.02 45);
-  --color-sidebar-primary: oklch(0.28 0.04 45);
-  --color-sidebar-primary-foreground: oklch(0.97 0.005 75);
-  --color-sidebar-accent: oklch(0.93 0.01 75);
-  --color-sidebar-accent-foreground: oklch(0.28 0.03 45);
-  --color-sidebar-border: oklch(0.9 0.008 75);
-  --color-sidebar-ring: oklch(0.55 0.08 45);
+  /* Sidebar — холодный серый */
+  --color-sidebar: oklch(0.971 0.004 236.50);
+  --color-sidebar-foreground: oklch(0.216 0.007 248.17);
+  --color-sidebar-primary: oklch(0.927 0.231 124.20);
+  --color-sidebar-primary-foreground: oklch(0.216 0.007 248.17);
+  --color-sidebar-accent: oklch(1.000 0.000 89.88);
+  --color-sidebar-accent-foreground: oklch(0.216 0.007 248.17);
+  --color-sidebar-border: oklch(0.894 0.009 242.85);
+  --color-sidebar-ring: oklch(0.927 0.231 124.20);
 }
 
 /* ========================================

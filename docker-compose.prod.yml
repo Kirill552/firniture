@@ -87,6 +87,13 @@ services:
       RUSENDER_API_KEY: ${RUSENDER_API_KEY:-}
       RUSENDER_SENDING_KEY_ID: ${RUSENDER_SENDING_KEY_ID:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@avtoraskroy.ru}
+      # ЮKassa: пустой YOOKASSA_SHOP_ID переводит платежи в mock-режим
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL:-}
+      PRICE_ORDER_RUB: ${PRICE_ORDER_RUB:-890}
+      PRICE_PACK10_RUB: ${PRICE_PACK10_RUB:-7900}
+      PACK_SIZE: ${PACK_SIZE:-10}
     depends_on:
       postgres:
         condition: service_healthy

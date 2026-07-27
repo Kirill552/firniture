@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum as _EnumShim
 from typing import Any
 from uuid import uuid4
@@ -12,7 +13,18 @@ def _embedding_dim_orm() -> int:
     """Размерность векторной колонки из настроек (избегаем хардкода 1536)."""
     from shared.ai_settings import AISettings
     return AISettings().ai_embedding_dim
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -320,3 +332,53 @@ class ManufacturingRevision(Base):
 
     cam_job: Mapped[CAMJob | None] = relationship()
     order: Mapped[Order | None] = relationship()
+
+
+class Payment(Base):
+    """Платёж в ЮKassa: либо один заказ, либо пакет из 10 заказов."""
+    __tablename__ = "payments"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    factory_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("factories.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # У пакета заказа нет — поле пустое.
+    order_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # single | pack10
+    amount_rub: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending"
+    )  # pending | succeeded | canceled
+    yookassa_payment_id: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True
+    )
+    idempotence_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OrderExportAccess(Base):
+    """Выданный доступ к production-экспорту заказа. Один заказ — одна запись."""
+    __tablename__ = "order_export_access"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    order_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    factory_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("factories.id", ondelete="CASCADE"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(String(16), nullable=False)  # free_first | payment | pack
+    payment_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )

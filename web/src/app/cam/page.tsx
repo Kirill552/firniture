@@ -295,7 +295,7 @@ export default function CamPage() {
               </Badge>
               {status === 'Processing' && (
                 <div className="flex items-center space-x-2">
-                  <div className="w-12 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="w-12 h-2 bg-muted rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-blue-500 transition-all duration-300"
                       style={{ width: `${progress}%` }}

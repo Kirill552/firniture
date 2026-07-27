@@ -35,11 +35,12 @@ from api.observability import create_event, event_to_dict
 from api.runtime_settings import _parse_cors_origins, validate_runtime_settings
 
 from .auth import router as auth_router
+from .mvp_features import router as features_router
+from .payments import payments_router
 from .routers import dialogue_router
 from .routers import router as api_v1
 from .routes.manufacturing import router as manufacturing_router
 from .routes.product_analytics import router as analytics_router
-from .mvp_features import router as features_router
 
 app = FastAPI(title="Furniture AI API", version="0.1.0")
 
@@ -209,10 +210,13 @@ def health() -> dict:
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Закрыть AI-клиент при остановке сервера."""
+    """Закрыть внешние HTTP-клиенты при остановке сервера."""
     _emit_event("app.shutdown", {})
     from shared.ai_client import get_ai_client
     await get_ai_client().close()
+
+    from .payments import get_yookassa_client
+    await get_yookassa_client().close()
 
 
 app.include_router(api_v1)
@@ -221,3 +225,4 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(manufacturing_router)
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(features_router, prefix="/api/v1")
+app.include_router(payments_router)

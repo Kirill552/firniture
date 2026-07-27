@@ -27,6 +27,7 @@ import {
 import { CostSummary } from "@/components/bom/cost-summary"
 import { PaywallCard } from "@/components/bom/paywall-card"
 import type { FullBOM, BOMPanel, BOMHardware, BOMFastener, BOMEdgeBand } from "@/types/api"
+import { isPaymentRequiredError, readPaymentRequired } from "@/lib/payments"
 
 // Тип статуса сохранения
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -70,6 +71,8 @@ export default function BomPage() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')
+  // ЮKassa возвращает на /bom?orderId=…&payment=success|pack
+  const returnedFromPayment = Boolean(searchParams.get('payment'))
 
   // BOM data state
   const [bom, setBom] = useState<FullBOM | null>(null)
@@ -580,6 +583,11 @@ export default function BomPage() {
         }),
       })
 
+      // 402 — заказ не оплачен: пейволл покажет блок оплаты вместо ошибки
+      if (response.status === 402) {
+        throw await readPaymentRequired(response, effectiveOrderId)
+      }
+
       const data = await response.json()
 
       if (data.job_id) {
@@ -590,8 +598,9 @@ export default function BomPage() {
         setIsGeneratingDxf(false)
       }
     } catch (error) {
-      setDxfError(error instanceof Error ? error.message : 'Ошибка генерации')
       setIsGeneratingDxf(false)
+      if (isPaymentRequiredError(error)) throw error
+      setDxfError(error instanceof Error ? error.message : 'Ошибка генерации')
     }
   }
 
@@ -634,7 +643,16 @@ export default function BomPage() {
     }
 
     if (!dxfDownloadUrl && !isGeneratingDxf) {
-      await handleGenerateDxf()
+      try {
+        await handleGenerateDxf()
+      } catch (error) {
+        setGcodeError(
+          isPaymentRequiredError(error)
+            ? 'Экспорт заказа не оплачен — оплатите доступ в блоке ниже'
+            : 'Не удалось подготовить DXF'
+        )
+        return
+      }
     }
 
     if (isGeneratingDxf) {
@@ -831,6 +849,11 @@ export default function BomPage() {
         }),
       })
 
+      // 402 — заказ не оплачен: пейволл покажет блок оплаты вместо ошибки
+      if (response.status === 402) {
+        throw await readPaymentRequired(response, effectiveOrderId ?? '')
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Ошибка генерации PDF')
@@ -854,6 +877,7 @@ export default function BomPage() {
         description: "Карта раскроя успешно сгенерирована",
       })
     } catch (error) {
+      if (isPaymentRequiredError(error)) throw error
       setPdfError(error instanceof Error ? error.message : 'Ошибка генерации PDF')
       toast({
         title: "Ошибка",
@@ -1111,6 +1135,7 @@ export default function BomPage() {
                 onGeneratePdf={handleGeneratePdf}
                 isGeneratingDxf={isGeneratingDxf}
                 isGeneratingPdf={isGeneratingPdf}
+                returnedFromPayment={returnedFromPayment}
               />
             )}
 

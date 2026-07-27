@@ -117,8 +117,8 @@ function LoginFormInner() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[100dvh] bg-[#f3f6f8] px-4 py-8">
-      <Card className="w-full max-w-[420px] overflow-hidden bg-white border border-[#d7dde2] shadow-sm rounded-xl">
+    <div className="flex items-center justify-center min-h-[100dvh] bg-background px-4 py-8">
+      <Card className="w-full max-w-[420px] overflow-hidden bg-card border border-border shadow-sm rounded-xl">
         <AnimatePresence mode="wait">
           {step === "form" ? (
             <motion.div
@@ -130,7 +130,7 @@ function LoginFormInner() {
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
               {/* Mode switch - always visible on the form step */}
-              <div className="flex border-b border-[#d7dde2] bg-white">
+              <div className="flex border-b border-border bg-card">
                 <button
                   type="button"
                   onClick={() => {
@@ -139,8 +139,8 @@ function LoginFormInner() {
                   }}
                   className={`flex-1 py-3 text-center text-sm font-semibold border-b-2 transition-all duration-150 cursor-pointer ${
                     activeMode === "login"
-                      ? "border-[#c7ff00] text-[#171a1d]"
-                      : "border-transparent text-[#66707a] hover:text-[#171a1d]"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Войти
@@ -153,8 +153,8 @@ function LoginFormInner() {
                   }}
                   className={`flex-1 py-3 text-center text-sm font-semibold border-b-2 transition-all duration-150 cursor-pointer ${
                     activeMode === "register"
-                      ? "border-[#c7ff00] text-[#171a1d]"
-                      : "border-transparent text-[#66707a] hover:text-[#171a1d]"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Создать аккаунт
@@ -174,7 +174,7 @@ function LoginFormInner() {
                     className="p-6 space-y-4"
                   >
                     <div className="space-y-1.5">
-                      <Label htmlFor="email" className="text-xs font-semibold text-[#171a1d]">Email</Label>
+                      <Label htmlFor="email" className="text-xs font-semibold text-foreground">Email</Label>
                       <Input
                         id="email"
                         type="email"
@@ -183,7 +183,7 @@ function LoginFormInner() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         autoComplete="email"
-                        className="h-10 border-[#d7dde2] focus-visible:ring-[#c7ff00] text-[#171a1d] placeholder:text-[#66707a]/50 text-sm"
+                        className="h-10 border-border focus-visible:ring-ring text-foreground placeholder:text-muted-foreground/50 text-sm"
                       />
                     </div>
 
@@ -193,7 +193,7 @@ function LoginFormInner() {
 
                     <Button 
                       type="submit" 
-                      className="w-full h-10 bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] font-semibold active:scale-[0.98] transition-all duration-150 rounded-lg cursor-pointer"
+                      className="w-full h-10 cursor-pointer"
                       disabled={isLoading}
                     >
                       {isLoading ? "Отправка..." : "Получить ссылку"}
@@ -211,7 +211,7 @@ function LoginFormInner() {
                     className="p-6 space-y-4"
                   >
                     <div className="space-y-1.5">
-                      <Label htmlFor="reg-email" className="text-xs font-semibold text-[#171a1d]">Email</Label>
+                      <Label htmlFor="reg-email" className="text-xs font-semibold text-foreground">Email</Label>
                       <Input
                         id="reg-email"
                         type="email"
@@ -220,14 +220,14 @@ function LoginFormInner() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         autoComplete="email"
-                        className="h-10 border-[#d7dde2] focus-visible:ring-[#c7ff00] text-[#171a1d] placeholder:text-[#66707a]/50 text-sm"
+                        className="h-10 border-border focus-visible:ring-ring text-foreground placeholder:text-muted-foreground/50 text-sm"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="factory-name" className="text-xs font-semibold text-[#171a1d]">Название фабрики</Label>
+                      <Label htmlFor="factory-name" className="text-xs font-semibold text-foreground">Название фабрики</Label>
                       <div className="relative">
-                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#66707a]/70" />
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
                         <Input
                           id="factory-name"
                           type="text"
@@ -235,7 +235,7 @@ function LoginFormInner() {
                           required
                           value={factoryName}
                           onChange={(e) => setFactoryName(e.target.value)}
-                          className="h-10 pl-10 border-[#d7dde2] focus-visible:ring-[#c7ff00] text-[#171a1d] placeholder:text-[#66707a]/50 text-sm"
+                          className="h-10 pl-10 border-border focus-visible:ring-ring text-foreground placeholder:text-muted-foreground/50 text-sm"
                         />
                       </div>
                     </div>
@@ -246,13 +246,13 @@ function LoginFormInner() {
 
                     <Button 
                       type="submit" 
-                      className="w-full h-10 bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] font-semibold active:scale-[0.98] transition-all duration-150 rounded-lg cursor-pointer"
+                      className="w-full h-10 cursor-pointer"
                       disabled={isLoading}
                     >
                       {isLoading ? "Регистрация..." : "Зарегистрироваться"}
                     </Button>
                     
-                    <p className="text-[10px] text-center text-[#66707a] leading-relaxed">
+                    <p className="text-[10px] text-center text-muted-foreground leading-relaxed">
                       Нажимая кнопку, вы соглашаетесь с правилами сервиса
                     </p>
                   </motion.form>
@@ -267,17 +267,17 @@ function LoginFormInner() {
               animate="animate"
               exit="exit"
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="p-6 text-center space-y-4 bg-white"
+              className="p-6 text-center space-y-4 bg-card"
             >
               <div className="flex justify-center">
-                <div className="w-12 h-12 rounded-full bg-[#c7ff00]/10 flex items-center justify-center">
-                  <Mail className="w-6 h-6 text-[#171a1d]" />
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Mail className="w-6 h-6 text-foreground" />
                 </div>
               </div>
               
               <div className="space-y-1">
-                <CardTitle className="text-lg font-bold text-[#171a1d]">Проверьте почту</CardTitle>
-                <CardDescription className="text-xs text-[#66707a] px-2 leading-relaxed">
+                <CardTitle className="text-lg font-bold text-foreground">Проверьте почту</CardTitle>
+                <CardDescription className="text-xs text-muted-foreground px-2 leading-relaxed">
                   {isNewUser
                     ? `Ссылка для завершения регистрации отправлена на ${email}`
                     : `Если аккаунт с таким адресом есть, ссылка придёт на почту ${email}`
@@ -299,7 +299,7 @@ function LoginFormInner() {
                 </div>
               )}
 
-              <div className="bg-[#f3f6f8] rounded-xl p-3 text-xs text-[#66707a] text-left space-y-2">
+              <div className="bg-muted rounded-xl p-3 text-xs text-muted-foreground text-left space-y-2">
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                   Ссылка действительно в течение 15 минут.
@@ -312,7 +312,7 @@ function LoginFormInner() {
 
               <Button
                 variant="outline"
-                className="w-full h-10 border-[#d7dde2] hover:bg-[#f3f6f8] text-[#171a1d] font-semibold active:scale-[0.98] transition-all duration-150 rounded-lg cursor-pointer text-xs"
+                className="w-full h-10 text-xs cursor-pointer"
                 onClick={resetFlow}
               >
                 <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -329,8 +329,8 @@ function LoginFormInner() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center min-h-[100dvh] bg-[#f3f6f8]">
-        <div className="text-sm text-[#66707a]">Загрузка...</div>
+      <div className="flex items-center justify-center min-h-[100dvh] bg-background">
+        <div className="text-sm text-muted-foreground">Загрузка...</div>
       </div>
     }>
       <LoginFormInner />

@@ -150,6 +150,40 @@
         "title": "ArtifactDownload",
         "type": "object"
       },
+      "BalanceResponse": {
+        "description": "Баланс фабрики: сколько заказов оплачено вперёд и почём.",
+        "properties": {
+          "free_first_available": {
+            "title": "Free First Available",
+            "type": "boolean"
+          },
+          "pack_credits": {
+            "title": "Pack Credits",
+            "type": "integer"
+          },
+          "pack_price_rub": {
+            "title": "Pack Price Rub",
+            "type": "integer"
+          },
+          "pack_size": {
+            "title": "Pack Size",
+            "type": "integer"
+          },
+          "price_rub": {
+            "title": "Price Rub",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pack_credits",
+          "free_first_available",
+          "price_rub",
+          "pack_price_rub",
+          "pack_size"
+        ],
+        "title": "BalanceResponse",
+        "type": "object"
+      },
       "CAMJobListItem": {
         "description": "Краткая информация о CAM задаче для списка.",
         "properties": {
@@ -589,6 +623,40 @@
           "height_mm"
         ],
         "title": "CalculatedPanel",
+        "type": "object"
+      },
+      "CheckoutResponse": {
+        "description": "Ответ обоих checkout-эндпоинтов.",
+        "properties": {
+          "amount_rub": {
+            "description": "Сумма к оплате в рублях",
+            "title": "Amount Rub",
+            "type": "integer"
+          },
+          "confirmation_url": {
+            "description": "Страница оплаты ЮKassa",
+            "title": "Confirmation Url",
+            "type": "string"
+          },
+          "payment_id": {
+            "description": "ID платежа в нашей БД",
+            "format": "uuid",
+            "title": "Payment Id",
+            "type": "string"
+          },
+          "status": {
+            "description": "pending | succeeded | canceled",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "confirmation_url",
+          "amount_rub",
+          "status"
+        ],
+        "title": "CheckoutResponse",
         "type": "object"
       },
       "ClaimDraftResponse": {
@@ -2802,6 +2870,48 @@
         "title": "Order",
         "type": "object"
       },
+      "OrderAccessResponse": {
+        "description": "Состояние доступа к экспорту конкретного заказа.",
+        "properties": {
+          "access": {
+            "title": "Access",
+            "type": "boolean"
+          },
+          "free_first_available": {
+            "title": "Free First Available",
+            "type": "boolean"
+          },
+          "pack_credits": {
+            "title": "Pack Credits",
+            "type": "integer"
+          },
+          "price_rub": {
+            "title": "Price Rub",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "free_first | payment | pack | null",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "access",
+          "reason",
+          "price_rub",
+          "pack_credits",
+          "free_first_available"
+        ],
+        "title": "OrderAccessResponse",
+        "type": "object"
+      },
       "OrderCreate": {
         "properties": {
           "customer_ref": {
@@ -2951,6 +3061,26 @@
           "panels"
         ],
         "title": "PDFCuttingMapRequest",
+        "type": "object"
+      },
+      "PackCheckoutRequest": {
+        "description": "Тело оплаты пакета. Необязательно: нужно только для возврата на заказ.",
+        "properties": {
+          "order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Заказ, из которого пользователь ушёл платить",
+            "title": "Order Id"
+          }
+        },
+        "title": "PackCheckoutRequest",
         "type": "object"
       },
       "PanelInput": {
@@ -3466,6 +3596,18 @@
           "token"
         ],
         "title": "VerifyRequest",
+        "type": "object"
+      },
+      "WebhookAck": {
+        "description": "Подтверждение приёма уведомления ЮKassa.",
+        "properties": {
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "WebhookAck",
         "type": "object"
       },
       "_LegacyApprovalRequest": {
@@ -5439,6 +5581,207 @@
           }
         ],
         "summary": "Calculate Panels Endpoint"
+      }
+    },
+    "/api/v1/payments/balance": {
+      "get": {
+        "description": "Сколько заказов у фабрики оплачено вперёд и почём следующий.",
+        "operationId": "get_balance_api_v1_payments_balance_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Balance",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/orders/{order_id}/access": {
+      "get": {
+        "description": "Есть ли доступ к экспорту заказа и чем его можно открыть.",
+        "operationId": "get_order_access_api_v1_payments_orders__order_id__access_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderAccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Order Access",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/orders/{order_id}/checkout": {
+      "post": {
+        "description": "Оплатить один заказ целиком. 409, если доступ уже есть.",
+        "operationId": "checkout_order_api_v1_payments_orders__order_id__checkout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Checkout Order",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/packs/checkout": {
+      "post": {
+        "description": "Купить пакет из 10 заказов. Кредиты не сгорают.",
+        "operationId": "checkout_pack_api_v1_payments_packs_checkout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PackCheckoutRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Checkout Pack",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/webhook/yookassa": {
+      "post": {
+        "description": "Уведомление ЮKassa. Без авторизации — ЮKassa её не присылает.",
+        "operationId": "yookassa_webhook_api_v1_payments_webhook_yookassa_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Yookassa Webhook",
+        "tags": [
+          "Payments"
+        ]
       }
     },
     "/api/v1/product-analytics/events": {

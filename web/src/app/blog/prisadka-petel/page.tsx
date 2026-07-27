@@ -6,6 +6,19 @@ export const metadata: Metadata = {
   description:
     'Как разметить фасад под чашку петли 35 мм: расстояние от края, система 32 мм, глубина сверления, количество петель по высоте двери. Схемы и таблицы.',
   alternates: { canonical: '/blog/prisadka-petel' },
+  openGraph: {
+    type: 'article',
+    locale: 'ru_RU',
+    url: '/blog/prisadka-petel',
+    siteName: 'АвтоРаскрой',
+    title: 'Присадка петель: схема разметки под мебельные петли 35 мм — АвтоРаскрой',
+    description: 'Как разметить фасад под чашку петли 35 мм: расстояние от края, система 32 мм, глубина сверления, количество петель по высоте двери. Схемы и таблицы.',
+    images: [{ url: '/og-blog.jpg', width: 1200, height: 630, alt: 'АвтоРаскрой' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/og-blog.jpg'],
+  },
 };
 
 const articleJsonLd = {

@@ -6,6 +6,19 @@ export const metadata: Metadata = {
   description:
     'Какой DXF понимает станок: версия R12 или R2013, слои под контур и присадку, единицы, замкнутые контуры вместо сплайнов. И где в цепочке появляется G-code.',
   alternates: { canonical: '/blog/dxf-dlya-chpu' },
+  openGraph: {
+    type: 'article',
+    locale: 'ru_RU',
+    url: '/blog/dxf-dlya-chpu',
+    siteName: 'АвтоРаскрой',
+    title: 'DXF для ЧПУ: версия формата, слои и подготовка файла — АвтоРаскрой',
+    description: 'Какой DXF понимает станок: версия R12 или R2013, слои под контур и присадку, единицы, замкнутые контуры вместо сплайнов. И где в цепочке появляется G-code.',
+    images: [{ url: '/og-blog.jpg', width: 1200, height: 630, alt: 'АвтоРаскрой' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/og-blog.jpg'],
+  },
 };
 
 const articleJsonLd = {

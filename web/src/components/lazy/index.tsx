@@ -24,10 +24,10 @@ export const LazyThreeViewer = dynamic(
   () => import('../three-viewer').then(mod => ({ default: mod.ThreeViewer })),
   {
     loading: () => (
-      <div className="w-full h-full bg-gray-100 dark:bg-gray-900 animate-pulse flex items-center justify-center">
+      <div className="w-full h-full bg-background animate-pulse flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="w-16 h-16 mx-auto rounded-lg bg-gray-200 dark:bg-gray-800" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Загрузка 3D-просмотра...</p>
+          <div className="w-16 h-16 mx-auto rounded-lg bg-muted" />
+          <p className="text-sm text-muted-foreground">Загрузка 3D-просмотра...</p>
         </div>
       </div>
     ),

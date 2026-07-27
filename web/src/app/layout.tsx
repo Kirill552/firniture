@@ -23,8 +23,36 @@ const onest = Onest({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://avtoraskroy.ru"),
-  title: "АвтоРаскрой",
-  description: "Умный раскрой и присадка для мебельных фабрик",
+  title: {
+    default: "АвтоРаскрой — эскиз в точный заказ",
+    template: "%s — АвтоРаскрой",
+  },
+  description:
+    "Загрузите фото или PDF эскиза: сервис снимет размеры, соберёт спецификацию и выдаст DXF с присадкой и PDF карты раскроя. Первый заказ бесплатно.",
+  openGraph: {
+    type: "website",
+    locale: "ru_RU",
+    url: "https://avtoraskroy.ru",
+    siteName: "АвтоРаскрой",
+    title: "Эскиз клиента — в точный заказ",
+    description:
+      "Фото наброска превращается в спецификацию, DXF с точками присадки и карту раскроя. Первый заказ бесплатно, дальше 890 ₽ за заказ.",
+    images: [
+      {
+        url: "/og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "АвтоРаскрой: эскиз превращается в точный заказ",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Эскиз клиента — в точный заказ",
+    description:
+      "Спецификация, DXF с присадкой и карта раскроя из фото наброска. Первый заказ бесплатно.",
+    images: ["/og.jpg"],
+  },
   // Верификация вебмастеров (Яндекс + Google Search Console)
   other: {
     "yandex-verification": "85f3807d99849b7b",

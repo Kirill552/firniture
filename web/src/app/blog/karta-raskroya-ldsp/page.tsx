@@ -6,6 +6,19 @@ export const metadata: Metadata = {
   description:
     'Что такое карта раскроя, как считать пропил и припуск на кромку, почему деталь не влезает в лист 2800×2070 и как получить карту раскроя ЛДСП онлайн из эскиза.',
   alternates: { canonical: '/blog/karta-raskroya-ldsp' },
+  openGraph: {
+    type: 'article',
+    locale: 'ru_RU',
+    url: '/blog/karta-raskroya-ldsp',
+    siteName: 'АвтоРаскрой',
+    title: 'Карта раскроя ЛДСП: как составить и получить онлайн — АвтоРаскрой',
+    description: 'Что такое карта раскроя, как считать пропил и припуск на кромку, почему деталь не влезает в лист 2800×2070 и как получить карту раскроя ЛДСП онлайн из эскиза.',
+    images: [{ url: '/og-blog.jpg', width: 1200, height: 630, alt: 'АвтоРаскрой' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/og-blog.jpg'],
+  },
 };
 
 const articleJsonLd = {

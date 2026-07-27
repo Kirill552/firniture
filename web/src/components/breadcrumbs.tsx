@@ -25,7 +25,7 @@ const LABELS: Record<string, string> = {
   "settings": "Настройки",
   "history": "История заказов",
   "audit": "Аудит",
-  "pricing": "Тарифы",
+  "pricing": "Цены",
   "login": "Вход",
 }
 

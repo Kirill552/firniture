@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>АвтоРаскрой</title>
+  <rect width="32" height="32" rx="7" fill="#171a1d"/>
+  <path d="M6 12 Q 10.5 7, 15 12 T 26 12" stroke="#f3f6f8" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+  <path d="M6 21 H 26" stroke="#c7ff00" stroke-width="3.2" stroke-linecap="round"/>
+</svg>

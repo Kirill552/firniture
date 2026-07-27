@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button-variants"
 
 export interface ProductHeaderProps {
   title: string

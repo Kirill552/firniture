@@ -6,6 +6,19 @@ export const metadata: Metadata = {
   description:
     'Из чего состоит спецификация мебельного изделия: деталировка панелей, кромка, фурнитура, крепёж. Что требует ГОСТ, что нужно цеху и как не потерять ревизию.',
   alternates: { canonical: '/blog/specifikaciya-mebeli' },
+  openGraph: {
+    type: 'article',
+    locale: 'ru_RU',
+    url: '/blog/specifikaciya-mebeli',
+    siteName: 'АвтоРаскрой',
+    title: 'Спецификация мебели: что в неё входит и как собрать — АвтоРаскрой',
+    description: 'Из чего состоит спецификация мебельного изделия: деталировка панелей, кромка, фурнитура, крепёж. Что требует ГОСТ, что нужно цеху и как не потерять ревизию.',
+    images: [{ url: '/og-blog.jpg', width: 1200, height: 630, alt: 'АвтоРаскрой' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/og-blog.jpg'],
+  },
 };
 
 const articleJsonLd = {

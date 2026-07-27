@@ -5,8 +5,8 @@ const BASE_URL = 'https://avtoraskroy.ru';
 /** Дата последнего изменения по каждому пути. */
 const PAGES: Array<{ path: string; lastModified: string }> = [
   { path: '', lastModified: '2026-07-26' },
-  { path: '/pricing', lastModified: '2026-07-20' },
-  { path: '/oferta', lastModified: '2026-07-14' },
+  { path: '/pricing', lastModified: '2026-07-27' },
+  { path: '/oferta', lastModified: '2026-07-27' },
   { path: '/privacy', lastModified: '2026-07-14' },
   { path: '/blog', lastModified: '2026-07-26' },
   { path: '/blog/prisadka-petel', lastModified: '2026-07-12' },
