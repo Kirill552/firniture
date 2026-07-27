@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LEGAL } from '@/lib/legal'
 
 export const metadata: Metadata = {
-  title: 'Цены — АвтоРаскрой',
+  title: 'Цены',
   description:
     'Первый заказ бесплатно, дальше 890 ₽ за заказ целиком. Пакет 10 заказов — 7900 ₽, кредиты не сгорают. Повторное скачивание оплаченного заказа бесплатно.',
   alternates: { canonical: '/pricing' },
@@ -82,7 +82,7 @@ const PLANS = [
  */
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-[#F5F5F1] py-12 sm:py-24 text-[#111111]">
+    <div className="min-h-screen bg-[#f3f6f8] py-12 sm:py-24 text-[#171a1d]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
@@ -102,7 +102,7 @@ export default function PricingPage() {
           {PLANS.map((plan) => (
             <Card
               key={plan.name}
-              className={`flex flex-col h-full ${plan.highlighted ? 'border-[#D8352A] border-2' : 'border-[#9C9C95]'}`}
+              className={`flex flex-col h-full ${plan.highlighted ? 'border-[#171a1d] border-2' : 'border-[#d7dde2]'}`}
             >
               <CardHeader>
                 <CardTitle>{plan.name}</CardTitle>
@@ -113,7 +113,7 @@ export default function PricingPage() {
                 <ul className="space-y-3 text-sm flex-grow">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start">
-                      <Check className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" style={{ color: '#D8352A' }} />
+                      <Check className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" style={{ color: '#171a1d' }} />
                       <span>{feature}</span>
                     </li>
                   ))}

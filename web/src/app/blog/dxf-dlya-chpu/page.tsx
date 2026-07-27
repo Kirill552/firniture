@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'DXF для ЧПУ: версия формата, слои и подготовка файла — АвтоРаскрой',
+  title: 'DXF для ЧПУ: версия формата, слои и подготовка файла',
   description:
     'Какой DXF понимает станок: версия R12 или R2013, слои под контур и присадку, единицы, замкнутые контуры вместо сплайнов. И где в цепочке появляется G-code.',
   alternates: { canonical: '/blog/dxf-dlya-chpu' },

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Спецификация мебели: что в неё входит и как собрать — АвтоРаскрой',
+  title: 'Спецификация мебели: что в неё входит и как собрать',
   description:
     'Из чего состоит спецификация мебельного изделия: деталировка панелей, кромка, фурнитура, крепёж. Что требует ГОСТ, что нужно цеху и как не потерять ревизию.',
   alternates: { canonical: '/blog/specifikaciya-mebeli' },

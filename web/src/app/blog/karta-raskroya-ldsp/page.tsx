@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Карта раскроя ЛДСП: как составить и получить онлайн — АвтоРаскрой',
+  title: 'Карта раскроя ЛДСП: как составить и получить онлайн',
   description:
     'Что такое карта раскроя, как считать пропил и припуск на кромку, почему деталь не влезает в лист 2800×2070 и как получить карту раскроя ЛДСП онлайн из эскиза.',
   alternates: { canonical: '/blog/karta-raskroya-ldsp' },

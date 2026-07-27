@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { LEGAL } from '@/lib/legal';
 
 export const metadata: Metadata = {
-  title: 'Публичная оферта — АвтоРаскрой',
+  title: 'Публичная оферта',
   description:
     'Договор публичной оферты сервиса АвтоРаскрой: распознавание эскизов мебели, спецификация, DXF и PDF раскроя.',
 };

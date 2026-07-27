@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Толщина кромки ПВХ: 0,4, 1 и 2 мм — где какую клеить — АвтоРаскрой',
+  title: 'Толщина кромки ПВХ: 0,4, 1 и 2 мм — где какую клеить',
   description:
     'Чем отличается кромка ПВХ 0,4, 1 и 2 мм, куда какую ставят, как вычитать её из размера детали и сколько метров кромки уйдёт на корпус. С расчётом на примере.',
   alternates: { canonical: '/blog/kromka-pvh-tolshchina' },

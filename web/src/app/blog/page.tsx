@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Статьи о мебельном производстве — АвтоРаскрой',
+  title: 'Статьи о мебельном производстве',
   description:
     'Практические гайды для мебельных технологов: раскрой ЛДСП, присадка фурнитуры, кромка, спецификации, DXF для производства.',
   openGraph: {

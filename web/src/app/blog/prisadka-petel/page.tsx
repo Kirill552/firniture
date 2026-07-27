@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Присадка петель: схема разметки под мебельные петли 35 мм — АвтоРаскрой',
+  title: 'Присадка петель: схема разметки под мебельные петли 35 мм',
   description:
     'Как разметить фасад под чашку петли 35 мм: расстояние от края, система 32 мм, глубина сверления, количество петель по высоте двери. Схемы и таблицы.',
   alternates: { canonical: '/blog/prisadka-petel' },

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { LEGAL } from '@/lib/legal';
 
 export const metadata: Metadata = {
-  title: 'Политика конфиденциальности — АвтоРаскрой',
+  title: 'Политика конфиденциальности',
   description:
     'Политика обработки персональных данных сервиса АвтоРаскрой в соответствии с 152-ФЗ.',
 };
