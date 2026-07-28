@@ -86,23 +86,35 @@ export default function NewOrderPage() {
       thickness: params.thickness_mm ?? 16,
     };
     setModules((current) => [...current, added]);
+    // Добавленный модуль сразу становится текущим: и на пироге, и в полях ниже.
     setSelectedModule(modules.length);
-    if (modules.length === 0) {
-      updateParam("cabinet_type", added.type);
-      updateParam("width_mm", added.width);
-      updateParam("height_mm", added.height);
-      updateParam("depth_mm", added.depth);
-    }
+    updateParam("cabinet_type", added.type);
+    updateParam("width_mm", added.width);
+    updateParam("height_mm", added.height);
+    updateParam("depth_mm", added.depth);
+    updateParam("shelf_count", added.shelves);
+    updateParam("door_count", added.doors);
   };
 
-  // Правка полок, фасадов и ножек прямо на пироге. Первый модуль ведёт форму
-  // ниже: он же уходит в расчёт, и расхождение между картинкой и полями
-  // было бы обманом.
+  // Поля ниже всегда описывают тот модуль, который выбран на пироге.
+  // Иначе картинка показывает пенал, а размеры под ней — от тумбы.
+  const selectModule = (index: number) => {
+    const target = modules[index];
+    if (!target) return;
+    setSelectedModule(index);
+    updateParam("cabinet_type", target.type);
+    updateParam("width_mm", target.width);
+    updateParam("height_mm", target.height);
+    updateParam("depth_mm", target.depth);
+    updateParam("shelf_count", target.shelves);
+    updateParam("door_count", target.doors);
+  };
+
   const updateModule = (index: number, patch: Partial<ModuleShape>) => {
     setModules((current) =>
       current.map((module, i) => (i === index ? { ...module, ...patch } : module))
     );
-    if (index === 0) {
+    if (index === selectedModule) {
       if (patch.shelves !== undefined) updateParam("shelf_count", patch.shelves);
       if (patch.doors !== undefined) updateParam("door_count", patch.doors);
     }
@@ -229,7 +241,7 @@ export default function NewOrderPage() {
                 modules={modules}
                 wallWidth={wallWidth}
                 selectedIndex={selectedModule}
-                onSelect={setSelectedModule}
+                onSelect={selectModule}
                 onChange={updateModule}
               />
             </div>
