@@ -6,10 +6,15 @@ export interface ParsedAiResponse {
 }
 
 function extractButtonLabels(markerContent: string): string[] {
-  return markerContent
-    .split(',')
-    .map((label) => label.trim().replace(/^['"]|['"]$/g, ''))
-    .map((label) => label.replace(/\s*\([A-Za-z][A-Za-z0-9_-]*\)\s*$/, '').trim())
+  // Подпись сама бывает с запятой: «Да, нужны ручки». Сначала берём то, что
+  // в кавычках, иначе одна кнопка разваливается на две бессмысленные.
+  const quoted = markerContent.match(/"([^"]+)"|'([^']+)'/g);
+  const rawLabels = quoted
+    ? quoted.map((label) => label.slice(1, -1))
+    : markerContent.split(',');
+
+  return rawLabels
+    .map((label) => label.trim().replace(/\s*\([A-Za-z][A-Za-z0-9_-]*\)\s*$/, '').trim())
     .filter(Boolean);
 }
 

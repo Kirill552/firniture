@@ -313,6 +313,7 @@ class AIClient:
         prompt: str,
         model: str | None = None,
         max_tokens: int | None = None,
+        mime_type: str = "image/jpeg",
     ) -> GPTResponse:
         """Отправить изображение + промпт, получить текстовый ответ.
 
@@ -323,7 +324,7 @@ class AIClient:
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}},
             ],
         }]
         return await self.chat_completion(
