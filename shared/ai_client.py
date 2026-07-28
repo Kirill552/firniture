@@ -312,8 +312,13 @@ class AIClient:
         image_base64: str,
         prompt: str,
         model: str | None = None,
+        max_tokens: int | None = None,
     ) -> GPTResponse:
-        """Отправить изображение + промпт, получить текстовый ответ."""
+        """Отправить изображение + промпт, получить текстовый ответ.
+
+        Модели с размышлениями тратят часть лимита на служебный блок, поэтому
+        для строгого JSON вызывающая сторона может поднять max_tokens.
+        """
         messages = [{
             "role": "user",
             "content": [
@@ -321,7 +326,11 @@ class AIClient:
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
             ],
         }]
-        return await self.chat_completion(messages, model=self._model(model, "vision"))
+        return await self.chat_completion(
+            messages,
+            model=self._model(model, "vision"),
+            max_tokens=max_tokens,
+        )
 
     # --- Embeddings ---
 

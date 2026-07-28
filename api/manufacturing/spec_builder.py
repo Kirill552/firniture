@@ -24,6 +24,7 @@ from api.drilling_calculator import (
     build_hinge_ops_typed,
     build_slide_ops_typed,
 )
+from api.drilling_templates import get_template_for_position
 from api.hardware_rules import get_hardware_provenance
 from api.manufacturing.contracts import (
     DrillOperation,
@@ -81,7 +82,11 @@ class CabinetInput(BaseModel):
     # Hardware provenance
     hinge_type: str | None = Field(None, description="Тип петель (напр. blum_clip_top_110)")
     slide_type: str | None = Field(None, description="Тип направляющих")
-
+    hinge_template_id: str | None = Field(None, description="ID шаблона петли из каталога")
+    slide_template_id: str | None = Field(None, description="ID шаблона направляющих из каталога")
+    hinge_position_type: str | None = Field(None, description="Тип позиции петли из каталога")
+    hinge_params: dict[str, Any] = Field(default_factory=dict, description="Параметры позиции петли")
+    hinge_needs_review: bool = Field(False, description="Запретить непроверенный шаблон петли")
     # Slot params
     back_slot_width_mm: float = Field(4.0, gt=0, description="Ширина паза под заднюю стенку")
     back_slot_depth_mm: float = Field(10.0, gt=0, description="Глубина паза под заднюю стенку")
@@ -437,6 +442,28 @@ def _assemble_corner(inp: CabinetInput, ids: _IdGenerator) -> list[PanelSpec]:
     return _assemble_wall(inp, ids)
 
 
+def _resolve_hinge_template(inp: CabinetInput) -> tuple[str, str, bool]:
+    """Вернуть ID шаблона, источник и признак ручной проверки."""
+    default_id = "hinge_35mm_overlay"
+    needs_review = inp.hinge_needs_review or bool(inp.hinge_params.get("needs_review"))
+    if needs_review or not inp.hinge_position_type or not inp.hinge_params:
+        return default_id, "default", needs_review
+    template = get_template_for_position(inp.hinge_position_type, inp.hinge_params)
+    if template is None or not hasattr(template, "hinge_type"):
+        return default_id, "default", needs_review
+    template_ids = {
+        "overlay": "hinge_35mm_overlay",
+        "half_overlay": "hinge_35mm_half_overlay",
+        "inset": "hinge_35mm_inset",
+        "corner_45": "hinge_35mm_corner_45",
+        "mini": "hinge_26mm_mini",
+    }
+    resolved_id = template_ids.get(template.hinge_type)
+    if resolved_id is None:
+        return default_id, "default", needs_review
+    return resolved_id, "catalog", needs_review
+
+
 _ASSEMBLERS: dict[CabinetType, Any] = {
     CabinetType.WALL: _assemble_wall,
     CabinetType.BASE: _assemble_base,
@@ -473,6 +500,7 @@ def build_spec(inp: CabinetInput) -> BuildResult:
         raise SpecValidationError(f"Неизвестный тип корпуса: {inp.cabinet_type}")
 
     panels = assembler(inp, ids)
+    hinge_template_id, hinge_source, hinge_review = _resolve_hinge_template(inp)
 
     # Hardware: attach typed hinge ops from drilling_calculator (Task 6)
     hinge_count_per_door = 2 if inp.height_mm <= 1000 else 3
@@ -487,8 +515,8 @@ def build_spec(inp: CabinetInput) -> BuildResult:
                     ids,
                     hinge_count_per_door,
                     hinge_sku=inp.hinge_type or "generic_hinge",
-                    template="hinge_35mm_overlay",
-                    source="catalog",
+                    template=hinge_template_id,
+                    source=hinge_source,
                 )
                 hinge_ops = _assign_unique_ids(hinge_ops, ids, "hinge")
                 panel.operations = list(panel.operations) + hinge_ops  # new list
@@ -504,6 +532,7 @@ def build_spec(inp: CabinetInput) -> BuildResult:
                     panel_height_mm=panel.height_mm,
                     panel_depth_mm=panel.width_mm,
                     drawer_positions_mm=positions,
+                    template_id=inp.slide_template_id or "slide_ball_h45",
                     hardware_sku=inp.slide_type or "generic_slide",
                     source="catalog",
                     face=Face.LEFT if "left" in panel.id.lower() else Face.RIGHT,
@@ -512,15 +541,28 @@ def build_spec(inp: CabinetInput) -> BuildResult:
                 # assign fresh list for independence
                 panel.operations = list(panel.operations) + slide_ops
 
-    # Structured provenance with SKU/template/source (Task 6)
+    # Структурированное происхождение SKU, шаблона и источника.
     provenance: dict[str, Any] = get_hardware_provenance(
         hinge_type=inp.hinge_type,
         slide_type=inp.slide_type,
     )
     if inp.hinge_type:
         provenance.setdefault("hinge_type", inp.hinge_type)
+        provenance.setdefault("hinges", {})
+        provenance["hinges"].update({
+            "sku": inp.hinge_type,
+            "template": hinge_template_id,
+            "source": hinge_source,
+            "needs_review": hinge_review,
+        })
     if inp.slide_type:
         provenance.setdefault("slide_type", inp.slide_type)
+        provenance.setdefault("slides", {})
+        provenance["slides"].update({
+            "sku": inp.slide_type,
+            "template": inp.slide_template_id or "slide_ball_h45",
+            "source": "catalog",
+        })
 
     # Ensure all panels have independent operation lists (deep copy lists)
     for p in panels:

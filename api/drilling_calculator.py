@@ -13,8 +13,6 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from api.drilling_templates import (
-    HINGE_TEMPLATES,
-    SLIDE_TEMPLATES,
     get_hinge_template,
     get_slide_template,
 )
@@ -78,7 +76,7 @@ def calculate_hinge_drill_points(
     """
     template = get_hinge_template(template_id)
     if template is None:
-        template = HINGE_TEMPLATES["hinge_35mm_overlay"]
+        return []
 
     # Количество петель
     if hinge_count is None:
@@ -96,7 +94,7 @@ def calculate_hinge_drill_points(
         y_from_bottom = panel_height_mm - y_from_top
 
         # Центр чашки петли
-        cup_x = template.edge_offset_mm
+        cup_x = template.edge_offset_mm + (template.body_offset_mm - 37.0)
         cup_y = y_from_bottom
 
         points.append(DrillPoint(
@@ -153,7 +151,7 @@ def calculate_slide_drill_points(
     """
     template = get_slide_template(template_id)
     if template is None:
-        template = SLIDE_TEMPLATES["slide_ball_h45"]
+        return []
 
     # Длина направляющих
     slide_length = calculate_slide_length(panel_depth_mm)

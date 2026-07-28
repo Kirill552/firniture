@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { X, Send, Loader2, Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseAiResponse } from "@/lib/ai-response";
 import type { ChatMessage, OrderCreatorParams } from "@/types/api";
 
 interface InlineChatPanelProps {
@@ -79,36 +80,60 @@ export function InlineChatPanel({
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div ref={scrollRef} className="space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-2",
-                msg.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              {msg.role === "assistant" && (
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Bot className="h-4 w-4 text-primary" />
+          {messages.map((msg) => {
+            const parsed = msg.role === "assistant"
+              ? parseAiResponse(msg.content)
+              : { cleanText: msg.content, buttons: [] };
+
+            return (
+              <div key={msg.id} className="space-y-2">
+                <div
+                  className={cn(
+                    "flex gap-2",
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  )}
+                >
+                  {msg.role === "assistant" && (
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted"
+                    )}
+                  >
+                    {parsed.cleanText}
+                  </div>
+                  {msg.role === "user" && (
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <User className="h-4 w-4" />
+                    </div>
+                  )}
                 </div>
-              )}
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-lg px-3 py-2 text-sm",
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
+                {parsed.buttons.length > 0 && (
+                  <div className="flex flex-wrap gap-2 ml-10">
+                    {parsed.buttons.map((button, index) => (
+                      <Button
+                        key={`${msg.id}-button-${index}`}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onSendMessage(button)}
+                        disabled={isLoading}
+                        data-testid={`clarify-suggestion-button-${index}`}
+                      >
+                        {button}
+                      </Button>
+                    ))}
+                  </div>
                 )}
-              >
-                {msg.content}
               </div>
-              {msg.role === "user" && (
-                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <User className="h-4 w-4" />
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           {isLoading && (
             <div className="flex gap-2">

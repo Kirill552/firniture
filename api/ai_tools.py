@@ -342,9 +342,12 @@ async def handle_check_hardware_compatibility(
     try:
         async with SessionLocal() as db:
             result = await db.execute(
-                select(HardwareItem).where(HardwareItem.sku == sku)
+                select(HardwareItem)
+                .where(HardwareItem.sku == sku)
+                .order_by(HardwareItem.brand.asc().nulls_last(), HardwareItem.id.asc())
+                .limit(1)
             )
-            item = result.scalar_one_or_none()
+            item = result.scalars().first()
 
         if not item:
             return {
@@ -437,9 +440,12 @@ async def handle_get_hardware_details(sku: str) -> dict[str, Any]:
     try:
         async with SessionLocal() as db:
             result = await db.execute(
-                select(HardwareItem).where(HardwareItem.sku == sku)
+                select(HardwareItem)
+                .where(HardwareItem.sku == sku)
+                .order_by(HardwareItem.brand.asc().nulls_last(), HardwareItem.id.asc())
+                .limit(1)
             )
-            item = result.scalar_one_or_none()
+            item = result.scalars().first()
 
         if not item:
             return {

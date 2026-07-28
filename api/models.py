@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum as _EnumShim
 from typing import Any
@@ -16,6 +16,7 @@ def _embedding_dim_orm() -> int:
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -24,6 +25,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -169,11 +171,19 @@ class Supplier(Base):
     contact_email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
-
 class HardwareItem(Base):
     __tablename__ = "hardware_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "brand",
+            "sku",
+            name="uq_hardware_items_brand_sku",
+        ),
+    )
+
     id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    sku: Mapped[str] = mapped_column(String(120), unique=True)
+    # Артикул уникален внутри бренда, разные поставщики используют одинаковые номера.
+    sku: Mapped[str] = mapped_column(String(120))
     brand: Mapped[str | None] = mapped_column(String(80), nullable=True)
     type: Mapped[str] = mapped_column(String(40))
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -197,6 +207,23 @@ class HardwareItem(Base):
     thickness_max_mm: Mapped[float | None] = mapped_column(Float, nullable=True)  # Максимальная толщина материала
     price_rub: Mapped[float | None] = mapped_column(Float, nullable=True)  # Цена в рублях
     is_active: Mapped[bool] = mapped_column(default=True)  # Активность позиции
+
+
+class SupplierPrice(Base):
+    """Историческая цена артикула поставщика из отдельного прайса."""
+    __tablename__ = "supplier_prices"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    sku: Mapped[str] = mapped_column(String(120), index=True)
+    supplier_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="CASCADE"), index=True
+    )
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="RUB")
+    unit: Mapped[str] = mapped_column(String(30), default="шт")
+    price_date: Mapped[date] = mapped_column(Date)
+    source_filename: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class BOMItem(Base):

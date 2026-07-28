@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { parseAiResponse } from "@/lib/ai-response";
 import { Loader2 } from 'lucide-react';
 
 interface Message {
@@ -20,23 +21,6 @@ interface AiChatProps {
   extractedContext?: string;
 }
 
-// Парсинг [BUTTONS: "A", "B", "C"] из текста
-function parseButtonsFromText(text: string): { cleanText: string; buttons: string[] } {
-  const buttonMatch = text.match(/\[BUTTONS:\s*(.+?)\]/);
-  if (!buttonMatch) {
-    return { cleanText: text, buttons: [] };
-  }
-
-  // Извлекаем кнопки из строки вида: "A", "B", "C"
-  const buttonsStr = buttonMatch[1];
-  const buttons = buttonsStr
-    .split(',')
-    .map(b => b.trim().replace(/^["']|["']$/g, ''))
-    .filter(b => b.length > 0);
-
-  const cleanText = text.replace(/\[BUTTONS:\s*.+?\]/, '').trim();
-  return { cleanText, buttons };
-}
 
 // Парсинг [SPEC_JSON]...[/SPEC_JSON] из текста
 function parseSpecJson(text: string): { cleanText: string; spec: Record<string, unknown> | null } {
@@ -73,25 +57,6 @@ function removeCompleteMarker(text: string): string {
   return text.replace('[COMPLETE]', '').trim();
 }
 
-// Фильтрация внутренних рассуждений ИИ (function_call, JSON tool calls и т.д.)
-function filterInternalReasoning(text: string): string {
-  return text
-    // Удаляем [TOOL_CALL] маркеры
-    .replace(/\[TOOL_CALL\]/gi, '')
-    // Удаляем JSON в бэктиках ``` {"name": "find_hardware", ...} ```
-    .replace(/```\s*\{[\s\S]*?"name"[\s\S]*?"arguments"[\s\S]*?\}\s*```/g, '')
-    // Удаляем JSON без бэктиков {"name": "...", "arguments": ...}
-    .replace(/\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}/g, '')
-    // Удаляем "(внутри себя решает...)" и подобные паттерны
-    .replace(/\(внутри себя[^)]*\)\s*/gi, '')
-    // Удаляем `function_call: ...` до конца строки или точки
-    .replace(/`?function_call:\s*[^`\n.]+`?\.?\s*/gi, '')
-    // Удаляем строки начинающиеся с function_call
-    .replace(/^function_call:[^\n]*\n?/gim, '')
-    // Удаляем пустые строки подряд
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 export function AiChat({ orderId, initialMessages = [], extractedContext }: AiChatProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -183,9 +148,8 @@ export function AiChat({ orderId, initialMessages = [], extractedContext }: AiCh
           responseText = removeCompleteMarker(responseText);
         }
 
-        // Парсим кнопки
-        const { cleanText, buttons } = parseButtonsFromText(responseText);
-
+        // Парсим кнопки и удаляем служебные блоки
+        const { cleanText, buttons } = parseAiResponse(responseText);
         // Добавляем сообщение в список
         const assistantMessage: Message = {
           role: 'assistant',
@@ -233,7 +197,7 @@ export function AiChat({ orderId, initialMessages = [], extractedContext }: AiCh
           const data = await response.json();
 
           if (data.success !== false) {
-            const { cleanText, buttons } = parseButtonsFromText(data.response || '');
+            const { cleanText, buttons } = parseAiResponse(data.response || '');
             setMessages([{
               role: 'assistant',
               content: cleanText,
@@ -288,9 +252,7 @@ export function AiChat({ orderId, initialMessages = [], extractedContext }: AiCh
           className="space-y-4"
         >
           {messages.map((m, i) => {
-            const displayContent = m.role === 'assistant'
-              ? filterInternalReasoning(m.content)
-              : m.content;
+            const displayContent = m.content;
 
             // Пропускаем пустые сообщения ассистента (только function_call)
             if (m.role === 'assistant' && !displayContent && !m.buttons?.length && !m.toolCalls?.length) {

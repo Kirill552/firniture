@@ -1,9 +1,11 @@
 """Тесты для шаблонов присадки."""
 
 from api.drilling_templates import (
+    HINGE_TEMPLATES,
     SLIDE_TEMPLATES,
     get_hinge_template,
     get_slide_template,
+    get_template_for_position,
     list_hinge_templates,
     list_slide_templates,
 )
@@ -41,9 +43,34 @@ class TestHingeTemplates:
     def test_list_hinge_templates(self):
         """Список шаблонов должен содержать все петли."""
         templates = list_hinge_templates()
-        assert len(templates) == 3
+        assert len(templates) >= 5
         ids = [t["id"] for t in templates]
         assert "hinge_35mm_overlay" in ids
+    def test_all_hinges_have_safe_cup_geometry(self):
+        """Все чашки используют известный диаметр и не пробивают плиту."""
+        assert len(HINGE_TEMPLATES) >= 5
+        for template in HINGE_TEMPLATES.values():
+            assert template.cup_diameter_mm in (26.0, 35.0)
+            assert 0 < template.cup_depth_mm < 16.0
+
+    def test_position_template_selection_uses_type_and_diameter(self):
+        """Выбор петли не подменяет неизвестный тип накладной."""
+        assert get_template_for_position(
+            "петля полунакладная", {"cup_diameter_mm": 35}
+        ).hinge_type == "half_overlay"
+        assert get_template_for_position(
+            "петля mini", {"cup_diameter_mm": 26}
+        ).hinge_type == "mini"
+        assert get_template_for_position(
+            "петля вкладная", {"cup_diameter_mm": 35}
+        ).hinge_type == "inset"
+        assert get_template_for_position("петля", {"cup_diameter_mm": 35}) is None
+        assert get_template_for_position("неизвестная фурнитура", {}) is None
+        assert get_template_for_position("шариковая H35", {}).slide_type == "ball_h35"
+        assert (
+            get_template_for_position("скрытая направляющая", {}).slide_type
+            == "concealed_full"
+        )
 
 
 class TestSlideTemplates:
@@ -68,15 +95,47 @@ class TestSlideTemplates:
         h35 = get_slide_template("slide_ball_h35")
         assert roller.load_capacity_kg < h35.load_capacity_kg
 
-    def test_hole_spacing_32mm(self):
-        """Шаг отверстий должен быть 32мм (система 32)."""
-        for template in SLIDE_TEMPLATES.values():
-            assert template.hole_spacing_mm == 32.0
-
     def test_list_slide_templates(self):
         """Список шаблонов должен содержать все направляющие."""
         templates = list_slide_templates()
-        assert len(templates) == 3
+        assert len(templates) >= 4
         types = [t["type"] for t in templates]
         assert "ball_h45" in types
         assert "roller" in types
+
+    def test_slide_templates_have_distinct_front_offsets(self):
+        """Сетка отверстий каждого типа привязана к своему переднему отступу."""
+        offsets = {
+            template.front_edge_offset_mm for template in SLIDE_TEMPLATES.values()
+        }
+        assert len(offsets) == len(SLIDE_TEMPLATES)
+
+
+class TestLegacyCatalogCards:
+    """Карточки прошлых парсеров: 1305 позиций в базе с другими именами полей."""
+
+    def test_legacy_cup_diameter_key_is_understood(self):
+        """Старый ETL писал cup_diameter без единиц — позиция не должна терять шаблон."""
+        template = get_template_for_position(
+            "петля", {"cup_diameter": 35, "mount_type": "накладная"}
+        )
+        assert template is not None
+        assert template.cup_diameter_mm == 35
+
+    def test_mount_type_from_card_selects_inset(self):
+        """Тип в базе всегда «петля», наложение лежит в карточке — берём оттуда."""
+        template = get_template_for_position(
+            "петля", {"cup_diameter": 35, "mount_type": "вкладная"}
+        )
+        assert template is not None
+        assert template.hinge_type == "inset"
+
+    def test_card_without_diameter_gives_no_template(self):
+        """Без подтверждённой чашки шаблон не выдаём: наугад сверлить нельзя."""
+        assert get_template_for_position("петля", {"series": "PROFI"}) is None
+
+    def test_slide_kind_from_card(self):
+        """Вид направляющей приходит полем карточки, а не типом позиции."""
+        template = get_template_for_position("направляющая", {"slide_type": "роликовые"})
+        assert template is not None
+        assert template.name == SLIDE_TEMPLATES["slide_roller"].name

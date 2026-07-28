@@ -35,7 +35,12 @@ tests/**/*.zip
 tests/**/*.gcode
 tests/test_output.*
 tests/test_*_request.json
-etl_pipeline/
+# Конвейер разбора каталогов версионируется: его тесты лежат в tests/ и идут в CI.
+# Наружу не выпускаем только секреты, выгрузки и тяжёлые данные.
+etl_pipeline/.env
+etl_pipeline/output/
+etl_pipeline/knowledge_base/
+etl_pipeline/**/*.pdf
 
 # Documentation (local only, not in repo)
 docs/
