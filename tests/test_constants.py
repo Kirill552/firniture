@@ -56,7 +56,9 @@ def test_edge_thickness_logical():
 def test_gaps_reasonable():
     """Зазоры должны быть в разумных пределах."""
     assert 3.0 <= DEFAULT_GAP_MM <= 5.0, "Зазор на пропил 3-5мм"
-    assert 2.0 <= DEFAULT_SHELF_GAP_MM <= 4.0, "Зазор полки 2-4мм"
+    # Съёмную полку сужают на сторону: технолог снимает полтора миллиметра,
+    # кто-то до трёх. Ноль означал бы полку в размер корпуса — она не встанет.
+    assert 1.0 <= DEFAULT_SHELF_GAP_MM <= 4.0, "Зазор полки 1-4мм на сторону"
     assert 20.0 <= DEFAULT_DRAWER_GAP_MM <= 30.0, "Зазор ящика 20-30мм"
     assert 5.0 <= DEFAULT_BACK_PANEL_INSET_MM <= 15.0, "Отступ задней стенки 5-15мм"
 
@@ -70,7 +72,8 @@ def test_slot_dimensions_reasonable():
 def test_structural_constraints():
     """Конструктивные ограничения должны быть безопасными."""
     assert 500.0 <= DEFAULT_MAX_SHELF_SPAN_MM <= 700.0, "Макс. ширина полки 500-700мм"
-    assert 80.0 <= DEFAULT_TIE_BEAM_HEIGHT_MM <= 120.0, "Высота царги 80-120мм"
+    # Ширина царги у каждого цеха своя: встречаются 50, 70 и 100 мм.
+    assert 50.0 <= DEFAULT_TIE_BEAM_HEIGHT_MM <= 120.0, "Ширина царги 50-120мм"
 
 
 def test_spindle_speed_safe():

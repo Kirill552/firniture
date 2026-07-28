@@ -12,5 +12,5 @@ export const LEGAL = {
   siteUrl: "https://avtoraskroy.ru",
   serviceName: "АвтоРаскрой",
   // Дата актуализации документов
-  updatedAt: "27 июля 2026 г.",
+  updatedAt: "28 июля 2026 г.",
 } as const;

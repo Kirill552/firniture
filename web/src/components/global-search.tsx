@@ -52,11 +52,11 @@ const mockSearchResults: SearchResult[] = [
   {
     id: "3",
     title: "CAM обработка",
-    description: "Управление CAM задачами, генерация G-code и предпросмотр DXF",
+    description: "Файлы для станка: DXF и PDF карты раскроя",
     url: "/cam",
     type: "page",
     category: "Производство",
-    keywords: ["cam", "dxf", "gcode", "обработка", "чпу", "станок"],
+    keywords: ["cam", "dxf", "обработка", "чпу", "станок"],
     icon: Wrench,
     score: 88
   },
@@ -137,7 +137,7 @@ export function GlobalSearch() {
   const [loading, setLoading] = React.useState(false)
   const [selectedIndex, setSelectedIndex] = React.useState(0)
   const router = useRouter()
-  const { machineFeaturesEnabled } = useFeatureFlags()
+  const { machineFeaturesEnabled, factoryFeaturesEnabled } = useFeatureFlags()
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -166,7 +166,11 @@ export function GlobalSearch() {
     try {
       // Smart fuzzy search with AI-like scoring
       const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 1)
-      const filteredMockResults = mockSearchResults.filter(item => item.url !== "/cam" || machineFeaturesEnabled)
+      const filteredMockResults = mockSearchResults.filter(
+        (item) =>
+          (item.url !== "/cam" || machineFeaturesEnabled) &&
+          (item.url !== "/integrations" || factoryFeaturesEnabled)
+      )
       const scoredResults = filteredMockResults.map(item => {
         let score = 0
         const searchableText = [
@@ -217,7 +221,7 @@ export function GlobalSearch() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [factoryFeaturesEnabled, machineFeaturesEnabled])
 
   React.useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -265,7 +269,9 @@ export function GlobalSearch() {
   const popularPages = [
     { title: "Создать заказ", url: "/new", icon: FileText, description: "Новый заказ мебели" },
     { title: "Спецификации", url: "/bom", icon: Package, description: "BOM материалов" },
-    { title: "CAM обработка", url: "/cam", icon: Wrench, description: "Генерация G-code" },
+    ...(machineFeaturesEnabled
+      ? [{ title: "CAM обработка", url: "/cam", icon: Wrench, description: "Генерация G-code" }]
+      : []),
     { title: "История", url: "/orders", icon: History, description: "Архив заказов" }
   ]
 

@@ -12,6 +12,7 @@ from api.panel_calculator import (
     WallCabinetTemplate,
     calculate_panels,
 )
+from api.routers import _calculate_fasteners
 
 
 class TestWallCabinet:
@@ -74,6 +75,51 @@ class TestWallCabinet:
 
         # Должно быть предупреждение
         assert any("провис" in w.lower() for w in result.warnings)
+    def test_fixed_shelf_adds_confirmats_without_shelf_pins(self):
+        """Конструкционная полка держит корпус на четырёх конфирматах."""
+        result = calculate_panels(
+            cabinet_type="wall",
+            width_mm=600,
+            height_mm=720,
+            depth_mm=300,
+            shelf_count=0,
+            fixed_shelf_count=1,
+        )
+        fasteners = _calculate_fasteners(result.panels, drawer_count=0, shelf_count=0)
+        confirmats = next(f for f in fasteners if f["name"] == "Конфирмат")
+        assert confirmats["quantity"] == 12
+        assert not any(f["name"] == "Полкодержатель" for f in fasteners)
+
+    def test_removable_shelf_adds_shelf_pins_without_fixed_confirmats(self):
+        """Съёмная полка получает четыре полкодержателя."""
+        result = calculate_panels(
+            cabinet_type="wall",
+            width_mm=600,
+            height_mm=720,
+            depth_mm=300,
+            shelf_count=1,
+            fixed_shelf_count=0,
+        )
+
+        fasteners = _calculate_fasteners(result.panels, drawer_count=0, shelf_count=1)
+        confirmats = next(f for f in fasteners if f["name"] == "Конфирмат")
+        pins = next(f for f in fasteners if f["name"] == "Полкодержатель")
+        assert confirmats["quantity"] == 8
+        assert pins["quantity"] == 4
+
+    def test_tall_cabinet_without_fixed_shelf_warns(self):
+        """Большой пенал советует добавить конструкционную полку."""
+        result = calculate_panels(
+            cabinet_type="tall",
+            width_mm=600,
+            height_mm=2200,
+            depth_mm=500,
+            shelf_count=0,
+            fixed_shelf_count=0,
+        )
+
+        assert any("конструкционной полкой" in warning.lower() for warning in result.warnings)
+
 
 
 class TestBaseCabinet:

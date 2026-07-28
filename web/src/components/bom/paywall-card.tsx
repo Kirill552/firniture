@@ -121,6 +121,30 @@ export function PaywallCard({
     );
   }
 
+  if (access?.beta_free || balance?.beta_free) {
+    return (
+      <Card className="border-primary/30">
+        <CardHeader>
+          <CardTitle className="text-lg">Бета-версия — бесплатно</CardTitle>
+          <CardDescription>
+            Скачивание DXF и PDF открыто без оплаты. Мы дорабатываем расчёт
+            по замечаниям технологов.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <OrderExportButtons
+            dxfDownloadUrl={dxfDownloadUrl}
+            pdfDownloadUrl={pdfDownloadUrl}
+            isGeneratingDxf={isGeneratingDxf}
+            isGeneratingPdf={isGeneratingPdf}
+            onDxf={openDxf}
+            onPdf={openPdf}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (access?.access) {
     return (
       <Card className="border-green-500 bg-green-50/50 dark:bg-green-900/10">

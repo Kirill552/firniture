@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 REASON_FREE_FIRST = "free_first"
 REASON_PAYMENT = "payment"
 REASON_PACK = "pack"
+REASON_BETA = "beta"
 
 KIND_SINGLE = "single"
 KIND_PACK10 = "pack10"
@@ -42,6 +43,7 @@ class OrderAccess:
     price_rub: int
     pack_credits: int
     free_first_available: bool
+    beta_free: bool
 
 
 async def count_pack_credits(db: AsyncSession, factory_id: UUID) -> int:
@@ -99,16 +101,20 @@ async def _find_access(
 async def resolve_order_access(
     db: AsyncSession, order_id: UUID, factory_id: UUID
 ) -> OrderAccess:
-    """Текущее состояние доступа плюс доступные способы его получить."""
+    """Текущее состояние доступа плюс доступные способы его получить.
+
+    В бете доступ есть всегда: платить не за что, пейволл фронт не рисует.
+    """
     granted = await _find_access(db, order_id, factory_id)
     credits = await count_pack_credits(db, factory_id)
     free_first = await is_free_first_available(db, factory_id)
     return OrderAccess(
-        access=granted is not None,
-        reason=granted.reason if granted else None,
+        access=settings.BETA_FREE_MODE or granted is not None,
+        reason=granted.reason if granted else (REASON_BETA if settings.BETA_FREE_MODE else None),
         price_rub=settings.PRICE_ORDER_RUB,
         pack_credits=max(credits, 0),
         free_first_available=free_first,
+        beta_free=settings.BETA_FREE_MODE,
     )
 
 
@@ -187,6 +193,11 @@ async def ensure_export_allowed(
     granted = await _find_access(db, order_id, factory_id)
     if granted is not None:
         return granted
+
+    # Бета идёт раньше бесплатного первого: он не должен сгореть на халяве,
+    # иначе после включения платной схемы фабрика останется без своей пробы.
+    if settings.BETA_FREE_MODE:
+        return await grant_access(db, order_id, factory_id, REASON_BETA)
 
     if await is_free_first_available(db, factory_id):
         return await grant_access(db, order_id, factory_id, REASON_FREE_FIRST)

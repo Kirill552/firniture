@@ -184,6 +184,7 @@ export function useOrderAccess(orderId: string, returnedFromPayment: boolean): U
         price_rub: error.priceRub,
         pack_credits: prev.access?.pack_credits ?? 0,
         free_first_available: false,
+        beta_free: false,
       },
     }))
   }, [])

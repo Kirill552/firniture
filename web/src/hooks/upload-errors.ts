@@ -21,3 +21,26 @@ export function getUploadErrorMessage(status: number, payload: unknown): string 
   if (status === 503) return "Проверка временно недоступна. Попробуйте позже.";
   return "Не удалось проверить файл. Попробуйте другой исходник.";
 }
+ 
+export function getImageExtractErrorMessage(errorType?: string | null): string {
+  switch (errorType) {
+    case "multiple_modules":
+    case "not_furniture_source":
+      return "На фото несколько модулей или кухня целиком. Сейчас сервис считает один модуль за раз. Выберите конкретный шкаф или задайте габариты вручную.";
+    case "file_too_large":
+    case "payload_too_large":
+    case "image_too_large":
+      return "Файл слишком большой. Загрузите изображение меньшего размера или задайте габариты вручную.";
+    case "unsupported_format":
+    case "unsupported_file_type":
+      return "Формат файла не поддерживается. Загрузите JPG, PNG, WebP или PDF.";
+    case "invalid_pdf":
+      return "Не удалось прочитать PDF. Проверьте файл или задайте габариты вручную.";
+    case "service_unavailable":
+      return "Проверка изображения временно недоступна. Задайте габариты вручную.";
+    case "ocr_failed":
+      return "Не удалось разобрать изображение. Выберите конкретный шкаф или задайте габариты вручную.";
+    default:
+      return "Не удалось разобрать изображение. Выберите конкретный шкаф или задайте габариты вручную.";
+  }
+}

@@ -21,6 +21,7 @@ interface DrillPreviewProps {
   highlightedHardwareId?: string;
   onPointHover?: (point: DrillPoint | null) => void;
   className?: string;
+  panelName?: string;
 }
 
 // Цвета по типу отверстия (соответствуют AutoCAD ACI)
@@ -44,6 +45,7 @@ export function DrillPreview({
   highlightedHardwareId,
   onPointHover,
   className,
+  panelName,
 }: DrillPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,6 +121,27 @@ export function DrillPreview({
 
       ctx.fill();
       ctx.stroke();
+
+      // Рисуем подпись расстояний рядом с точкой
+      ctx.fillStyle = isHighlighted ? "#D97706" : "#666666"; // темный золотой или серый
+      ctx.font = "9px Arial, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+
+      const distLeft = Math.round(point.x);
+      const distRight = Math.round(panelWidth - point.x);
+      const distBottom = Math.round(point.y);
+      const distTop = Math.round(panelHeight - point.y);
+
+      const nearestX = distLeft < distRight ? `${distLeft}` : `${distRight}`;
+      const nearestY = distBottom < distTop ? `${distBottom}` : `${distTop}`;
+
+      // Направление к краю для ясности
+      const xDir = distLeft < distRight ? "←" : "→";
+      const yDir = distBottom < distTop ? "↓" : "↑";
+
+      const labelText = `${xDir}${nearestX} ${yDir}${nearestY}`;
+      ctx.fillText(labelText, x + Math.max(radius, 4) + 3, y);
     }
 
     // Размеры панели
@@ -182,7 +205,9 @@ export function DrillPreview({
   return (
     <Card className={className}>
       <CardHeader className="py-3">
-        <CardTitle className="text-sm font-medium">Превью присадки</CardTitle>
+        <CardTitle className="text-sm font-medium">
+          Превью присадки{panelName ? `: ${panelName}` : ""}
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-4" ref={containerRef}>
         <canvas

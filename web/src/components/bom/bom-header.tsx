@@ -124,26 +124,35 @@ export function BOMHeader({
           {compact && (
             <>
               <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  value={dimensions.width_mm}
-                  onChange={(e) => handleDimensionChange("width_mm", parseInt(e.target.value) || 0)}
-                  className="h-7 w-16 text-center text-sm"
-                />
+                <div className="relative flex items-center">
+                  <Input
+                    type="number"
+                    value={dimensions.width_mm}
+                    onChange={(e) => handleDimensionChange("width_mm", parseInt(e.target.value) || 0)}
+                    className="h-7 w-20 pl-2 pr-6 text-left text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute right-1.5 text-[10px] text-muted-foreground pointer-events-none">мм</span>
+                </div>
                 <span className="text-muted-foreground text-sm">×</span>
-                <Input
-                  type="number"
-                  value={dimensions.height_mm}
-                  onChange={(e) => handleDimensionChange("height_mm", parseInt(e.target.value) || 0)}
-                  className="h-7 w-16 text-center text-sm"
-                />
+                <div className="relative flex items-center">
+                  <Input
+                    type="number"
+                    value={dimensions.height_mm}
+                    onChange={(e) => handleDimensionChange("height_mm", parseInt(e.target.value) || 0)}
+                    className="h-7 w-20 pl-2 pr-6 text-left text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute right-1.5 text-[10px] text-muted-foreground pointer-events-none">мм</span>
+                </div>
                 <span className="text-muted-foreground text-sm">×</span>
-                <Input
-                  type="number"
-                  value={dimensions.depth_mm}
-                  onChange={(e) => handleDimensionChange("depth_mm", parseInt(e.target.value) || 0)}
-                  className="h-7 w-14 text-center text-sm"
-                />
+                <div className="relative flex items-center">
+                  <Input
+                    type="number"
+                    value={dimensions.depth_mm}
+                    onChange={(e) => handleDimensionChange("depth_mm", parseInt(e.target.value) || 0)}
+                    className="h-7 w-20 pl-2 pr-6 text-left text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute right-1.5 text-[10px] text-muted-foreground pointer-events-none">мм</span>
+                </div>
               </div>
 
               <span className="text-muted-foreground">|</span>
@@ -195,27 +204,35 @@ export function BOMHeader({
                   </span>
                 ) : (
                   <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      value={dimensions.width_mm}
-                      onChange={(e) => handleDimensionChange("width_mm", parseInt(e.target.value) || 0)}
-                      className="h-8 w-20 text-center"
-                    />
+                    <div className="relative flex items-center">
+                      <Input
+                        type="number"
+                        value={dimensions.width_mm}
+                        onChange={(e) => handleDimensionChange("width_mm", parseInt(e.target.value) || 0)}
+                        className="h-8 w-24 pl-3 pr-7 text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <span className="absolute right-2 text-xs text-muted-foreground pointer-events-none">мм</span>
+                    </div>
                     <span className="text-muted-foreground">×</span>
-                    <Input
-                      type="number"
-                      value={dimensions.height_mm}
-                      onChange={(e) => handleDimensionChange("height_mm", parseInt(e.target.value) || 0)}
-                      className="h-8 w-20 text-center"
-                    />
+                    <div className="relative flex items-center">
+                      <Input
+                        type="number"
+                        value={dimensions.height_mm}
+                        onChange={(e) => handleDimensionChange("height_mm", parseInt(e.target.value) || 0)}
+                        className="h-8 w-24 pl-3 pr-7 text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <span className="absolute right-2 text-xs text-muted-foreground pointer-events-none">мм</span>
+                    </div>
                     <span className="text-muted-foreground">×</span>
-                    <Input
-                      type="number"
-                      value={dimensions.depth_mm}
-                      onChange={(e) => handleDimensionChange("depth_mm", parseInt(e.target.value) || 0)}
-                      className="h-8 w-20 text-center"
-                    />
-                    <span className="text-muted-foreground ml-1">мм</span>
+                    <div className="relative flex items-center">
+                      <Input
+                        type="number"
+                        value={dimensions.depth_mm}
+                        onChange={(e) => handleDimensionChange("depth_mm", parseInt(e.target.value) || 0)}
+                        className="h-8 w-24 pl-3 pr-7 text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <span className="absolute right-2 text-xs text-muted-foreground pointer-events-none">мм</span>
+                    </div>
                   </div>
                 )}
               </div>

@@ -81,3 +81,49 @@ async def test_mvp_features_flag_lifecycle(monkeypatch: pytest.MonkeyPatch) -> N
             headers=headers
         )
         assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_factory_settings_defaults_and_custom_values() -> None:
+    factory_id = uuid4()
+    user_id = uuid4()
+    email = f"settings_{uuid4().hex[:8]}@example.com"
+
+    async with SessionLocal() as session:
+        session.add(Factory(id=factory_id, name="Settings Factory"))
+        session.add(User(id=user_id, email=email, factory_id=factory_id))
+        await session.commit()
+
+    jwt_token, _ = create_access_token(user_id, factory_id)
+    headers = {"Authorization": f"Bearer {jwt_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/settings", headers=headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["settings"]["price_board_m2"] == 450.0
+        assert payload["settings"]["bottom_mount"] == "on_bottom"
+        assert "price_board_m2" in payload["defaults_used"]
+
+        response = await client.patch(
+            "/api/v1/settings",
+            json={"price_board_m2": 700, "bottom_mount": "inset", "currency": "EUR"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert {"price_board_m2", "bottom_mount", "currency"} <= set(response.json()["updated_fields"])
+
+        response = await client.get("/api/v1/settings", headers=headers)
+        assert response.json()["settings"]["price_board_m2"] == 700.0
+        assert response.json()["settings"]["bottom_mount"] == "inset"
+        assert response.json()["settings"]["currency"] == "EUR"
+
+        response = await client.patch(
+            "/api/v1/settings", json={"price_board_m2": -1}, headers=headers
+        )
+        assert response.status_code == 422
+        response = await client.patch(
+            "/api/v1/settings", json={"bottom_mount": "sideways"}, headers=headers
+        )
+        assert response.status_code == 422

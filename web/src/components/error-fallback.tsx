@@ -10,7 +10,7 @@ interface ErrorFallbackProps {
   reset: () => void
 }
 
-export function ErrorFallback({ error, reset }: ErrorFallbackProps) {
+export function ErrorFallback({ reset }: ErrorFallbackProps) {
   const { error: showErrorToast } = useToast()
 
   const handleReportError = () => {
@@ -47,26 +47,10 @@ export function ErrorFallback({ error, reset }: ErrorFallbackProps) {
             Что-то пошло не так
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Произошла неожиданная ошибка. Попробуйте обновить страницу или вернитесь позже.
+            Не удалось загрузить страницу. Попробуйте ещё раз или вернитесь к заказам.
           </p>
         </div>
 
-        {process.env.NODE_ENV === 'development' && (
-          <motion.details
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-left bg-muted/20 rounded-md p-4"
-          >
-            <summary className="cursor-pointer text-sm font-medium mb-2">
-              Подробности ошибки (для разработчика)
-            </summary>
-            <pre className="text-xs text-muted-foreground overflow-auto">
-              {error.message}
-              {error.digest && `\nDigest: ${error.digest}`}
-            </pre>
-          </motion.details>
-        )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button 
@@ -126,7 +110,7 @@ export function DataErrorFallback({
       </h3>
       
       <p className="text-muted-foreground text-sm mb-4">
-        {error.message || "Не удалось загрузить данные. Проверьте подключение к интернету."}
+        Не удалось загрузить данные. Проверьте подключение и попробуйте ещё раз.
       </p>
       
       {retry && (

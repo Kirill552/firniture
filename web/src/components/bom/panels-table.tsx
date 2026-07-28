@@ -1,7 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2, Plus, Pencil } from "lucide-react"
+import { Trash2, Plus, Pencil, Info } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -177,7 +182,25 @@ export function PanelsTable({
               panels.map((panel) => (
                 <TableRow key={panel.id}>
                   <TableCell className="font-medium">
-                    {renderEditableCell(panel.id, "name", panel.name)}
+                    <div className="flex items-center gap-1.5">
+                      {renderEditableCell(panel.id, "name", panel.name)}
+                      {panel.notes && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-muted-foreground hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus:outline-none rounded p-0.5"
+                              aria-label={`Примечание: ${panel.notes}`}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <span>{panel.notes}</span>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {renderEditableCell(panel.id, "width_mm", panel.width_mm, " мм", true)}

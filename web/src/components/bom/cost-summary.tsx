@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Coins, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-
+import { formatMoney } from "@/lib/money";
 interface CostBreakdownItem {
   name: string;
   quantity: number;
@@ -26,34 +26,63 @@ interface CostEstimate {
   operations_cost: number;
 }
 
+interface PurchaseList {
+  items: CostBreakdownItem[];
+  materials_total: number;
+  hardware_total: number;
+  services_total: number;
+  total: number;
+  currency: string;
+  prices_are_defaults: boolean;
+}
+
 export function CostSummary({ orderId }: { orderId: string }) {
   const [data, setData] = useState<CostEstimate | null>(null);
+  const [purchase, setPurchase] = useState<PurchaseList | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/v1/orders/${orderId}/cost`, { headers: getAuthHeader() })
-      .then((res) => {
-        if (!res.ok) {
-          // 401 или другие ошибки — просто не показываем компонент
-          return null;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data) setData(data);
-      })
-      .catch(() => {
-        // Сетевая ошибка — игнорируем
-      })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((value) => { if (value) setData(value); })
+      .catch(() => undefined)
       .finally(() => setIsLoading(false));
+  }, [orderId]);
+
+  useEffect(() => {
+    fetch(`/api/v1/orders/${orderId}/purchase-list`, { headers: getAuthHeader() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((value) => { if (value) setPurchase(value); })
+      .catch(() => undefined);
   }, [orderId]);
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
   if (!data) return null;
-
   return (
-    <Card className="border-green-500/20 bg-green-50/50 dark:bg-green-900/10">
+    <>
+      {purchase && (
+        <Card className="mb-4 border-blue-500/20">
+          <CardHeader><CardTitle className="text-lg">Что купить</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {purchase.items.map((item, index) => (
+              <div key={index} className="flex justify-between text-sm">
+                <span>{item.name} — {item.quantity} {item.unit}</span>
+                <span className="font-medium">{formatMoney(item.total_price, purchase.currency)}</span>
+              </div>
+            ))}
+            <div className="border-t pt-2 flex justify-between font-bold text-lg">
+              <span>Итого</span><span>{formatMoney(purchase.total, purchase.currency)}</span>
+            </div>
+            {purchase.prices_are_defaults && (
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                Цены прикидочные по российскому рынку. Для валюты {purchase.currency} введите свои цены в <a className="underline" href="/settings">настройках</a>.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      <Card className="border-green-500/20 bg-green-50/50 dark:bg-green-900/10">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -61,7 +90,7 @@ export function CostSummary({ orderId }: { orderId: string }) {
             Себестоимость изделия
           </CardTitle>
           <Badge variant="secondary" className="text-lg font-bold text-green-700">
-            {Math.round(data.total_cost).toLocaleString()} ₽
+            {formatMoney(data.total_cost, data.currency)}
           </Badge>
         </div>
       </CardHeader>
@@ -69,15 +98,15 @@ export function CostSummary({ orderId }: { orderId: string }) {
         <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
           <div>
             <p className="text-muted-foreground">Материалы</p>
-            <p className="font-semibold">{Math.round(data.materials_cost).toLocaleString()} ₽</p>
+            <p className="font-semibold">{formatMoney(data.materials_cost, data.currency)}</p>
           </div>
           <div>
             <p className="text-muted-foreground">Фурнитура</p>
-            <p className="font-semibold">{Math.round(data.hardware_cost).toLocaleString()} ₽</p>
+            <p className="font-semibold">{formatMoney(data.hardware_cost, data.currency)}</p>
           </div>
           <div>
             <p className="text-muted-foreground">Работа</p>
-            <p className="font-semibold">{Math.round(data.operations_cost).toLocaleString()} ₽</p>
+            <p className="font-semibold">{formatMoney(data.operations_cost, data.currency)}</p>
           </div>
         </div>
 
@@ -94,12 +123,13 @@ export function CostSummary({ orderId }: { orderId: string }) {
                 <span className="text-muted-foreground">
                   {item.name} ({item.quantity} {item.unit})
                 </span>
-                <span className="font-medium">{Math.round(item.total_price)} ₽</span>
+                <span className="font-medium">{formatMoney(item.total_price, data.currency)}</span>
               </div>
             ))}
           </CollapsibleContent>
         </Collapsible>
       </CardContent>
     </Card>
+      </>
   );
 }

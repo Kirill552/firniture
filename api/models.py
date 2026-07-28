@@ -148,6 +148,10 @@ class Panel(Base):
     edge_band_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
     edge_front: Mapped[bool] = mapped_column(Boolean, default=False)
     edge_back: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Верх и низ детали: съёмная полка кромится по кругу, и эти метры
+    # попадают в смету наравне с передним торцом.
+    edge_top: Mapped[bool] = mapped_column(Boolean, default=False)
+    edge_bottom: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Точки присадки для G-code (сверление, конфирматы, полкодержатели)

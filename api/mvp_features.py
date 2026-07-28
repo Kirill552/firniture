@@ -9,5 +9,6 @@ router = APIRouter(tags=["Features"])
 async def get_features() -> FeaturesResponse:
     """Получить статус доступных экспериментальных функций (feature flags)."""
     return FeaturesResponse(
-        machine_features_enabled=settings.MVP_MACHINE_FEATURES_ENABLED
+        machine_features_enabled=settings.MVP_MACHINE_FEATURES_ENABLED,
+        factory_features_enabled=settings.FACTORY_FEATURES_ENABLED,
     )

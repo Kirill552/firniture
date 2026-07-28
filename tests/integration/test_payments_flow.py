@@ -24,9 +24,11 @@ from api.models import Factory, Order, OrderExportAccess, Payment, RevisionStatu
 from api.payments.access import (
     count_pack_credits,
     ensure_export_allowed,
+    is_free_first_available,
     grant_access,
 )
 from api.payments.yookassa_client import get_yookassa_client
+from api.settings import settings
 
 PANELS = [{"name": "Боковина", "width_mm": 500.0, "height_mm": 400.0}]
 PRICE_RUB = 890
@@ -56,6 +58,16 @@ class FakeYooKassa:
     async def get_payment(self, payment_id: str) -> dict:
         self.get_calls += 1
         return {"id": payment_id, "status": self.statuses.get(payment_id, "pending")}
+
+
+@pytest.fixture(autouse=True)
+def paid_mode(monkeypatch) -> None:
+    """Этот модуль проверяет платную схему — бету выключаем явно.
+
+    Дефолт продукта сейчас `BETA_FREE_MODE=True`: без этого экспорт
+    открывался бы бесплатно, а checkout отдавал бы 409.
+    """
+    monkeypatch.setattr(settings, "BETA_FREE_MODE", False)
 
 
 @pytest_asyncio.fixture
@@ -255,6 +267,7 @@ async def test_pack_gives_ten_exports_and_eleventh_requires_payment(tenant) -> N
         "price_rub": PRICE_RUB,
         "pack_price_rub": PACK_PRICE_RUB,
         "pack_size": 10,
+        "beta_free": False,
     }
 
     for index in range(10):
@@ -303,6 +316,7 @@ async def test_repeated_export_of_paid_order_spends_nothing(tenant) -> None:
         "price_rub": PRICE_RUB,
         "pack_credits": 9,
         "free_first_available": False,
+        "beta_free": False,
     }
 
 
@@ -350,3 +364,43 @@ async def test_foreign_factory_gets_no_access_from_someone_elses_payment(tenant)
             .where(OrderExportAccess.factory_id == stranger_factory)
         )
     assert leaked == 1, "чужой платёж не должен добавлять доступов"
+
+
+@pytest.mark.asyncio
+async def test_beta_exports_are_free_and_do_not_burn_free_first(tenant, monkeypatch) -> None:
+    """В бете любой экспорт открыт, а обещанный бесплатный первый цел.
+
+    Иначе после выключения беты фабрика лишилась бы своей пробы: доступ
+    выдаётся с reason="beta", а не "free_first".
+    """
+    monkeypatch.setattr(settings, "BETA_FREE_MODE", True)
+    http, user, _ = tenant
+
+    for _ in range(3):
+        order = await _approved_order(user.factory_id)
+        exported = await http.post(
+            "/api/v1/cam/dxf", json={"order_id": str(order), "panels": PANELS}
+        )
+        assert exported.status_code == 200, exported.text
+        assert [row.reason for row in await _access_rows(order)] == ["beta"]
+
+    async with SessionLocal() as db:
+        assert await is_free_first_available(db, user.factory_id) is True
+
+
+@pytest.mark.asyncio
+async def test_beta_closes_checkout(tenant, monkeypatch) -> None:
+    """Пока идёт бета, деньги не берём даже по прямому вызову API."""
+    monkeypatch.setattr(settings, "BETA_FREE_MODE", True)
+    http, user, _ = tenant
+    order = await _approved_order(user.factory_id)
+
+    single = await http.post(f"/api/v1/payments/orders/{order}/checkout")
+    pack = await http.post("/api/v1/payments/packs/checkout")
+
+    assert single.status_code == 409, single.text
+    assert pack.status_code == 409, pack.text
+
+    access = await http.get(f"/api/v1/payments/orders/{order}/access")
+    assert access.json()["beta_free"] is True
+    assert access.json()["access"] is True

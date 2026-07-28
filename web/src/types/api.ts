@@ -755,6 +755,8 @@ export interface BOMPanel {
   edge_front?: boolean
   /** Кромка сзади */
   edge_back?: boolean
+  /** Примечания */
+  notes?: string
 }
 
 /** Фурнитура в BOM */

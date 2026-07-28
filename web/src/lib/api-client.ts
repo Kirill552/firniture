@@ -49,6 +49,15 @@ export class APIClientError extends Error {
   }
 }
 
+function getPublicApiErrorMessage(status: number): string {
+  if (status === 401 || status === 403) return "Войдите в аккаунт, чтобы продолжить.";
+  if (status === 404) return "Запрошенные данные не найдены.";
+  if (status === 429) return "Слишком много запросов. Попробуйте позже.";
+  if (status >= 500) return "Сервис временно недоступен. Попробуйте позже.";
+  return "Не удалось выполнить действие. Проверьте данные и попробуйте снова.";
+}
+
+
 /**
  * Базовая функция для выполнения запросов к API
  */
@@ -80,9 +89,9 @@ async function fetchAPI<T>(
         detail: response.statusText,
       }))
       throw new APIClientError(
-        `API Error: ${errorData.detail}`,
+        getPublicApiErrorMessage(response.status),
         response.status,
-        errorData.detail
+        typeof errorData.detail === 'string' ? errorData.detail : undefined
       )
     }
 
@@ -92,7 +101,7 @@ async function fetchAPI<T>(
       throw error
     }
     throw new APIClientError(
-      `Network Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      'Не удалось связаться с сервисом. Проверьте подключение и попробуйте снова.',
       0
     )
   }
@@ -336,14 +345,13 @@ export const apiClient = {
         detail: response.statusText,
       }))
       throw new APIClientError(
-        `API Error: ${errorData.detail}`,
+        getPublicApiErrorMessage(response.status),
         response.status,
-        errorData.detail
+        typeof errorData.detail === 'string' ? errorData.detail : undefined
       )
     }
-
     if (!response.body) {
-      throw new APIClientError('Response body is null', response.status)
+      throw new APIClientError('Не удалось получить ответ от сервиса. Попробуйте снова.', response.status)
     }
 
     return response.body

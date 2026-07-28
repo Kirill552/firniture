@@ -9,7 +9,6 @@ import { Download, Package, Loader2, Check, FileText, FileCode, Settings, Circle
 import { useToast } from "@/hooks/use-toast"
 import { getAuthHeader } from "@/lib/auth"
 import { StatCardSkeleton } from "@/components/ui/table-skeleton"
-import { MachineProfileModal, hasSelectedMachineProfile } from "@/components/machine-profile-modal"
 import {
   BOMHeader,
   PanelsTable,
@@ -18,11 +17,9 @@ import {
   SheetLayoutPreview,
   DualPanelLayout,
   FileGenerationCard,
-  MiniStepper,
   DrillPreview,
   HardwarePresets,
   ConfirmationCheckbox,
-  type FileStatus,
 } from "@/components/bom"
 import { CostSummary } from "@/components/bom/cost-summary"
 import { PaywallCard } from "@/components/bom/paywall-card"
@@ -31,17 +28,6 @@ import { isPaymentRequiredError, readPaymentRequired } from "@/lib/payments"
 
 // Тип статуса сохранения
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
-
-const getFileStatus = (
-  isGenerating: boolean,
-  error: string | null,
-  downloadUrl: string | null
-): FileStatus => {
-  if (isGenerating) return "generating"
-  if (error) return "error"
-  if (downloadUrl) return "ready"
-  return "idle"
-}
 
 // Empty state component
 function EmptyBomState() {
@@ -67,7 +53,6 @@ function EmptyBomState() {
 }
 
 export default function BomPage() {
-  const { machineFeaturesEnabled } = useFeatureFlags()
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')
@@ -94,27 +79,10 @@ export default function BomPage() {
   const [dxfDownloadUrl, setDxfDownloadUrl] = useState<string | null>(null)
   const [dxfError, setDxfError] = useState<string | null>(null)
 
-  // G-code generation state
-  const [isGeneratingGcode, setIsGeneratingGcode] = useState(false)
-  const [gcodeJobId, setGcodeJobId] = useState<string | null>(null)
-  const [gcodeDownloadUrl, setGcodeDownloadUrl] = useState<string | null>(null)
-  const [gcodeError, setGcodeError] = useState<string | null>(null)
-
-  // Drilling G-code generation state
-  const [isGeneratingDrilling, setIsGeneratingDrilling] = useState(false)
-  const [drillingJobId, setDrillingJobId] = useState<string | null>(null)
-  const [drillingDownloadUrl, setDrillingDownloadUrl] = useState<string | null>(null)
-  const [drillingError, setDrillingError] = useState<string | null>(null)
-
   // PDF generation state
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null)
   const [pdfError, setPdfError] = useState<string | null>(null)
-
-  // Machine profile state
-  const [machineProfile, setMachineProfile] = useState<string | null>(null)
-  const [showProfileModal, setShowProfileModal] = useState(false)
-  const [isFirstTimeProfile, setIsFirstTimeProfile] = useState(false)
 
   // Smart Hardware Rules state
   const [confirmed, setConfirmed] = useState(false)
@@ -197,9 +165,6 @@ export default function BomPage() {
         })
         if (response.ok) {
           const data = await response.json()
-          if (data.settings?.machine_profile) {
-            setMachineProfile(data.settings.machine_profile)
-          }
           // Размер листа из настроек фабрики
           if (data.settings?.sheet_width_mm) {
             setSheetWidth(data.settings.sheet_width_mm)
@@ -635,188 +600,6 @@ export default function BomPage() {
     setIsGeneratingDxf(false)
   }
 
-  const handleGenerateGcode = async () => {
-    if (!hasSelectedMachineProfile() || !machineProfile) {
-      setIsFirstTimeProfile(true)
-      setShowProfileModal(true)
-      return
-    }
-
-    if (!dxfDownloadUrl && !isGeneratingDxf) {
-      try {
-        await handleGenerateDxf()
-      } catch (error) {
-        setGcodeError(
-          isPaymentRequiredError(error)
-            ? 'Экспорт заказа не оплачен — оплатите доступ в блоке ниже'
-            : 'Не удалось подготовить DXF'
-        )
-        return
-      }
-    }
-
-    if (isGeneratingDxf) {
-      setTimeout(() => handleGenerateGcode(), 2000)
-      return
-    }
-
-    if (!dxfJobId) {
-      setGcodeError("Сначала сгенерируйте DXF")
-      return
-    }
-
-    setIsGeneratingGcode(true)
-    setGcodeError(null)
-
-    try {
-      const jobResponse = await fetch(`/api/v1/cam/jobs/${dxfJobId}`, {
-        headers: getAuthHeader(),
-      })
-      const jobData = await jobResponse.json()
-
-      if (!jobData.artifact_id) {
-        throw new Error("DXF артефакт не найден")
-      }
-
-      const response = await fetch("/api/v1/cam/gcode", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({
-          dxf_artifact_id: jobData.artifact_id,
-          machine_profile: machineProfile,
-          // Используем толщину из BOM, затем из настроек, затем дефолт
-          cut_depth: bom?.body_material.thickness_mm ?? effectiveThickness,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.job_id) {
-        setGcodeJobId(data.job_id)
-        pollGcodeJobStatus(data.job_id)
-      } else {
-        setGcodeError(data.detail || "Ошибка создания задачи G-code")
-        setIsGeneratingGcode(false)
-      }
-    } catch (error) {
-      setGcodeError(error instanceof Error ? error.message : "Ошибка генерации G-code")
-      setIsGeneratingGcode(false)
-    }
-  }
-
-  const pollGcodeJobStatus = async (jobId: string) => {
-    const maxAttempts = 30
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      try {
-        const response = await fetch(`/api/v1/cam/jobs/${jobId}`, {
-          headers: getAuthHeader(),
-        })
-        const data = await response.json()
-
-        if (data.status === "Completed" && data.artifact_id) {
-          // Используем прямой endpoint /file вместо presigned URL
-          setGcodeDownloadUrl(`/api/v1/cam/jobs/${jobId}/file`)
-          setIsGeneratingGcode(false)
-          return
-        }
-        if (data.status === "Failed") {
-          setGcodeError(data.error || "Генерация G-code не удалась")
-          setIsGeneratingGcode(false)
-          return
-        }
-      } catch {
-        // Continue polling
-      }
-    }
-
-    setGcodeError("Превышено время ожидания")
-    setIsGeneratingGcode(false)
-  }
-
-  const handleProfileSelected = (profileId: string) => {
-    setMachineProfile(profileId)
-    setTimeout(() => {
-      handleGenerateGcode()
-    }, 100)
-  }
-
-  // Drilling G-code generation
-  const handleGenerateDrilling = async () => {
-    if (!hasSelectedMachineProfile() || !machineProfile) {
-      setIsFirstTimeProfile(true)
-      setShowProfileModal(true)
-      return
-    }
-
-    if (!effectiveOrderId) return
-
-    setIsGeneratingDrilling(true)
-    setDrillingError(null)
-
-    try {
-      const response = await fetch("/api/v1/cam/drilling", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({
-          order_id: effectiveOrderId,
-          machine_profile: machineProfile,
-          output_format: "zip",
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.job_id) {
-        setDrillingJobId(data.job_id)
-        pollDrillingJobStatus(data.job_id)
-      } else {
-        setDrillingError(data.detail || "Ошибка создания задачи присадки")
-        setIsGeneratingDrilling(false)
-      }
-    } catch (error) {
-      setDrillingError(error instanceof Error ? error.message : "Ошибка генерации присадки")
-      setIsGeneratingDrilling(false)
-    }
-  }
-
-  const pollDrillingJobStatus = async (jobId: string) => {
-    const maxAttempts = 30
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      try {
-        const response = await fetch(`/api/v1/cam/jobs/${jobId}`, {
-          headers: getAuthHeader(),
-        })
-        const data = await response.json()
-
-        if (data.status === "Completed" && data.artifact_id) {
-          setDrillingDownloadUrl(`/api/v1/cam/jobs/${jobId}/file`)
-          setIsGeneratingDrilling(false)
-          return
-        }
-        if (data.status === "Failed") {
-          setDrillingError(data.error || "Генерация присадки не удалась")
-          setIsGeneratingDrilling(false)
-          return
-        }
-      } catch {
-        // Continue polling
-      }
-    }
-
-    setDrillingError("Превышено время ожидания")
-    setIsGeneratingDrilling(false)
-  }
-
   // PDF cutting map generation
   const handleGeneratePdf = async () => {
     if (!bom) return
@@ -918,6 +701,14 @@ export default function BomPage() {
   const effectiveThickness = defaultThickness ?? DEFAULT_THICKNESS_MM
   const sheetAreaM2 = (effectiveSheetWidth * effectiveSheetHeight) / 1_000_000
 
+  // Присадку показываем на той детали, которую сверлят: чашки петель идут
+  // в фасад, и подписывать их размерами боковины было бы враньём.
+  const drilledPanel = useMemo(() => {
+    if (!bom?.panels?.length) return null
+    const facade = bom.panels.find((p) => p.name.toLowerCase().includes("фасад"))
+    return facade ?? bom.panels[0]
+  }, [bom])
+
   // Расчёт стоимости для Header
   const totalCost = useMemo(() => {
     if (!bom) return 0
@@ -926,25 +717,6 @@ export default function BomPage() {
     const edgeCost = bom.edge_bands.reduce((sum, eb) => sum + eb.length_m * (eb.unit_price || 0), 0)
     return hardwareCost + fastenersCost + edgeCost
   }, [bom])
-
-  // Шаги производства для MiniStepper
-  type StepStatus = "completed" | "current" | "pending"
-  const productionSteps = useMemo(() => {
-    const dxfSt = getFileStatus(isGeneratingDxf, dxfError, dxfDownloadUrl)
-    const drillingSt = getFileStatus(isGeneratingDrilling, drillingError, drillingDownloadUrl)
-
-    const mapStatus = (st: FileStatus): StepStatus => {
-      if (st === "generating") return "current"
-      if (st === "ready") return "completed"
-      return "pending"
-    }
-
-    return [
-      { label: "Спецификация", status: "completed" as StepStatus },
-      { label: "Раскрой", status: mapStatus(dxfSt) },
-      { label: "Присадка", status: mapStatus(drillingSt) },
-    ]
-  }, [isGeneratingDxf, dxfError, dxfDownloadUrl, isGeneratingDrilling, drillingError, drillingDownloadUrl])
 
   // Empty state
   if (!effectiveOrderId) {
@@ -1016,6 +788,17 @@ export default function BomPage() {
   return (
     <div className="p-6 w-full space-y-4">
       {/* Компактная шапка */}
+      {(() => {
+        const kitchen = bom as FullBOM & { module_count?: number; module_width_total_mm?: number };
+        if (!kitchen.module_count || kitchen.module_count < 2) return null;
+        return (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="py-3 text-sm">
+              Модулей в заказе: {kitchen.module_count}. Суммарная ширина корпусов: {kitchen.module_width_total_mm ?? 0} мм.
+            </CardContent>
+          </Card>
+        );
+      })()}
       <BOMHeader
         compact
         furnitureType={bom.furniture_type}
@@ -1080,11 +863,13 @@ export default function BomPage() {
               sheetHeight={effectiveSheetHeight}
             />
 
-            {/* Превью присадки */}
-            {bom.panels.length > 0 && (
+            {/* Превью присадки: показываем ту деталь, которую реально сверлят.
+                Чашки петель идут в фасад, поэтому берём его, а не первую панель. */}
+            {drilledPanel && (
               <DrillPreview
-                panelWidth={bom.panels[0]?.width_mm || 600}
-                panelHeight={bom.panels[0]?.height_mm || 720}
+                panelWidth={drilledPanel.width_mm}
+                panelHeight={drilledPanel.height_mm}
+                panelName={drilledPanel.name}
                 drillPoints={(bom as FullBOM & { drill_points?: Array<{
                   x: number
                   y: number
@@ -1138,25 +923,9 @@ export default function BomPage() {
                 returnedFromPayment={returnedFromPayment}
               />
             )}
-
-            {/* Mini Stepper (скрываем, так как шаги изменились) */}
-            {/* <div className="flex justify-center pt-2">
-              <MiniStepper steps={productionSteps} />
-            </div> */}
           </>
         }
       />
-
-      {/* Machine Profile Modal */}
-      {machineFeaturesEnabled && (
-        <MachineProfileModal
-          open={showProfileModal}
-          onOpenChange={setShowProfileModal}
-          currentProfile={machineProfile}
-          onSelectProfile={handleProfileSelected}
-          isFirstTime={isFirstTimeProfile}
-        />
-      )}
 
       {/* Floating status indicator для needsRecalculation */}
       {needsRecalculation && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useOrderCreator } from "@/hooks/use-order-creator";
 import { FileDropzone } from "@/components/vision/file-dropzone";
 import {
@@ -22,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Keyboard, Check, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { ProductPreview } from "@/components/order/product-preview";
+import type { ModuleShape } from "@/components/order/module-drawing";
 
 const MATERIALS = [
   { value: "ЛДСП", label: "ЛДСП" },
@@ -33,6 +36,14 @@ const THICKNESSES = [
   { value: "16", label: "16 мм" },
   { value: "18", label: "18 мм" },
   { value: "22", label: "22 мм" },
+];
+
+const MODULE_TYPES = [
+  { type: "wall", label: "Навесной шкаф", width: 600, height: 720 },
+  { type: "base", label: "Напольная тумба", width: 600, height: 850 },
+  { type: "base_sink", label: "Тумба под мойку", width: 600, height: 850 },
+  { type: "drawer", label: "Тумба с ящиками", width: 600, height: 850 },
+  { type: "tall", label: "Пенал", width: 600, height: 2200 },
 ];
 
 export default function NewOrderPage() {
@@ -58,6 +69,44 @@ export default function NewOrderPage() {
     sendChatMessage,
   } = useOrderCreator();
 
+  const [wallWidth, setWallWidth] = useState(3000);
+  const [ceilingHeight, setCeilingHeight] = useState(2600);
+  const [modules, setModules] = useState<ModuleShape[]>([]);
+  const [selectedModule, setSelectedModule] = useState(0);
+  const modulesWidth = modules.reduce((sum, module) => sum + module.width, 0);
+  const widthDifference = wallWidth - modulesWidth;
+
+  const addModule = (moduleType: (typeof MODULE_TYPES)[number]) => {
+    const added: ModuleShape = {
+      ...moduleType,
+      depth: moduleType.type === "wall" ? 320 : 600,
+      shelves: moduleType.type === "tall" ? 4 : 1,
+      doors: moduleType.width > 700 ? 2 : 1,
+      legs: moduleType.type === "wall" ? 0 : 100,
+      thickness: params.thickness_mm ?? 16,
+    };
+    setModules((current) => [...current, added]);
+    setSelectedModule(modules.length);
+    if (modules.length === 0) {
+      updateParam("cabinet_type", added.type);
+      updateParam("width_mm", added.width);
+      updateParam("height_mm", added.height);
+      updateParam("depth_mm", added.depth);
+    }
+  };
+
+  // Правка полок, фасадов и ножек прямо на пироге. Первый модуль ведёт форму
+  // ниже: он же уходит в расчёт, и расхождение между картинкой и полями
+  // было бы обманом.
+  const updateModule = (index: number, patch: Partial<ModuleShape>) => {
+    setModules((current) =>
+      current.map((module, i) => (i === index ? { ...module, ...patch } : module))
+    );
+    if (index === 0) {
+      if (patch.shelves !== undefined) updateParam("shelf_count", patch.shelves);
+      if (patch.doors !== undefined) updateParam("door_count", patch.doors);
+    }
+  };
   return (
     <OrderCreatorShell
       mode={mode}
@@ -75,6 +124,7 @@ export default function NewOrderPage() {
         />
       }
     >
+
       {/* Header */}
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-[#171a1d]">Создать заказ</h1>
@@ -150,14 +200,50 @@ export default function NewOrderPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 pt-0 space-y-6">
-            {/* Type selector */}
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+              <p className="text-sm font-semibold">Габарит по стене</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Ширина стены, мм</Label>
+                  <Input type="number" value={wallWidth} onChange={(e) => setWallWidth(Number(e.target.value) || 0)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Высота потолка, мм</Label>
+                  <Input type="number" value={ceilingHeight} onChange={(e) => setCeilingHeight(Number(e.target.value) || 0)} />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Глубина по умолчанию — 600 мм.</p>
+              <div className="flex flex-wrap gap-2">
+                {MODULE_TYPES.map((moduleType) => (
+                  <Button key={moduleType.type} type="button" variant="outline" size="sm" onClick={() => addModule(moduleType)}>
+                    + {moduleType.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Пирог: что получится до расчёта */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-[#171a1d]">Тип изделия</Label>
-              <TypeSelector
-                value={params.cabinet_type || ""}
-                onChange={(v) => updateParam("cabinet_type", v)}
+              <Label className="text-xs font-semibold text-[#171a1d]">Что получится</Label>
+              <ProductPreview
+                modules={modules}
+                wallWidth={wallWidth}
+                selectedIndex={selectedModule}
+                onSelect={setSelectedModule}
+                onChange={updateModule}
               />
             </div>
+            {/* Тип изделия нужен, только пока модулей нет: дальше тип задаёт
+                выбранный модуль на пироге, и два разных выбора путали бы. */}
+            {modules.length === 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-[#171a1d]">Тип изделия</Label>
+                <TypeSelector
+                  value={params.cabinet_type || ""}
+                  onChange={(v) => updateParam("cabinet_type", v)}
+                />
+              </div>
+            )}
 
             {/* Dimensions */}
             <div className="grid grid-cols-3 gap-4">
@@ -272,7 +358,7 @@ export default function NewOrderPage() {
               ) : (
                 <>
                   <Check className="mr-2 h-4 w-4" />
-                  Рассчитать деталировку
+                  Сгенерировать технологию
                 </>
               )}
             </Button>

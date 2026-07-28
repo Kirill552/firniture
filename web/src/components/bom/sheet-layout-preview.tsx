@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertTriangle, Layers, Loader2, Sparkles } from "lucide-react"
@@ -32,7 +32,6 @@ export function SheetLayoutPreview({
   sheetHeight = 2070,
   gap = 4,
 }: SheetLayoutPreviewProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Вызываем API для раскладки
   const layoutMutation = useLayoutPreview()
@@ -55,11 +54,6 @@ export function SheetLayoutPreview({
   }, [panels, sheetWidth, sheetHeight, gap])
 
   // Прокручиваем контейнер вправо при загрузке
-  useEffect(() => {
-    if (scrollContainerRef.current && layoutMutation.data) {
-      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth
-    }
-  }, [layoutMutation.data])
 
   // Данные из API или fallback
   const placedPanels: PlacedPanelInfo[] = layoutMutation.data?.placed_panels ?? []
@@ -74,15 +68,6 @@ export function SheetLayoutPreview({
   )
   const sheetArea = (sheetWidth * sheetHeight) / 1_000_000
 
-  // Масштаб для отображения
-  const CANVAS_WIDTH = 400
-  const CANVAS_HEIGHT = 300
-  const scaleX = CANVAS_WIDTH / sheetWidth
-  const scaleY = CANVAS_HEIGHT / sheetHeight
-  const scale = Math.min(scaleX, scaleY) * 0.9
-  const displayWidth = sheetWidth * scale
-  const displayHeight = sheetHeight * scale
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -96,59 +81,57 @@ export function SheetLayoutPreview({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Визуализация — flex column на мобильных, row на десктопе */}
-        <div
-          ref={scrollContainerRef}
-          className="flex flex-col lg:flex-row gap-6 overflow-x-auto"
-        >
+        <div className="flex flex-col lg:flex-row gap-6">
           {/* Лист с панелями */}
-          <div className="relative shrink-0" style={{ minWidth: displayWidth + 50 }}>
-            <div
-              className="relative bg-stone-100 dark:bg-stone-800 border-2 border-stone-300 dark:border-stone-600 rounded ml-2"
-              style={{
-                width: displayWidth,
-                height: displayHeight,
-              }}
-            >
-              {/* Размеры листа — сверху */}
-              <div className="absolute -top-5 left-0 right-0 text-center text-xs text-muted-foreground">
-                {sheetWidth} мм
-              </div>
-              {/* Размеры листа — справа (внутри контейнера) */}
-              <div
-                className="absolute -right-12 top-1/2 -translate-y-1/2 text-xs text-muted-foreground whitespace-nowrap"
-                style={{ writingMode: "vertical-rl" }}
-              >
-                {sheetHeight} мм
-              </div>
-
-              {/* Панели */}
-              {placedPanels.map((placed, index) => (
-                <div
-                  key={`${placed.name}-${index}`}
-                  className="absolute border border-stone-400 dark:border-stone-500 rounded-sm overflow-hidden flex items-center justify-center"
-                  style={{
-                    left: placed.x * scale,
-                    bottom: placed.y * scale, // y=0 внизу листа
-                    width: placed.width_mm * scale - 1,
-                    height: placed.height_mm * scale - 1,
-                    backgroundColor: panelColors[index % panelColors.length],
-                  }}
-                  title={`${placed.name}: ${placed.width_mm}×${placed.height_mm} мм${placed.rotated ? " (повёрнута)" : ""}`}
-                >
-                  {/* Название панели (если помещается) */}
-                  {placed.width_mm * scale > 40 && placed.height_mm * scale > 20 && (
-                    <span className="text-[8px] text-stone-600 dark:text-stone-300 truncate px-1">
-                      {placed.name}
-                    </span>
-                  )}
-                </div>
-              ))}
-
-              {/* Пустое место */}
-              {panels.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+          <div className="flex-1 min-w-0">
+            <div className="relative border-2 border-stone-300 dark:border-stone-600 bg-stone-100 dark:bg-stone-800 w-full overflow-hidden">
+              {panels.length === 0 ? (
+                <div className="flex items-center justify-center text-muted-foreground text-sm h-[300px]">
                   Нет панелей
                 </div>
+              ) : (
+                <svg
+                  viewBox={`0 0 ${sheetWidth} ${sheetHeight}`}
+                  preserveAspectRatio="xMidYMid meet"
+                  className="w-full h-auto"
+                >
+                  {/* Панели */}
+                  {placedPanels.map((placed, index) => {
+                    const x = placed.x
+                    const y = sheetHeight - placed.y - placed.height_mm
+                    const w = placed.width_mm
+                    const h = placed.height_mm
+                    const color = panelColors[index % panelColors.length]
+                    const fontSize = Math.min(w / (placed.name.length * 0.6), h * 0.3, 50)
+
+                    return (
+                      <g key={`${placed.name}-${index}`}>
+                        <title>{`${placed.name}: ${placed.width_mm}×${placed.height_mm} мм${placed.rotated ? " (повёрнута)" : ""}`}</title>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={w}
+                          height={h}
+                          fill={color}
+                          stroke="rgb(120, 113, 108)" // stone-500
+                          strokeWidth="1.5"
+                        />
+                        {w > 120 && h > 80 && fontSize >= 16 && (
+                          <text
+                            x={x + w / 2}
+                            y={y + h / 2}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize={fontSize}
+                            className="fill-stone-700 dark:fill-stone-200 font-medium select-none pointer-events-none"
+                          >
+                            {placed.name}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  })}
+                </svg>
               )}
 
               {/* Индикатор загрузки */}
@@ -157,6 +140,10 @@ export function SheetLayoutPreview({
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               )}
+            </div>
+            {/* Текстовая подпись габаритов листа */}
+            <div className="text-center text-xs text-muted-foreground mt-2 font-medium">
+              Лист ЛДСП: {sheetWidth} × {sheetHeight} мм
             </div>
           </div>
 

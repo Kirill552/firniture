@@ -1,7 +1,9 @@
 'use client'
 
 import * as React from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { fetchPaymentBalance } from "@/lib/payments"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,12 +20,27 @@ import { useAuth } from "@/components/auth-provider"
 
 export function AppBar() {
   const { user, logout } = useAuth()
+  const [isBeta, setIsBeta] = useState(false)
+
+  useEffect(() => {
+    fetchPaymentBalance()
+      .then((b) => setIsBeta(b.beta_free === true))
+      .catch(() => {/* ignore */})
+  }, [])
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#d7dde2] bg-white/90 backdrop-blur-md">
       <div className="w-full flex h-14 items-center px-6">
         <div className="flex w-full flex-1 items-center justify-between">
-          {/* Левая часть — пустая, можно добавить breadcrumbs */}
-          <div className="flex-1" />
+          {/* Левая часть — бейдж беты, затем spacer */}
+          <div className="flex items-center gap-3">
+            {isBeta && (
+              <span className="inline-flex items-center rounded-md bg-[#c7ff00] px-2 py-0.5 text-xs font-semibold text-[#171a1d]">
+                Бета
+              </span>
+            )}
+            <div className="flex-1" />
+          </div>
 
           {/* Правая часть — действия */}
           <div className="flex items-center gap-3">

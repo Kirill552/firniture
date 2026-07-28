@@ -67,7 +67,7 @@ def _validate_base64_and_size(image_base64: str) -> tuple[bytes, str | None, str
         # Строго проверяем padding и запрещаем посторонние символы.
         file_bytes = base64.b64decode(image_base64, validate=True)
     except Exception:
-        return b"", "invalid_base64", "Некорректный base64 в поле image_base64"
+        return b"", "invalid_base64", "Не удалось прочитать загруженный файл."
 
     if len(file_bytes) > settings.MAX_UPLOAD_BYTES:
         mb = len(file_bytes) / (1024 * 1024)
@@ -118,22 +118,20 @@ def _validate_image_structure(data: bytes) -> tuple[bool, str | None, str | None
             except Exception:
                 pass
             return True, None, None
-    except Exception as e:
-        return False, "unsupported_file_type", f"Не удалось открыть изображение: {type(e).__name__}"
-
+    except Exception:
+        log.exception("[Vision] Не удалось открыть изображение")
+        return False, "unsupported_file_type", "Не удалось открыть изображение. Загрузите JPG, PNG, WebP или PDF."
 
 def _validate_pdf_structure(data: bytes) -> tuple[bool, str | None, str | None]:
     try:
         pdf_to_images(data)  # reuses strict validate (pages 1-2, size, not encrypted)
         return True, None, None
     except PDFValidationError as e:
-        code = "invalid_pdf"
-        msg = str(e)
-        if "большой" in msg.lower():
-            code = "payload_too_large"
-        return False, code, msg
+        log.warning("[Vision] Проверка PDF не пройдена: %s", e)
+        return False, "invalid_pdf", "Не удалось прочитать PDF. Проверьте файл или задайте габариты вручную."
     except Exception as e:
-        return False, "invalid_pdf", f"Невалидный PDF: {e}"
+        log.exception("[Vision] Проверка PDF завершилась с исключением")
+        return False, "invalid_pdf", "Не удалось прочитать PDF. Проверьте файл или задайте габариты вручную."
 
 # Промпт для GPT для парсинга текста OCR в структурированные параметры
 FURNITURE_EXTRACTION_PROMPT = """Ты — эксперт по мебельному производству. Проанализируй текст, извлечённый из изображения/эскиза мебели, и извлеки параметры изделия.
@@ -481,29 +479,30 @@ async def extract_furniture_params_from_image(
                 )
             image_bytes_for_preflight = file_bytes
     except PDFValidationError as e:
+        log.warning("[Vision] Проверка PDF не пройдена: %s", e)
         return ImageExtractResponse(
             success=False,
-            error=str(e),
+            error="Не удалось прочитать PDF. Проверьте файл или задайте габариты вручную.",
             error_type="invalid_pdf",
             processing_time_ms=int((time.time() - start_time) * 1000),
         )
     except Exception as e:
+        log.exception("[Vision] Ошибка валидации файла")
         return ImageExtractResponse(
             success=False,
-            error=f"Ошибка валидации файла: {e}",
+            error="Не удалось проверить файл. Загрузите другой исходник или задайте габариты вручную.",
             error_type="unsupported_file_type",
             processing_time_ms=int((time.time() - start_time) * 1000),
         )
-
     # Проверка AI ключа ПОСЛЕ детерминированных проверок (mock тоже их прошёл)
     ai_settings = AISettings()
     if not ai_settings.ai_api_key:
         # В реальном пути (не mock router) это не должно случаться, но для безопасности
         return ImageExtractResponse(
             success=False,
-            error="AI_API_KEY не настроен",
+            error="Проверка изображения временно недоступна. Задайте габариты вручную.",
             fallback_to_dialogue=True,
-            dialogue_prompt="Опишите мебельное изделие, которое нужно изготовить.",
+            dialogue_prompt="Опишите изделие или задайте его габариты вручную.",
             processing_time_ms=int((time.time() - start_time) * 1000),
         )
 
@@ -519,9 +518,7 @@ async def extract_furniture_params_from_image(
             log.warning("[Vision] Preflight vision failed (fail-closed): %s", pre_e)
             return ImageExtractResponse(
                 success=False,
-                error="Сервис временно недоступен. Попробуйте позже.",
-                error_type="service_unavailable",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                error="Проверка изображения временно недоступна. Задайте габариты вручную.",
             )
 
         if not is_single or module_count != 1:
@@ -586,16 +583,14 @@ async def extract_furniture_params_from_image(
         )
 
     except Exception as e:
-        log.error(f"[Vision] Extraction failed: {e}")
+        log.exception("[Vision] Extraction failed")
         return ImageExtractResponse(
             success=False,
-            error=str(e),
+            error="Не удалось разобрать изображение. Выберите конкретный шкаф или задайте габариты вручную.",
             fallback_to_dialogue=True,
-            dialogue_prompt="Произошла ошибка при обработке изображения. Опишите изделие текстом.",
+            dialogue_prompt="Выберите конкретный шкаф или задайте габариты вручную.",
             processing_time_ms=int((time.time() - start_time) * 1000),
         )
-
-
 # Mock функция для тестирования без реальных API
 async def extract_furniture_params_mock(
     image_base64: str,

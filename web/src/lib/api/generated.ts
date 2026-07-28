@@ -63,6 +63,8 @@ export interface ArtifactDownload {
 
 /** BalanceResponse — Баланс фабрики: сколько заказов оплачено вперёд и почём. */
 export interface BalanceResponse {
+  /** Бета: оплата отключена */
+  beta_free?: boolean
   free_first_available: boolean
   pack_credits: number
   pack_price_rub: number
@@ -114,9 +116,15 @@ export interface CalculatePanelsRequest {
   drawer_count?: number
   /** Толщина кромки */
   edge_thickness_mm?: number | null
+  /** Цвет/декор фасада */
+  facade_color?: string | null
+  /** Количество конструкционных полок */
+  fixed_shelf_count?: number
   /** Высота корпуса */
   height_mm: number
-  /** Материал */
+  /** Включать фасады в раскрой */
+  include_facades?: boolean
+  /** Материал корпуса */
   material?: string
   /** Количество полок */
   shelf_count?: number
@@ -200,6 +208,8 @@ export interface ClaimResponse {
 
 /** CostBreakdownItem — Детализация стоимости. */
 export interface CostBreakdownItem {
+  /** Группа позиции: материалы, фурнитура, крепёж, услуги цеха */
+  category?: 'materials' | 'hardware' | 'fasteners' | 'services'
   /** Название позиции */
   name: string
   /** Количество */
@@ -365,20 +375,54 @@ export interface FactorySettingsResponse {
 
 /** FactorySettingsUpdate — Запрос на обновление настроек (PATCH). */
 export interface FactorySettingsUpdate {
+  /** Схема установки дна: боковины на дне или вкладное дно */
+  bottom_mount?: 'on_bottom' | 'inset' | null
+  /** Валюта цен */
+  currency?: 'RUB' | 'EUR' | 'USD' | 'KZT' | 'BYN' | 'RSD' | null
   cut_depth?: number | null
   decor?: string | null
   edge_thickness_mm?: number | null
+  /** Общий зазор фасадов по ширине и высоте, мм */
+  facade_gap_mm?: number | null
   /** Название фабрики */
   factory_name?: string | null
+  /** Тип крепежа: конфирмат или шкант */
+  fastener_type?: 'confirmat' | 'dowel' | null
   feed_rate_cutting?: number | null
   feed_rate_plunge?: number | null
   gap_mm?: number | null
+  /** Чем крепите планки и направляющие */
+  hardware_mount?: 'screws' | 'euro_screw' | null
+  /** Высота ножек напольных модулей, мм */
+  legs_height_mm?: number | null
   machine_profile?: 'weihong' | 'syntec' | 'fanuc' | 'dsp' | 'homag' | null
+  /** Множитель наценки: затраты × коэффициент = цена клиенту */
+  markup_multiplier?: number | null
+  /** Цена корпусной плиты за м² */
+  price_board_m2?: number | null
+  /** Цена распила за погонный метр */
+  price_cut_m?: number | null
+  /** Цена присадки за отверстие */
+  price_drilling_hole?: number | null
+  /** Цена скрытой кромки 0,4 мм за метр */
+  price_edge_hidden_m?: number | null
+  /** Цена видимой кромки 2 мм за метр */
+  price_edge_visible_m?: number | null
+  /** Цена кромления за метр */
+  price_edging_m?: number | null
+  /** Цена фасадной плиты за м² */
+  price_facade_board_m2?: number | null
+  /** Цена ХДФ/ДВП за м² */
+  price_hdf_m2?: number | null
   safe_height?: number | null
   sheet_height_mm?: number | null
   sheet_width_mm?: number | null
+  /** Зазор полки с каждой стороны, мм */
+  shelf_gap_mm?: number | null
   spindle_speed?: number | null
   thickness_mm?: number | null
+  /** Ширина верхних планок (царг), мм */
+  tie_beam_height_mm?: number | null
   tool_diameter?: number | null
 }
 
@@ -391,6 +435,7 @@ export interface FactorySettingsUpdateResponse {
 
 /** FeaturesResponse — Ответ о доступных функциях (feature flags). */
 export interface FeaturesResponse {
+  factory_features_enabled: boolean
   machine_features_enabled: boolean
 }
 
@@ -449,7 +494,11 @@ export interface GenerateBOMRequest {
   depth_mm: number
   door_count?: number
   drawer_count?: number
+  /** Цвет/декор фасада */
+  facade_color?: string | null
   height_mm: number
+  /** Включать фасады в раскрой */
+  include_facades?: boolean
   material?: string
   order_id?: string | null
   shelf_count?: number
@@ -463,6 +512,8 @@ export interface GenerateBOMResponse {
   cabinet_type: string
   dimensions: Record<string, number>
   edge_length_m: number
+  /** Крепёж: конфирматы, заглушки, полкодержатели */
+  fasteners?: Record<string, unknown>[]
   hardware: HardwareRecommendation[]
   manufacturing_revision?: number | null
   order_id?: string | null
@@ -659,10 +710,12 @@ export interface Order {
 /** OrderAccessResponse — Состояние доступа к экспорту конкретного заказа. */
 export interface OrderAccessResponse {
   access: boolean
+  /** Бета: экспорт бесплатен, пейволл скрыт */
+  beta_free?: boolean
   free_first_available: boolean
   pack_credits: number
   price_rub: number
-  /** free_first | payment | pack | null */
+  /** free_first | payment | pack | beta | null */
   reason: string | null
 }
 
@@ -733,16 +786,11 @@ export interface PanelInput {
 
 /** PlacedPanelInfo — Информация о размещённой панели. */
 export interface PlacedPanelInfo {
-  /** Высота (после возможного поворота) */
   height_mm: number
   name: string
-  /** Повёрнута ли панель на 90° */
   rotated?: boolean
-  /** Ширина (после возможного поворота) */
   width_mm: number
-  /** X координата левого нижнего угла */
   x: number
-  /** Y координата левого нижнего угла */
   y: number
 }
 
@@ -757,6 +805,30 @@ export interface ProductConfigResponse {
   params: Record<string, unknown>
   thickness_mm: number | null
   width_mm: number
+}
+
+/** PurchaseListItemResponse — Позиция закупочного листа. */
+export interface PurchaseListItemResponse {
+  name: string
+  quantity: number
+  total_price: number
+  unit: string
+  unit_price: number
+}
+
+/** PurchaseListResponse — Закупочный лист заказа с разбивкой по категориям. */
+export interface PurchaseListResponse {
+  /** Цена для клиента: затраты × множитель */
+  client_price?: number | null
+  currency?: string
+  hardware_total: number
+  items: PurchaseListItemResponse[]
+  /** Множитель наценки мастера, если он задан */
+  markup_multiplier?: number | null
+  materials_total: number
+  prices_are_defaults: boolean
+  services_total: number
+  total: number
 }
 
 /** RegisterRequest — Запрос на регистрацию фабрики. */
@@ -1084,6 +1156,26 @@ export interface approve_manufacturing_api_v1_orders__order_id__manufacturing_ap
 export interface validate_manufacturing_api_v1_orders__order_id__manufacturing_validate_post {
   order_id: string
   response: ValidateResponse
+}
+
+/** POST /api/v1/orders/{order_id}/products - Add Order Product */
+export interface add_order_product_api_v1_orders__order_id__products_post {
+  order_id: string
+  body: Record<string, unknown>
+  response: void
+}
+
+/** DELETE /api/v1/orders/{order_id}/products/{product_id} - Delete Order Product */
+export interface delete_order_product_api_v1_orders__order_id__products__product_id__delete {
+  order_id: string
+  product_id: string
+  response: void
+}
+
+/** GET /api/v1/orders/{order_id}/purchase-list - Get Order Purchase List */
+export interface get_order_purchase_list_api_v1_orders__order_id__purchase_list_get {
+  order_id: string
+  response: PurchaseListResponse
 }
 
 /** POST /api/v1/panels/calculate - Calculate Panels Endpoint */

@@ -21,14 +21,19 @@ class FieldSource(str, Enum):
 from api.constants import (
     DEFAULT_CUT_DEPTH,
     DEFAULT_EDGE_THICKNESS_MM,
+    DEFAULT_FACADE_GAP_MM,
+    DEFAULT_HARDWARE_MOUNT,
     DEFAULT_FEED_RATE_CUTTING,
     DEFAULT_FEED_RATE_PLUNGE,
     DEFAULT_GAP_MM,
+    DEFAULT_LEGS_HEIGHT_MM,
     DEFAULT_SAFE_HEIGHT,
+    DEFAULT_SHELF_GAP_MM,
     DEFAULT_SHEET_HEIGHT_MM,
     DEFAULT_SHEET_WIDTH_MM,
     DEFAULT_SPINDLE_SPEED,
     DEFAULT_THICKNESS_MM,
+    DEFAULT_TIE_BEAM_HEIGHT_MM,
     DEFAULT_TOOL_DIAMETER,
 )
 
@@ -677,6 +682,25 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cut_depth": DEFAULT_CUT_DEPTH,
     "safe_height": DEFAULT_SAFE_HEIGHT,
     "tool_diameter": DEFAULT_TOOL_DIAMETER,
+    "bottom_mount": "on_bottom",
+    "tie_beam_height_mm": DEFAULT_TIE_BEAM_HEIGHT_MM,
+    "facade_gap_mm": DEFAULT_FACADE_GAP_MM,
+    "shelf_gap_mm": DEFAULT_SHELF_GAP_MM,
+    "legs_height_mm": DEFAULT_LEGS_HEIGHT_MM,
+    "fastener_type": "confirmat",
+    "hardware_mount": DEFAULT_HARDWARE_MOUNT,
+    "price_board_m2": 450.0,
+    "price_facade_board_m2": 900.0,
+    "price_hdf_m2": 140.0,
+    "price_edge_visible_m": 45.0,
+    "price_edge_hidden_m": 15.0,
+    "price_cut_m": 30.0,
+    "price_edging_m": 40.0,
+    "price_drilling_hole": 10.0,
+    # Множитель наценки: мастер умножает затраты на свой коэффициент и получает
+    # цену для клиента. Два — распространённый минимум, три уже уверенно.
+    "markup_multiplier": 2.5,
+    "currency": "RUB",
 }
 
 
@@ -697,6 +721,48 @@ class FactorySettings(BaseModel):
 
     # DXF
     gap_mm: float | None = Field(None, ge=0, le=50, description="Зазор на пропил (мм)")
+    # Стандарты мастера
+    bottom_mount: Literal["on_bottom", "inset"] | None = Field(
+        None, description="Схема установки дна: боковины на дне или вкладное дно"
+    )
+    tie_beam_height_mm: float | None = Field(
+        None, ge=30, le=200, description="Ширина верхних планок (царг), мм"
+    )
+    facade_gap_mm: float | None = Field(
+        None, ge=0, le=20, description="Общий зазор фасадов по ширине и высоте, мм"
+    )
+    shelf_gap_mm: float | None = Field(
+        None, ge=0, le=20, description="Зазор полки с каждой стороны, мм"
+    )
+    legs_height_mm: float | None = Field(
+        None, ge=0, le=300, description="Высота ножек напольных модулей, мм"
+    )
+    fastener_type: Literal["confirmat", "dowel"] | None = Field(
+        None, description="Тип крепежа: конфирмат или шкант"
+    )
+    hardware_mount: Literal["screws", "euro_screw"] | None = Field(
+        None, description="Чем крепите планки и направляющие"
+    )
+
+    # Прайс мастера
+    price_board_m2: float | None = Field(None, ge=0, description="Цена корпусной плиты за м²")
+    price_facade_board_m2: float | None = Field(None, ge=0, description="Цена фасадной плиты за м²")
+    price_hdf_m2: float | None = Field(None, ge=0, description="Цена ХДФ/ДВП за м²")
+    price_edge_visible_m: float | None = Field(
+        None, ge=0, description="Цена видимой кромки 2 мм за метр"
+    )
+    price_edge_hidden_m: float | None = Field(
+        None, ge=0, description="Цена скрытой кромки 0,4 мм за метр"
+    )
+    price_cut_m: float | None = Field(None, ge=0, description="Цена распила за погонный метр")
+    price_edging_m: float | None = Field(None, ge=0, description="Цена кромления за метр")
+    price_drilling_hole: float | None = Field(None, ge=0, description="Цена присадки за отверстие")
+    markup_multiplier: float | None = Field(
+        None, ge=1, le=10, description="Множитель наценки: затраты × коэффициент = цена клиенту"
+    )
+    currency: Literal["RUB", "EUR", "USD", "KZT", "BYN", "RSD"] | None = Field(
+        None, description="Валюта цен"
+    )
 
     # G-code
     spindle_speed: int | None = Field(
@@ -732,6 +798,48 @@ class FactorySettingsUpdate(BaseModel):
 
     # DXF
     gap_mm: float | None = Field(None, ge=0, le=50)
+    # Стандарты мастера
+    bottom_mount: Literal["on_bottom", "inset"] | None = Field(
+        None, description="Схема установки дна: боковины на дне или вкладное дно"
+    )
+    tie_beam_height_mm: float | None = Field(
+        None, ge=30, le=200, description="Ширина верхних планок (царг), мм"
+    )
+    facade_gap_mm: float | None = Field(
+        None, ge=0, le=20, description="Общий зазор фасадов по ширине и высоте, мм"
+    )
+    shelf_gap_mm: float | None = Field(
+        None, ge=0, le=20, description="Зазор полки с каждой стороны, мм"
+    )
+    legs_height_mm: float | None = Field(
+        None, ge=0, le=300, description="Высота ножек напольных модулей, мм"
+    )
+    fastener_type: Literal["confirmat", "dowel"] | None = Field(
+        None, description="Тип крепежа: конфирмат или шкант"
+    )
+    hardware_mount: Literal["screws", "euro_screw"] | None = Field(
+        None, description="Чем крепите планки и направляющие"
+    )
+
+    # Прайс мастера
+    price_board_m2: float | None = Field(None, ge=0, description="Цена корпусной плиты за м²")
+    price_facade_board_m2: float | None = Field(None, ge=0, description="Цена фасадной плиты за м²")
+    price_hdf_m2: float | None = Field(None, ge=0, description="Цена ХДФ/ДВП за м²")
+    price_edge_visible_m: float | None = Field(
+        None, ge=0, description="Цена видимой кромки 2 мм за метр"
+    )
+    price_edge_hidden_m: float | None = Field(
+        None, ge=0, description="Цена скрытой кромки 0,4 мм за метр"
+    )
+    price_cut_m: float | None = Field(None, ge=0, description="Цена распила за погонный метр")
+    price_edging_m: float | None = Field(None, ge=0, description="Цена кромления за метр")
+    price_drilling_hole: float | None = Field(None, ge=0, description="Цена присадки за отверстие")
+    markup_multiplier: float | None = Field(
+        None, ge=1, le=10, description="Множитель наценки: затраты × коэффициент = цена клиенту"
+    )
+    currency: Literal["RUB", "EUR", "USD", "KZT", "BYN", "RSD"] | None = Field(
+        None, description="Валюта цен"
+    )
 
     # G-code
     spindle_speed: int | None = Field(None, ge=1000, le=30000)
@@ -804,10 +912,15 @@ class CalculatePanelsRequest(BaseModel):
     depth_mm: int = Field(..., gt=0, le=1000, description="Глубина корпуса")
 
     # Опции
-    material: str = Field("ЛДСП 16мм", description="Материал")
+    material: str = Field("ЛДСП 16мм", description="Материал корпуса")
     shelf_count: int = Field(1, ge=0, le=10, description="Количество полок")
+    fixed_shelf_count: int = Field(
+        0, ge=0, le=10, description="Количество конструкционных полок"
+    )
     door_count: int = Field(1, ge=0, le=4, description="Количество дверей")
     drawer_count: int = Field(0, ge=0, le=10, description="Количество ящиков")
+    include_facades: bool = Field(True, description="Включать фасады в раскрой")
+    facade_color: str | None = Field(None, max_length=100, description="Цвет/декор фасада")
 
     # Настройки (если не указаны — берутся из фабрики)
     thickness_mm: float | None = Field(None, description="Толщина материала")
@@ -858,6 +971,8 @@ class GenerateBOMRequest(BaseModel):
     shelf_count: int = Field(1, ge=0)
     door_count: int = Field(1, ge=0)
     drawer_count: int = Field(0, ge=0)
+    include_facades: bool = Field(True, description="Включать фасады в раскрой")
+    facade_color: str | None = Field(None, max_length=100, description="Цвет/декор фасада")
 
 
 class GenerateBOMResponse(BaseModel):
@@ -871,6 +986,10 @@ class GenerateBOMResponse(BaseModel):
 
     panels: list[CalculatedPanel]
     hardware: list[HardwareRecommendation]
+    fasteners: list[dict] = Field(
+        default_factory=list,
+        description="Крепёж: конфирматы, заглушки, полкодержатели",
+    )
 
     # Сводка
     total_panels: int
@@ -911,11 +1030,11 @@ class PlacedPanelInfo(BaseModel):
     """Информация о размещённой панели."""
 
     name: str
-    x: float = Field(..., description="X координата левого нижнего угла")
-    y: float = Field(..., description="Y координата левого нижнего угла")
-    width_mm: float = Field(..., description="Ширина (после возможного поворота)")
-    height_mm: float = Field(..., description="Высота (после возможного поворота)")
-    rotated: bool = Field(False, description="Повёрнута ли панель на 90°")
+    x: float
+    y: float
+    width_mm: float
+    height_mm: float
+    rotated: bool = False
 
 
 class LayoutPreviewResponse(BaseModel):
@@ -926,15 +1045,11 @@ class LayoutPreviewResponse(BaseModel):
     unplaced_panels: list[str] = Field(
         default_factory=list, description="Названия панелей, которые не поместились"
     )
-
-    # Статистика
     sheet_width_mm: float
     sheet_height_mm: float
     utilization_percent: float = Field(..., description="Утилизация листа (%)")
     panels_placed: int
     panels_total: int
-
-    # Метаданные раскладки
     layout_method: str = Field("guillotine", description="Метод раскладки (guillotine/maxrects)")
 
 
@@ -999,6 +1114,10 @@ class CostBreakdownItem(BaseModel):
     unit: str = Field(..., description="Ед. изм.")
     unit_price: float = Field(..., description="Цена за единицу")
     total_price: float = Field(..., description="Итоговая цена")
+    category: Literal["materials", "hardware", "fasteners", "services"] = Field(
+        "materials",
+        description="Группа позиции: материалы, фурнитура, крепёж, услуги цеха",
+    )
 
 
 class CostEstimateResponse(BaseModel):
@@ -1139,3 +1258,31 @@ class FeaturesResponse(BaseModel):
     """Ответ о доступных функциях (feature flags)."""
 
     machine_features_enabled: bool
+    factory_features_enabled: bool
+ 
+class PurchaseListItemResponse(BaseModel):
+    """Позиция закупочного листа."""
+
+    name: str
+    quantity: float
+    unit: str
+    unit_price: float
+    total_price: float
+
+
+class PurchaseListResponse(BaseModel):
+    """Закупочный лист заказа с разбивкой по категориям."""
+
+    items: list[PurchaseListItemResponse]
+    materials_total: float
+    hardware_total: float
+    services_total: float
+    total: float
+    markup_multiplier: float | None = Field(
+        None, description="Множитель наценки мастера, если он задан"
+    )
+    client_price: float | None = Field(
+        None, description="Цена для клиента: затраты × множитель"
+    )
+    currency: str = "RUB"
+    prices_are_defaults: bool

@@ -35,7 +35,7 @@ export class ErrorBoundary extends React.Component<
           </div>
           <h2 className="text-2xl font-bold mb-2">Что-то пошло не так</h2>
           <p className="text-muted-foreground mb-6 max-w-md">
-            Произошла ошибка при загрузке компонента. Попробуйте обновить страницу или перезайти в систему.
+            Не удалось загрузить этот раздел. Обновите страницу или вернитесь к заказам.
           </p>
           <div className="flex gap-2">
             <Button onClick={() => window.location.reload()}>Обновить страницу</Button>
@@ -43,14 +43,6 @@ export class ErrorBoundary extends React.Component<
               На главную
             </Button>
           </div>
-          {this.state.error && (
-            <details className="mt-6 p-4 border rounded-md bg-destructive/5 text-sm">
-              <summary className="cursor-pointer font-medium">Детали ошибки</summary>
-              <pre className="mt-2 text-destructive whitespace-pre-wrap">
-                {this.state.error.message}
-              </pre>
-            </details>
-          )}
         </div>
       );
     }

@@ -41,6 +41,7 @@ from . import crud, models
 from .auth import get_current_user, get_current_user_optional
 from .database import get_db
 from .dxf_generator import Panel as DXFPanel
+from .purchase_list import calculate_purchase_list, summarize_purchase
 from .dxf_generator import PlacedPanel, optimize_layout_best
 from .models import (
     Artifact,
@@ -62,6 +63,8 @@ from .schemas import (
     CAMJobsListResponse,
     CostBreakdownItem,
     CostEstimateResponse,
+    PurchaseListItemResponse,
+    PurchaseListResponse,
     DialogueTurnRequest,
     Export1CRequest,
     Export1CResponse,
@@ -154,7 +157,7 @@ TECHNOLOGIST_SYSTEM_PROMPT = """Ты — «Технолог-GPT», опытны�
 
 **Фурнитура:**
 • Петля Boyard H404A21 накладная — 4 шт
-• Конфирмат 5×40 — 12 шт
+• Конфирмат 7×50 — 8 шт
 
 Всё верно? Могу изменить или сгенерировать DXF."
 
@@ -317,8 +320,8 @@ async def create_anonymous_order(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=UploadErrorDetail(
-                code=GuestUploadErrorCode.service_unavailable,  # or introduce unauthorized but stick to listed
-                message="Требуется одноразовый guest_upload_grant после успешного распознавания.",
+                code=GuestUploadErrorCode.service_unavailable,
+                message="Сначала загрузите изображение для проверки.",
             ).model_dump(),
         )
 
@@ -330,7 +333,7 @@ async def create_anonymous_order(
             status_code=status.HTTP_409_CONFLICT,
             detail=UploadErrorDetail(
                 code=GuestUploadErrorCode.service_unavailable,
-                message="Недействительный, просроченный или уже использованный guest_upload_grant.",
+                message="Проверка изображения больше недоступна. Загрузите файл ещё раз.",
             ).model_dump(),
         )
 
@@ -386,7 +389,7 @@ async def get_order_with_products_endpoint(
     """Получить заказ с продуктами для отображения на BOM странице."""
     order = await crud.get_order_with_products(db, order_id)
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
 
     return OrderWithProductsResponse(
@@ -411,45 +414,106 @@ async def get_order_with_products_endpoint(
     )
 
 
+def _count_drilling(panels: list, hardware_type: str, side: str | None = None) -> int:
+    """Сколько отверстий заданного типа насверлено по всем деталям заказа.
+
+    Конфирмат живёт в двух отверстиях сразу: в пласти боковины (`face`) и в
+    торце горизонтали (`edge`). Чтобы не посчитать один винт дважды, вызывающий
+    задаёт сторону.
+    """
+    total = 0
+    for panel in panels:
+        if isinstance(panel, dict):
+            points = panel.get("drilling_points") or []
+            quantity = panel.get("quantity") or 1
+        else:
+            points = getattr(panel, "drilling_points", None) or []
+            quantity = getattr(panel, "quantity", 1) or 1
+
+        for point in points:
+            if isinstance(point, dict):
+                kind, point_side = point.get("hardware_type"), point.get("side")
+            else:
+                kind = getattr(point, "hardware_type", None)
+                point_side = getattr(point, "side", None)
+            if kind != hardware_type:
+                continue
+            if side is not None and point_side != side:
+                continue
+            total += quantity
+    return total
+
+
+_CALCULATOR_STANDARD_KEYS = (
+    "bottom_mount", "tie_beam_height_mm", "facade_gap_mm",
+    "shelf_gap_mm", "legs_height_mm", "fastener_type", "hardware_mount",
+)
+
+
+def _calculator_standards(factory_settings: dict) -> dict:
+    return {
+        key: factory_settings[key]
+        for key in _CALCULATOR_STANDARD_KEYS
+        if key in factory_settings and factory_settings[key] is not None
+    }
+
 def _calculate_fasteners(
-    panels_count: int, door_count: int, drawer_count: int, shelf_count: int
+    panels: list,
+    drawer_count: int,
+    shelf_count: int,
+    standards: dict | None = None,
 ) -> list[dict]:
-    """Расчёт крепежа на основе количества панелей и элементов."""
-    fasteners = []
+    """Крепёж по фактической присадке и стандарту мастера."""
+    fasteners: list[dict] = []
+    fastener_type = (standards or {}).get("fastener_type", "confirmat")
+    fastener_count = _count_drilling(panels, fastener_type, side="face")
+    if fastener_count == 0:
+        horizontals = 2 + max(drawer_count, 0)
+        fastener_count = horizontals * 2 * 2
 
-    # Конфирматы для сборки корпуса (2 на соединение, ~4 соединения на панель)
-    confirmats_count = panels_count * 4
-    if confirmats_count > 0:
+    if fastener_type == "dowel":
         fasteners.append(
             {
                 "id": str(uuid.uuid4()),
-                "name": "Конфирмат",
-                "size": "7×50",
-                "quantity": confirmats_count,
+                "name": "Шкант 8×35",
+                "size": "8×35",
+                "quantity": fastener_count,
                 "purpose": "сборка корпуса",
-                "unit_price": 2.0,
+                "unit_price": 1.5,
             }
         )
-        # Заглушки под конфирматы
-        fasteners.append(
-            {
-                "id": str(uuid.uuid4()),
-                "name": "Заглушка",
-                "size": "15мм",
-                "quantity": confirmats_count,
-                "purpose": "закрытие конфирматов",
-                "unit_price": 1.0,
-            }
+    else:
+        fasteners.extend(
+            [
+                {
+                    "id": str(uuid.uuid4()),
+                    "name": "Конфирмат",
+                    "size": "7×50",
+                    "quantity": fastener_count,
+                    "purpose": "сборка корпуса",
+                    "unit_price": 2.0,
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "name": "Заглушка",
+                    "size": "15мм",
+                    "quantity": fastener_count,
+                    "purpose": "закрытие конфирматов",
+                    "unit_price": 1.0,
+                },
+            ]
         )
 
-    # Полкодержатели (4 на полку)
-    if shelf_count > 0:
+    # Полкодержателей четыре на полку. Отверстий в боковине больше: система 32
+    # сверлит ряд под перестановку, но покупают не ряд, а четыре штуки.
+    pins_count = max(shelf_count, 0) * 4
+    if pins_count > 0:
         fasteners.append(
             {
                 "id": str(uuid.uuid4()),
                 "name": "Полкодержатель",
                 "size": "5мм",
-                "quantity": shelf_count * 4,
+                "quantity": pins_count,
                 "purpose": "крепление полок",
                 "unit_price": 3.0,
             }
@@ -459,23 +523,31 @@ def _calculate_fasteners(
 
 
 def _calculate_edge_bands(panels: list, material_color: str = "белый") -> list[dict]:
-    """Расчёт кромки на основе панелей."""
-    # Считаем периметр всех панелей
-    total_visible_edges_mm = 0  # Видимые торцы (ПВХ 2мм)
-    total_hidden_edges_mm = 0  # Скрытые торцы (меламин 0.4мм)
+    """Кромка по фактическим сторонам детали, а не по её названию.
+
+    Калькулятор помечает каждую панель флагами `edge_*`: у съёмной полки
+    кромка идёт по кругу, у боковины только передний торец, у фасада все
+    четыре. Остальные торцы закрываются меламином, потому что их не видно.
+    """
+    total_visible_edges_mm = 0.0  # Видимые торцы (ПВХ 2мм)
+    total_hidden_edges_mm = 0.0  # Скрытые торцы (меламин 0.4мм)
 
     for panel in panels:
-        width = panel.get("width_mm", 0) or 0
-        height = panel.get("height_mm", 0) or 0
-        name_lower = panel.get("name", "").lower()
+        width = float(panel.get("width_mm", 0) or 0)
+        height = float(panel.get("height_mm", 0) or 0)
+        quantity = int(panel.get("quantity", 1) or 1)
 
-        # Видимые торцы — передние кромки боковин и фасадов
-        if "боковина" in name_lower or "фасад" in name_lower:
-            total_visible_edges_mm += height  # Передняя кромка
-            total_hidden_edges_mm += height + width * 2  # Остальные
-        else:
-            # Для остальных панелей — все скрытые
-            total_hidden_edges_mm += (width + height) * 2
+        sides = (
+            (panel.get("edge_front"), height),
+            (panel.get("edge_back"), height),
+            (panel.get("edge_top"), width),
+            (panel.get("edge_bottom"), width),
+        )
+        perimeter = (width + height) * 2
+        visible = sum(length for flagged, length in sides if flagged)
+
+        total_visible_edges_mm += visible * quantity
+        total_hidden_edges_mm += max(perimeter - visible, 0) * quantity
 
     edge_bands = []
 
@@ -519,12 +591,14 @@ async def finalize_order_endpoint(
     Принимает JSON спецификацию от AI в гибком формате и сохраняет в ProductConfig.
     Автоматически рассчитывает крепёж и кромку.
     """
+    factory = await db.get(Factory, current_user.factory_id)
+    factory_settings = (factory.settings or {}) if factory else {}
     import re
 
     # Проверяем существование заказа
     order = await crud.get_order_with_history(db, order_id)
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
 
     # Извлекаем размеры из разных форматов
@@ -629,6 +703,9 @@ async def finalize_order_endpoint(
                 door_count=door_count,
                 shelf_count=shelf_count,
                 drawer_count=drawer_count,
+                include_facades=bool(spec.get("include_facades", True)),
+                facade_color=spec.get("facade_color"),
+                standards=_calculator_standards(factory_settings),
             )
 
             for p in calc_result.panels:
@@ -639,6 +716,9 @@ async def finalize_order_endpoint(
                         "height_mm": p.height_mm,
                         "edge_front": p.edge_front,
                         "edge_back": p.edge_back,
+                        "edge_top": p.edge_top,
+                        "edge_bottom": p.edge_bottom,
+                        "quantity": p.quantity,
                     }
                 )
         except Exception as e:
@@ -646,10 +726,10 @@ async def finalize_order_endpoint(
 
     # Рассчитываем крепёж
     fasteners = _calculate_fasteners(
-        panels_count=len(parsed_panels),
-        door_count=door_count,
+        panels=parsed_panels,
         drawer_count=drawer_count,
         shelf_count=shelf_count,
+        standards=_calculator_standards(factory_settings),
     )
 
     # Рассчитываем кромку
@@ -701,6 +781,8 @@ async def finalize_order_endpoint(
             material=material,
             edge_front=panel_data.get("edge_front", False),
             edge_back=panel_data.get("edge_back", False),
+            edge_top=panel_data.get("edge_top", False),
+            edge_bottom=panel_data.get("edge_bottom", False),
             drilling_points=panel_data.get("drilling_points"),
         )
         db.add(panel)
@@ -718,6 +800,107 @@ async def finalize_order_endpoint(
 
 
 # ============================================================================
+# Мультимодульный заказ
+# ============================================================================
+
+def _cabinet_type_from_name(name: str | None) -> str:
+    """Определяет тип кухонного модуля по его названию."""
+    value = (name or "").lower()
+    if "пенал" in value or "высок" in value or "колонн" in value:
+        return "tall"
+    if "мойк" in value:
+        return "base_sink"
+    if "ящик" in value:
+        return "drawer"
+    if "напольн" in value or "тумб" in value or "нижн" in value:
+        return "base"
+    return "wall"
+
+
+@router.post("/orders/{order_id}/products")
+async def add_order_product(
+    order_id: UUID,
+    product_data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Добавить кухонный модуль и сразу рассчитать его панели."""
+    from api.panel_calculator import calculate_panels
+
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
+    params = dict(product_data.get("params") or {})
+    product = ProductConfig(
+        order_id=order.id,
+        name=product_data.get("name") or product_data.get("furniture_type") or "Модуль",
+        width_mm=float(product_data.get("width_mm", 600)),
+        height_mm=float(product_data.get("height_mm", 720)),
+        depth_mm=float(product_data.get("depth_mm", 600)),
+        material=product_data.get("material", "ЛДСП"),
+        thickness_mm=float(product_data.get("thickness_mm", 16)),
+        params=params,
+    )
+    db.add(product)
+    await db.flush()
+    factory = await db.get(Factory, order.factory_id)
+    factory_settings = factory.settings if factory else {}
+    result = calculate_panels(
+        cabinet_type=_cabinet_type_from_name(product.name),
+        width_mm=int(product.width_mm), height_mm=int(product.height_mm),
+        depth_mm=int(product.depth_mm), thickness_mm=float(product.thickness_mm),
+        shelf_count=int(params.get("shelf_count", 1)),
+        door_count=int(params.get("door_count", 1)),
+        drawer_count=int(params.get("drawer_count", 0)),
+        include_facades=bool(params.get("include_facades", True)),
+        facade_color=params.get("facade_color"),
+        standards=_calculator_standards(factory_settings),
+    )
+    for spec in result.panels:
+        panel_material = (
+            params.get("facade_color")
+            if spec.name.startswith("Фасад") and params.get("facade_color")
+            else product.material
+        )
+        db.add(Panel(
+            product_id=product.id, name=spec.name, width_mm=spec.width_mm,
+            height_mm=spec.height_mm, thickness_mm=spec.thickness_mm,
+            material=panel_material, edge_front=spec.edge_front,
+            edge_back=spec.edge_back, edge_top=spec.edge_top,
+            edge_bottom=spec.edge_bottom, drilling_points=spec.drilling_points,
+        ))
+    await db.commit()
+    return {
+        "success": True,
+        "product": {
+            "id": str(product.id), "name": product.name,
+            "width_mm": product.width_mm, "height_mm": product.height_mm,
+            "depth_mm": product.depth_mm,
+        },
+    }
+
+
+@router.delete("/orders/{order_id}/products/{product_id}")
+async def delete_order_product(
+    order_id: UUID,
+    product_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Удалить модуль из заказа, оставив остальные модули без изменений."""
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
+    product = next((item for item in order.products if item.id == product_id), None)
+    if not product:
+        raise HTTPException(status_code=404, detail="Модуль не найден.")
+    await db.delete(product)
+    await db.commit()
+    return {"success": True, "product_id": str(product_id)}
+
+# ============================================================================
 # BOM — полная спецификация заказа
 # ============================================================================
 
@@ -728,152 +911,83 @@ async def get_order_bom(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Получить полную спецификацию (BOM) заказа.
-
-    Включает:
-    - Основные параметры (габариты, материал)
-    - Панели с размерами
-    - Фурнитуру
-    - Крепёж (конфирматы, заглушки)
-    - Кромку
-    - Сводку (площадь, % использования листа)
-    """
+    """Получить единую спецификацию всех модулей заказа."""
     order = await crud.get_order_with_products(db, order_id)
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
-
     if not order.products:
-        raise HTTPException(status_code=404, detail="No product config found for this order")
+        raise HTTPException(status_code=404, detail="В заказе нет изделия для расчёта.")
 
-    # Берём первый ProductConfig (обычно один на заказ)
-    product = order.products[0]
-
-    # Получаем панели из БД
-    from sqlalchemy import select
-
-    panels_result = await db.execute(select(Panel).where(Panel.product_id == product.id))
-    panels = panels_result.scalars().all()
-
-    # Формируем ответ
-    params = product.params or {}
-
-    # Рассчитать drill_points для первого фасада (если есть двери)
+    product_ids = [product.id for product in order.products]
+    result = await db.execute(select(Panel).where(Panel.product_id.in_(product_ids)))
+    db_panels = result.scalars().all()
+    products_by_id = {product.id: product for product in order.products}
+    panels = []
     drill_points = []
-    door_count = params.get("door_count") or params.get("doors", 0)
-    drawer_count = params.get("drawer_count") or params.get("drawers", 0)
-
-    if door_count > 0:
-        # Ищем фасад среди панелей
-        facade_panel = next(
-            (p for p in panels if "фасад" in p.name.lower() or "дверь" in p.name.lower()), None
-        )
-        # Если фасад не найден — рассчитываем по размерам шкафа
-        if facade_panel:
-            facade_width = facade_panel.width_mm
-            facade_height = facade_panel.height_mm
-        else:
-            # Размер фасада = размер шкафа минус зазоры (по 2мм с каждой стороны)
-            facade_width = (
-                (product.width_mm - 4) / door_count if door_count > 1 else product.width_mm - 4
-            )
-            facade_height = product.height_mm - 4
-
-        facade_drilling = calculate_drilling_for_facade(
-            width_mm=facade_width,
-            height_mm=facade_height,
-        )
-        drill_points.extend(
-            [
-                {
-                    "x": pt.x,
-                    "y": pt.y,
-                    "diameter": pt.diameter,
-                    "depth": pt.depth,
-                    "layer": pt.layer,
-                    "hardware_id": pt.hardware_id,
-                    "hardware_type": pt.hardware_type,
-                    "notes": pt.notes,
-                }
-                for pt in facade_drilling.drill_points
-            ]
-        )
-
-    if drawer_count > 0:
-        # Ищем боковину среди панелей
-        side_panel = next((p for p in panels if "боковина" in p.name.lower()), None)
-        # Если боковина не найдена — рассчитываем по размерам шкафа
-        if side_panel:
-            side_height = side_panel.height_mm
-            side_depth = side_panel.width_mm  # Для боковины width = depth
-        else:
-            side_height = product.height_mm
-            side_depth = product.depth_mm
-
-        side_drilling = calculate_drilling_for_side_panel(
-            height_mm=side_height,
-            depth_mm=side_depth,
-            drawer_count=drawer_count,
-        )
-        drill_points.extend(
-            [
-                {
-                    "x": pt.x,
-                    "y": pt.y,
-                    "diameter": pt.diameter,
-                    "depth": pt.depth,
-                    "layer": pt.layer,
-                    "hardware_id": pt.hardware_id,
-                    "hardware_type": pt.hardware_type,
-                    "notes": pt.notes,
-                }
-                for pt in side_drilling.drill_points
-            ]
-        )
-
+    hardware, fasteners, edge_bands = [], [], []
+    total_width = 0.0
+    for product in order.products:
+        params = product.params or {}
+        total_width += product.width_mm or 0
+        hardware.extend(params.get("hardware", []))
+        fasteners.extend(params.get("fasteners", []))
+        edge_bands.extend(params.get("edge_bands", []))
+    for panel in db_panels:
+        product = products_by_id[panel.product_id]
+        panels.append({
+            "id": str(panel.id), "name": panel.name,
+            "module_name": product.name or "Модуль",
+            "module_id": str(product.id), "width_mm": panel.width_mm,
+            "height_mm": panel.height_mm, "thickness_mm": panel.thickness_mm,
+            "material": panel.material, "edge_front": panel.edge_front,
+            "edge_back": panel.edge_back,
+        })
+        for point in panel.drilling_points or []:
+            drill_points.append({**point, "module_name": product.name or "Модуль"})
+    if not drill_points:
+        for product in order.products:
+            params = product.params or {}
+            door_count = int(params.get("door_count") or params.get("doors", 0))
+            if door_count:
+                drilling = calculate_drilling_for_facade(
+                    width_mm=(product.width_mm - 4) / door_count,
+                    height_mm=product.height_mm - 4,
+                )
+                drill_points.extend(
+                    {**point.__dict__, "module_name": product.name or "Модуль"}
+                    for point in drilling.drill_points
+                )
+    first = order.products[0]
+    first_params = first.params or {}
+    summary = dict(first_params.get("summary") or {})
+    summary.update({"panels_count": len(panels),
+                    "total_area_m2": round(sum(p["width_mm"] * p["height_mm"]
+                                               for p in panels) / 1_000_000, 3)})
     return {
-        "order_id": str(order_id),
-        "product_config_id": str(product.id),
-        "furniture_type": product.name,
-        "dimensions": {
-            "width_mm": product.width_mm,
-            "height_mm": product.height_mm,
-            "depth_mm": product.depth_mm,
-        },
-        "body_material": {
-            "type": product.material,
-            "thickness_mm": product.thickness_mm,
-            "color": params.get("body_material", {}).get("color", "белый")
-            if isinstance(params.get("body_material"), dict)
-            else "белый",
-        },
-        "panels": [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "width_mm": p.width_mm,
-                "height_mm": p.height_mm,
-                "thickness_mm": p.thickness_mm,
-                "material": p.material,
-                "edge_front": p.edge_front,
-                "edge_back": p.edge_back,
-            }
-            for p in panels
+        "order_id": str(order_id), "product_config_id": str(first.id),
+        "furniture_type": first.name, "module_count": len(order.products),
+        "modules": [
+            {"id": str(product.id), "name": product.name,
+             "width_mm": product.width_mm, "height_mm": product.height_mm,
+             "depth_mm": product.depth_mm}
+            for product in order.products
         ],
-        "hardware": params.get("hardware", []),
-        "fasteners": params.get("fasteners", []),
-        "edge_bands": params.get("edge_bands", []),
-        "summary": params.get("summary", {}),
-        "door_count": door_count,
-        "drawer_count": drawer_count,
-        "shelf_count": params.get("shelf_count") or params.get("shelves", 0),
+        "dimensions": {"width_mm": first.width_mm, "height_mm": first.height_mm,
+                       "depth_mm": first.depth_mm},
+        "module_width_total_mm": total_width,
+        "body_material": {"type": first.material,
+                          "thickness_mm": first.thickness_mm,
+                          "color": first_params.get("body_material", {}).get("color", "белый")
+                          if isinstance(first_params.get("body_material"), dict) else "белый"},
+        "panels": panels,
+        "hardware": hardware, "fasteners": fasteners, "edge_bands": edge_bands,
+        "summary": summary,
+        "door_count": first_params.get("door_count") or first_params.get("doors", 0),
+        "drawer_count": first_params.get("drawer_count") or first_params.get("drawers", 0),
+        "shelf_count": first_params.get("shelf_count") or first_params.get("shelves", 0),
         "drill_points": drill_points,
-        "presets": {
-            "hinge_template": "hinge_35mm_overlay",
-            "slide_template": "slide_ball_h45",
-        },
-        # Approval-flow: текущая и утверждённая manufacturing revision заказа
+        "presets": {"hinge_template": "hinge_35mm_overlay", "slide_template": "slide_ball_h45"},
         "manufacturing_revision": order.manufacturing_revision,
         "approved_manufacturing_revision": order.approved_manufacturing_revision,
     }
@@ -898,13 +1012,19 @@ async def update_order_bom(
     """
     order = await crud.get_order_with_products(db, order_id)
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if not order.products:
-        raise HTTPException(status_code=404, detail="No product config found")
+        raise HTTPException(status_code=404, detail="В заказе нет изделия для расчёта.")
 
-    product = order.products[0]
+    target_id = updates.get("product_config_id")
+    product = next(
+        (item for item in order.products if not target_id or str(item.id) == str(target_id)),
+        None,
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Модуль не найден.")
 
     # Обновляем габариты
     if "dimensions" in updates:
@@ -935,7 +1055,9 @@ async def update_order_bom(
         for panel_update in updates["panels"]:
             panel_id = panel_update.get("id")
             if panel_id:
-                result = await db.execute(select(Panel).where(Panel.id == UUID(panel_id)))
+                result = await db.execute(
+                    select(Panel).where(Panel.id == UUID(panel_id), Panel.product_id == product.id)
+                )
                 panel = result.scalars().first()
                 if panel:
                     if "name" in panel_update:
@@ -983,17 +1105,20 @@ async def add_panel_to_bom(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Добавить панель в BOM."""
+    """Добавить панель в BOM выбранного модуля."""
     order = await crud.get_order_with_products(db, order_id)
     if not order or not order.products:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
-
-    product = order.products[0]
-
+    target_id = panel_data.get("product_config_id")
+    product = next(
+        (item for item in order.products if not target_id or str(item.id) == str(target_id)),
+        None,
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Модуль не найден.")
     panel = Panel(
-        product_id=product.id,
-        name=panel_data.get("name", "Новая панель"),
+        product_id=product.id, name=panel_data.get("name", "Новая панель"),
         width_mm=float(panel_data.get("width_mm", 0)),
         height_mm=float(panel_data.get("height_mm", 0)),
         thickness_mm=float(panel_data.get("thickness_mm", product.thickness_mm or 16)),
@@ -1002,7 +1127,6 @@ async def add_panel_to_bom(
     )
     db.add(panel)
     await db.commit()
-
     return {"success": True, "panel_id": str(panel.id)}
 
 
@@ -1019,17 +1143,17 @@ async def delete_panel_from_bom(
     # Проверяем что панель принадлежит заказу
     order = await crud.get_order_with_products(db, order_id)
     if not order or not order.products:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
 
-    product = order.products[0]
-
     result = await db.execute(
-        select(Panel).where(Panel.id == panel_id, Panel.product_id == product.id)
+        select(Panel)
+        .join(ProductConfig, Panel.product_id == ProductConfig.id)
+        .where(Panel.id == panel_id, ProductConfig.order_id == order_id)
     )
     panel = result.scalars().first()
     if not panel:
-        raise HTTPException(status_code=404, detail="Panel not found")
+        raise HTTPException(status_code=404, detail="Панель не найдена.")
 
     await db.delete(panel)
     await db.commit()
@@ -1059,11 +1183,11 @@ async def recalculate_bom(
 
     order = await crud.get_order_with_products(db, order_id)
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Заказ не найден.")
     enforce_factory_access(order.factory_id, current_user.factory_id)
 
     if not order.products:
-        raise HTTPException(status_code=404, detail="No product config found")
+        raise HTTPException(status_code=404, detail="В заказе нет изделия для расчёта.")
 
     product = order.products[0]
     params = product.params or {}
@@ -1092,6 +1216,8 @@ async def recalculate_bom(
     shelf_count = params.get("shelf_count", 1)
     door_count = params.get("door_count", 1)
     drawer_count = params.get("drawer_count", 0)
+    factory = await db.get(Factory, order.factory_id)
+    factory_settings = factory.settings if factory else {}
 
     # Вызываем калькулятор панелей
     calc_result = calculate_panels(
@@ -1103,23 +1229,28 @@ async def recalculate_bom(
         shelf_count=shelf_count,
         door_count=door_count,
         drawer_count=drawer_count,
+        include_facades=bool(params.get("include_facades", True)),
+        facade_color=params.get("facade_color"),
+        standards=_calculator_standards(factory_settings),
     )
 
-    # Удаляем старые панели
-    await db.execute(sql_delete(Panel).where(Panel.product_id == product.id))
-
-    # Создаём новые панели
-    new_panels = []
     for panel_spec in calc_result.panels:
+        panel_material = (
+            params.get("facade_color")
+            if panel_spec.name.startswith("Фасад") and params.get("facade_color")
+            else product.material
+        )
         panel = Panel(
             product_id=product.id,
             name=panel_spec.name,
             width_mm=panel_spec.width_mm,
             height_mm=panel_spec.height_mm,
             thickness_mm=panel_spec.thickness_mm,
-            material=product.material,
+            material=panel_material,
             edge_front=panel_spec.edge_front,
             edge_back=panel_spec.edge_back,
+            edge_top=panel_spec.edge_top,
+            edge_bottom=panel_spec.edge_bottom,
             drilling_points=panel_spec.drilling_points,
         )
         db.add(panel)
@@ -1129,10 +1260,10 @@ async def recalculate_bom(
 
     # Рассчитываем крепёж
     fasteners = _calculate_fasteners(
-        panels_count=calc_result.total_panels,
-        door_count=door_count,
+        panels=calc_result.panels,
         drawer_count=drawer_count,
         shelf_count=shelf_count,
+        standards=_calculator_standards(factory_settings),
     )
 
     # Рассчитываем кромку
@@ -1157,6 +1288,29 @@ async def recalculate_bom(
     }
 
     product.params = params
+    for extra_product in order.products[1:]:
+        extra_params = extra_product.params or {}
+        extra_type = _cabinet_type_from_name(extra_product.name)
+        extra_result = calculate_panels(
+            cabinet_type=extra_type, width_mm=int(extra_product.width_mm or 600),
+            height_mm=int(extra_product.height_mm or 720),
+            depth_mm=int(extra_product.depth_mm or 600),
+            thickness_mm=float(extra_product.thickness_mm or 16),
+            shelf_count=int(extra_params.get("shelf_count", 1)),
+            door_count=int(extra_params.get("door_count", 1)),
+            drawer_count=int(extra_params.get("drawer_count", 0)),
+            standards=_calculator_standards(factory_settings),
+        )
+        await db.execute(sql_delete(Panel).where(Panel.product_id == extra_product.id))
+        for spec in extra_result.panels:
+            db.add(Panel(
+                product_id=extra_product.id, name=spec.name,
+                width_mm=spec.width_mm, height_mm=spec.height_mm,
+                thickness_mm=spec.thickness_mm, material=extra_product.material,
+                edge_front=spec.edge_front, edge_back=spec.edge_back,
+                edge_top=spec.edge_top, edge_bottom=spec.edge_bottom,
+                drilling_points=spec.drilling_points,
+            ))
     await db.commit()
 
     # Approval-flow: пересчёт = новая manufacturing revision (старая approved устаревает)
@@ -1201,6 +1355,8 @@ async def recalculate_bom(
                 "material": p.material,
                 "edge_front": p.edge_front,
                 "edge_back": p.edge_back,
+                "edge_top": p.edge_top,
+                "edge_bottom": p.edge_bottom,
             }
             for p in new_panels
         ],
@@ -1347,6 +1503,21 @@ async def update_settings(
         "cut_depth",
         "safe_height",
         "tool_diameter",
+        "bottom_mount",
+        "tie_beam_height_mm",
+        "facade_gap_mm",
+        "shelf_gap_mm",
+        "legs_height_mm",
+        "fastener_type",
+        "price_board_m2",
+        "price_facade_board_m2",
+        "price_hdf_m2",
+        "price_edge_visible_m",
+        "price_edge_hidden_m",
+        "price_cut_m",
+        "price_edging_m",
+        "price_drilling_hole",
+        "currency",
     ]
 
     req_dict = req.model_dump(exclude_unset=True)
@@ -1389,13 +1560,11 @@ async def calculate_panels_endpoint(
     """
     from api.panel_calculator import calculate_panels
 
-    # Получаем настройки фабрики если авторизован
     factory_settings = {}
     if current_user:
         factory = await db.get(Factory, current_user.factory_id)
         if factory:
             factory_settings = factory.settings or {}
-
     # Merge параметров: запрос > настройки > дефолты
     thickness = (
         req.thickness_mm
@@ -1417,8 +1586,12 @@ async def calculate_panels_endpoint(
             thickness_mm=thickness,
             edge_thickness_mm=edge_thickness,
             shelf_count=req.shelf_count,
+            fixed_shelf_count=req.fixed_shelf_count,
             door_count=req.door_count,
             drawer_count=req.drawer_count,
+            include_facades=req.include_facades,
+            facade_color=req.facade_color,
+            standards=_calculator_standards(factory_settings),
         )
 
         panels = [
@@ -1574,7 +1747,6 @@ async def generate_bom_endpoint(
         "tall": "Пенал",
     }.get(req.cabinet_type.value, req.cabinet_type.value)
 
-    # 1. Расчёт панелей
     try:
         panel_result = calculate_panels(
             cabinet_type=req.cabinet_type.value,
@@ -1585,6 +1757,9 @@ async def generate_bom_endpoint(
             shelf_count=req.shelf_count,
             door_count=req.door_count,
             drawer_count=req.drawer_count,
+            include_facades=req.include_facades,
+            facade_color=req.facade_color,
+            standards=_calculator_standards(factory_settings),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1671,41 +1846,16 @@ async def generate_bom_endpoint(
                     source="calculated",
                 )
             )
-
-    # Конфирматы (всегда)
-    fixed_panels = sum(1 for p in panel_result.panels if "полка" not in p.name.lower())
-    confirmat_qty = fixed_panels * 4
-
-    hardware_list.append(
-        HardwareRecommendation(
-            type="connector",
-            sku=None,
-            name="Конфирмат 5×40",
-            quantity=confirmat_qty,
-            unit="шт",
-            source="calculated",
-        )
-    )
-
-    # Полкодержатели (если есть полки)
-    if req.shelf_count > 0:
-        hardware_list.append(
-            HardwareRecommendation(
-                type="other",
-                sku=None,
-                name="Полкодержатель 5мм",
-                quantity=req.shelf_count * 4,
-                unit="шт",
-                source="calculated",
-            )
-        )
+    # Конфирматы, заглушки и полкодержатели считает _calculate_fasteners:
+    # они уходят в раздел «Крепёж». Здесь остаётся только фурнитура из RAG
+    # (петли, направляющие, ручки), иначе технолог видит одну позицию дважды.
 
     # Рассчитываем крепёж и кромку
     fasteners = _calculate_fasteners(
-        panels_count=len(panel_result.panels),
-        door_count=req.door_count,
+        panels=panel_result.panels,
         drawer_count=req.drawer_count,
         shelf_count=req.shelf_count,
+        standards=_calculator_standards(factory_settings),
     )
     parsed_panels = [
         {
@@ -1713,6 +1863,9 @@ async def generate_bom_endpoint(
             "height_mm": p.height_mm,
             "edge_front": p.edge_front,
             "edge_back": p.edge_back,
+            "edge_top": p.edge_top,
+            "edge_bottom": p.edge_bottom,
+            "quantity": p.quantity,
         }
         for p in panel_result.panels
     ]
@@ -1851,6 +2004,7 @@ async def generate_bom_endpoint(
         },
         panels=panels,
         hardware=hardware_list,
+        fasteners=fasteners,
         total_panels=panel_result.total_panels,
         total_area_m2=round(panel_result.total_area_m2, 2),
         edge_length_m=round(panel_result.edge_length_m, 1),
@@ -1923,6 +2077,8 @@ async def export_1c(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Export1CResponse:
+    if not settings.FACTORY_FEATURES_ENABLED:
+        raise HTTPException(status_code=404, detail="Фабричные функции отключены")
     """
     Экспорт заказа в формате для 1С.
 
@@ -3331,9 +3487,14 @@ async def calculate_order_cost(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    factory_result = await db.execute(select(Factory).where(Factory.id == order.factory_id))
+    factory = factory_result.scalar_one_or_none()
+    price_settings = dict(SETTINGS_DEFAULTS)
+    price_settings.update((factory.settings or {}) if factory else {})
     if not order.products:
         return CostEstimateResponse(
             total_cost=0,
+            currency=str(price_settings.get("currency", "RUB")),
             breakdown=[],
             materials_cost=0,
             hardware_cost=0,
@@ -3352,35 +3513,57 @@ async def calculate_order_cost(
     edge_bands = params.get("edge_bands", [])
 
     breakdown = []
+    # 1. Материалы по площади: фасады дороже корпусной плиты.
+    board_price = float(price_settings["price_board_m2"])
+    facade_price = float(price_settings["price_facade_board_m2"])
+    body_area = 0.0
+    facade_area = 0.0
+    for panel in panels:
+        material = str(getattr(panel, "material", "") or "").lower()
+        params_data = getattr(panel, "params", {}) or {}
+        decor = str(params_data.get("decor", "") or "").lower()
+        explicit = material or decor
+        if explicit:
+            is_facade = any(token in explicit for token in ("фасад", "мдф", "эмаль", "пластик"))
+        else:
+            is_facade = str(getattr(panel, "name", "")).lower().startswith("фасад")
+        area = float(panel.width_mm) * float(panel.height_mm) / 1_000_000
+        if is_facade:
+            facade_area += area
+        else:
+            body_area += area
 
-    # 1. Материалы (ЛДСП)
-    # Цена за лист 2800x2070 (5.8 м2) ~ 3500 руб -> ~600 руб/м2
-    MATERIAL_PRICE_M2 = 600.0
+    waste_factor = 1.2
+    if body_area:
+        body_area *= waste_factor
+        breakdown.append(CostBreakdownItem(
+            name=f"ЛДСП {product.material or '16мм'}", quantity=round(body_area, 2),
+            unit="м²", unit_price=board_price,
+            total_price=round(body_area * board_price, 2), category="materials",
+        ))
+    if facade_area:
+        facade_area *= waste_factor
+        breakdown.append(CostBreakdownItem(
+            name="Фасадная плита", quantity=round(facade_area, 2),
+            unit="м²", unit_price=facade_price,
+            total_price=round(facade_area * facade_price, 2), category="materials",
+        ))
 
-    total_area_m2 = sum((p.width_mm * p.height_mm) / 1_000_000 for p in panels)
-    # Учитываем обрезки (+20%)
-    sheet_area_needed = total_area_m2 * 1.2
-
-    breakdown.append(
-        CostBreakdownItem(
-            name=f"ЛДСП {product.material or '16мм'}",
-            quantity=round(sheet_area_needed, 2),
-            unit="м²",
-            unit_price=MATERIAL_PRICE_M2,
-            total_price=round(sheet_area_needed * MATERIAL_PRICE_M2, 2),
-        )
-    )
-
-    # 2. Кромка
-    # Цена 25 руб/м (2мм) и 8 руб/м (0.4мм)
+    # 2. Кромка по длине с ценой из прайса мастера.
     for band in edge_bands:
+        band_type = str(band.get("type", "")).lower()
+        thickness = float(band.get("thickness_mm", 2 if "2" in band_type else 0.4))
+        edge_key = "price_edge_visible_m" if thickness >= 1 or "вид" in band_type or "visible" in band_type else "price_edge_hidden_m"
+        edge_price = float(price_settings.get(edge_key, 45.0 if thickness >= 1 else 15.0))
+        length = float(band.get("length_m", 0))
         breakdown.append(
             CostBreakdownItem(
                 name=f"Кромка {band.get('type')}",
-                quantity=band.get("length_m", 0),
+                quantity=length,
                 unit="м",
-                unit_price=band.get("unit_price", 10),
-                total_price=round(band.get("length_m", 0) * band.get("unit_price", 10), 2),
+                unit_price=edge_price,
+                total_price=round(length * edge_price, 2),
+                category="materials",
             )
         )
 
@@ -3409,6 +3592,7 @@ async def calculate_order_cost(
                 unit="шт",
                 unit_price=price,
                 total_price=qty * price,
+                category="hardware",
             )
         )
 
@@ -3422,6 +3606,7 @@ async def calculate_order_cost(
                 unit="шт",
                 unit_price=price,
                 total_price=qty * price,
+                category="hardware",
             )
         )
 
@@ -3437,8 +3622,9 @@ async def calculate_order_cost(
             name="Распил ЛДСП",
             quantity=round(cut_length_m, 1),
             unit="м",
-            unit_price=30.0,
-            total_price=round(cut_length_m * 30.0, 2),
+            unit_price=float(price_settings.get("price_cut_m", 30.0)),
+            total_price=round(cut_length_m * float(price_settings.get("price_cut_m", 30.0)), 2),
+            category="services",
         )
     )
 
@@ -3449,8 +3635,9 @@ async def calculate_order_cost(
             name="Кромление",
             quantity=round(edge_length_m, 1),
             unit="м",
-            unit_price=40.0,
-            total_price=round(edge_length_m * 40.0, 2),
+            unit_price=float(price_settings.get("price_edging_m", 40.0)),
+            total_price=round(edge_length_m * float(price_settings.get("price_edging_m", 40.0)), 2),
+            category="services",
         )
     )
 
@@ -3461,39 +3648,77 @@ async def calculate_order_cost(
             name="Присадка (сверление)",
             quantity=parts_count,
             unit="дет",
-            unit_price=50.0,
-            total_price=parts_count * 50.0,
+            unit_price=float(price_settings.get("price_drilling_hole", 10.0)),
+            total_price=parts_count * float(price_settings.get("price_drilling_hole", 10.0)),
+            category="services",
         )
     )
 
     # Суммируем
-    materials_cost = sum(i.total_price for i in breakdown if "ЛДСП" in i.name or "Кромка" in i.name)
-    hardware_cost = sum(
-        i.total_price
-        for i in breakdown
-        if "Петля" in i.name
-        or "Направляющие" in i.name
-        or "Ручка" in i.name
-        or "Фурнитура" in i.name
-        or "Крепёж" in i.name
-        or "Опора" in i.name
-    )
-    operations_cost = sum(
-        i.total_price
-        for i in breakdown
-        if "Распил" in i.name or "Кромление" in i.name or "Присадка" in i.name
-    )
+    materials_cost = sum(i.total_price for i in breakdown if i.category == "materials")
+    hardware_cost = sum(i.total_price for i in breakdown if i.category == "hardware")
+    operations_cost = sum(i.total_price for i in breakdown if i.category == "services")
 
     total_cost = materials_cost + hardware_cost + operations_cost
 
     return CostEstimateResponse(
         total_cost=round(total_cost, 2),
-        currency="RUB",
+        currency=str(price_settings.get("currency", "RUB")),
         breakdown=breakdown,
         materials_cost=round(materials_cost, 2),
         hardware_cost=round(hardware_cost, 2),
         operations_cost=round(operations_cost, 2),
     )
+
+
+ 
+@router.get("/orders/{order_id}/purchase-list", response_model=PurchaseListResponse)
+async def get_order_purchase_list(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Вернуть закупку в единицах поставщика."""
+    order = await crud.get_order_with_products(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    enforce_factory_access(order.factory_id, current_user.factory_id)
+    # Закупка считается по всему заказу: кухня из восьми модулей — это один
+    # поход к поставщику, а не восемь.
+    panels: list[Panel] = []
+    params: dict = {}
+    for index, product in enumerate(order.products):
+        panel_result = await db.execute(select(Panel).where(Panel.product_id == product.id))
+        panels.extend(panel_result.scalars().all())
+        product_params = product.params or {}
+        if index == 0:
+            params = dict(product_params)
+        else:
+            for key in ("hardware", "fasteners", "edge_bands"):
+                params[key] = list(params.get(key, [])) + list(product_params.get(key, []))
+
+    factory_result = await db.execute(select(Factory).where(Factory.id == order.factory_id))
+    factory = factory_result.scalar_one_or_none()
+    factory_settings = factory.settings if factory else None
+    items, defaults = calculate_purchase_list(panels, params, factory_settings)
+    totals = summarize_purchase(items, factory_settings)
+    return PurchaseListResponse(
+        items=[
+            PurchaseListItemResponse(
+                name=item.name, quantity=item.quantity, unit=item.unit,
+                unit_price=item.unit_price, total_price=item.total_price,
+            ) for item in items
+        ],
+        materials_total=totals.get("materials", 0),
+        hardware_total=totals.get("hardware", 0) + totals.get("fasteners", 0),
+        services_total=totals.get("services", 0),
+        total=totals["total"],
+        markup_multiplier=totals.get("markup_multiplier"),
+        client_price=totals.get("client_price"),
+        currency=str((factory_settings or {}).get("currency", "RUB")),
+        prices_are_defaults=defaults,
+    )
+
 
 
 # ============================================================================

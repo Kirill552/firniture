@@ -26,6 +26,7 @@ const PAID: OrderAccess = {
   price_rub: 890,
   pack_credits: 0,
   free_first_available: false,
+  beta_free: false,
 }
 
 beforeEach(() => {

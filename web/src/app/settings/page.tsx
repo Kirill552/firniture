@@ -31,6 +31,22 @@ type FactorySettings = {
     cut_depth: number
     safe_height: number
     tool_diameter: number
+    bottom_mount: "on_bottom" | "inset"
+    tie_beam_height_mm: number
+    facade_gap_mm: number
+    shelf_gap_mm: number
+    legs_height_mm: number
+    fastener_type: "confirmat" | "dowel"
+    hardware_mount: "screws" | "euro_screw"
+    price_board_m2: number
+    price_facade_board_m2: number
+    price_hdf_m2: number
+    price_edge_visible_m: number
+    price_edge_hidden_m: number
+    price_cut_m: number
+    price_edging_m: number
+    price_drilling_hole: number
+    currency: "RUB" | "EUR" | "USD" | "KZT" | "BYN" | "RSD"
   }
   defaults_used: string[]
 }
@@ -42,6 +58,27 @@ const MACHINE_PROFILES = [
   { value: "dsp", label: "DSP", description: "Бюджетный сегмент" },
   { value: "homag", label: "HOMAG", description: "Премиум мебельное" },
 ]
+
+const STANDARD_NUMBER_FIELDS = [
+  { key: "tie_beam_height_mm", label: "Ширина верхних планок (царг), мм", description: "Перемычка вместо сплошного верха у напольной тумбы." },
+  { key: "facade_gap_mm", label: "Зазор фасада, мм", description: "Общий зазор по ширине корпуса и по высоте фасада." },
+  { key: "shelf_gap_mm", label: "Зазор полки с каждой стороны, мм", description: "Свободное место, чтобы полка встала без подгонки." },
+  { key: "legs_height_mm", label: "Высота ножек, мм", description: "На сколько поднять напольный модуль от пола." },
+] as const
+
+const PRICE_FIELDS = [
+  { key: "price_board_m2", label: "Корпусная плита", unit: "за м²", description: "Белая плита дешевле цветной; цена квадратного метра корпуса." },
+  { key: "price_facade_board_m2", label: "Фасадная плита", unit: "за м²", description: "Цветная плита для фасадов, обычно дороже белой." },
+  { key: "price_hdf_m2", label: "ХДФ / ДВП", unit: "за м²", description: "Цена квадратного метра задней стенки." },
+  { key: "price_edge_visible_m", label: "Кромка видимая 2 мм", unit: "за метр", description: "Кромка на лицевые торцы." },
+  { key: "price_edge_hidden_m", label: "Кромка скрытая 0,4 мм", unit: "за метр", description: "Кромка на внутренние торцы." },
+  { key: "price_cut_m", label: "Распил", unit: "за метр", description: "Стоимость погонного метра реза." },
+  { key: "price_edging_m", label: "Кромление", unit: "за метр", description: "Стоимость нанесения кромки." },
+  { key: "price_drilling_hole", label: "Присадка", unit: "за отверстие", description: "Сверление отверстий под фурнитуру." },
+] as const
+const CURRENCY_SYMBOLS: Record<FactorySettings["settings"]["currency"], string> = {
+  RUB: "₽", EUR: "€", USD: "$", KZT: "₸", BYN: "Br", RSD: "дин",
+}
 
 export default function SettingsPage() {
   const searchParams = useSearchParams()
@@ -246,6 +283,132 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="mt-6 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Стандарты цеха</CardTitle>
+                <CardDescription>Настройте конструктив один раз — дальше расчёты будут под ваши привычки.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="bottom_mount">Как стоит дно</Label>
+                  <Select
+                    value={formData.bottom_mount || "on_bottom"}
+                    onValueChange={(value) => updateField("bottom_mount", value)}
+                  >
+                    <SelectTrigger id="bottom_mount"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="on_bottom">Боковины на дне</SelectItem>
+                      <SelectItem value="inset">Дно вкладное</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Куда встаёт масса корпуса. Большинство ставит боковины на дно.</p>
+                  {settings?.defaults_used.includes("bottom_mount") && <p className="text-xs text-amber-600">Используется значение по умолчанию</p>}
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {STANDARD_NUMBER_FIELDS.map((field) => (
+                    <div key={field.key} className="space-y-2">
+                      <Label htmlFor={field.key}>{field.label}</Label>
+                      <Input
+                        id={field.key}
+                        type="number"
+                        step="0.1"
+                        value={formData[field.key] ?? ""}
+                        onChange={(e) => updateField(field.key, parseFloat(e.target.value) || null)}
+                      />
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                      {settings?.defaults_used.includes(field.key) && <p className="text-xs text-amber-600">Используется значение по умолчанию</p>}
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fastener_type">Тип крепежа</Label>
+                  <Select
+                    value={formData.fastener_type || "confirmat"}
+                    onValueChange={(value) => updateField("fastener_type", value)}
+                  >
+                    <SelectTrigger id="fastener_type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="confirmat">Конфирмат</SelectItem>
+                      <SelectItem value="dowel">Шкант</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Чем соединять детали корпуса по умолчанию.</p>
+                  {settings?.defaults_used.includes("fastener_type") && <p className="text-xs text-amber-600">Используется значение по умолчанию</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hardware_mount">Чем крепите планки и направляющие</Label>
+                  <Select
+                    value={formData.hardware_mount || "screws"}
+                    onValueChange={(value) => updateField("hardware_mount", value)}
+                  >
+                    <SelectTrigger id="hardware_mount"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="screws">Саморезы (без присадки)</SelectItem>
+                      <SelectItem value="euro_screw">Евровинт в сверловку 5 мм</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Ответные планки и направляющие без лишних отверстий по умолчанию.</p>
+                  {settings?.defaults_used.includes("hardware_mount") && <p className="text-xs text-amber-600">Используется значение по умолчанию</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Цены</CardTitle>
+                <CardDescription>До ввода своих цен смета считается по прикидке. Укажите цены поставщика, чтобы итог был ближе к реальности.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {PRICE_FIELDS.map((field) => (
+                    <div key={field.key} className="space-y-2">
+                      <Label htmlFor={field.key}>{field.label}</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={field.key}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData[field.key] ?? ""}
+                          onChange={(e) => updateField(field.key, parseFloat(e.target.value) || null)}
+                        />
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {CURRENCY_SYMBOLS[(formData.currency as FactorySettings["settings"]["currency"]) || "RUB"]} {field.unit}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                      {settings?.defaults_used.includes(field.key) && (
+                        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                          Прикидка по российскому рынку. При другой валюте введите свои цены.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Валюта цен мастера</Label>
+                  <Select value={(formData.currency as string) || "RUB"} onValueChange={(value) => updateField("currency", value)}>
+                    <SelectTrigger id="currency"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="RUB">₽ (RUB)</SelectItem>
+                      <SelectItem value="EUR">€ (EUR)</SelectItem>
+                      <SelectItem value="USD">$ (USD)</SelectItem>
+                      <SelectItem value="KZT">₸ (KZT)</SelectItem>
+                      <SelectItem value="BYN">Br (BYN)</SelectItem>
+                      <SelectItem value="RSD">дин (RSD)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Валюта материалов, фурнитуры и работ в смете.</p>
+                  {formData.currency && formData.currency !== "RUB" && settings?.defaults_used.some((key) => key.startsWith("price_")) && (
+                    <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                      Внимание: цены по умолчанию — прикидка по российскому рынку. Введите свои цены в выбранной валюте.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Вкладка: Станок */}

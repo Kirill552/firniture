@@ -42,10 +42,12 @@ const sidebarNavItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { machineFeaturesEnabled } = useFeatureFlags()
-  
+  const { machineFeaturesEnabled, factoryFeaturesEnabled } = useFeatureFlags()
+
   const filteredNavItems = sidebarNavItems.filter(
-    (item) => item.url !== "/cam" || machineFeaturesEnabled
+    (item) =>
+      (item.url !== "/cam" || machineFeaturesEnabled) &&
+      (item.url !== "/integrations" || factoryFeaturesEnabled)
   )
 
   return (

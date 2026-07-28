@@ -107,6 +107,15 @@ async def _start_payment(
     )
 
 
+def _reject_if_beta() -> None:
+    """В бете платежей нет: закрываем оба checkout, а не только кнопки."""
+    if settings.BETA_FREE_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Идёт бесплатная бета — оплата отключена, экспорт открыт всем",
+        )
+
+
 @payments_router.post("/orders/{order_id}/checkout", response_model=CheckoutResponse)
 async def checkout_order(
     order_id: UUID,
@@ -115,6 +124,7 @@ async def checkout_order(
     client: YooKassaClient = Depends(get_yookassa_client),
 ) -> CheckoutResponse:
     """Оплатить один заказ целиком. 409, если доступ уже есть."""
+    _reject_if_beta()
     await _load_own_order(db, order_id, current_user)
 
     state = await resolve_order_access(db, order_id, current_user.factory_id)
@@ -150,6 +160,7 @@ async def checkout_pack(
     client: YooKassaClient = Depends(get_yookassa_client),
 ) -> CheckoutResponse:
     """Купить пакет из 10 заказов. Кредиты не сгорают."""
+    _reject_if_beta()
     payment = Payment(
         factory_id=current_user.factory_id,
         user_id=current_user.id,
@@ -184,6 +195,7 @@ async def get_order_access(
         price_rub=state.price_rub,
         pack_credits=state.pack_credits,
         free_first_available=state.free_first_available,
+        beta_free=state.beta_free,
     )
 
 
@@ -200,6 +212,7 @@ async def get_balance(
         price_rub=settings.PRICE_ORDER_RUB,
         pack_price_rub=settings.PRICE_PACK10_RUB,
         pack_size=settings.PACK_SIZE,
+        beta_free=settings.BETA_FREE_MODE,
     )
 
 

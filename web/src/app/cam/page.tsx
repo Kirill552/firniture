@@ -137,7 +137,7 @@ function DXFViewer({ url, jobType }: { url?: string; jobType?: CAMJobType }) {
 
 export default function CamPage() {
   const router = useRouter()
-  const { machineFeaturesEnabled, isLoading: isFlagsLoading } = useFeatureFlags()
+  const { machineFeaturesEnabled, factoryFeaturesEnabled, isLoading: isFlagsLoading } = useFeatureFlags()
   const { toast } = useToast()
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -148,10 +148,10 @@ export default function CamPage() {
   const [isLoadingDownloadUrl, setIsLoadingDownloadUrl] = useState(false)
 
   useEffect(() => {
-    if (!isFlagsLoading && !machineFeaturesEnabled) {
+    if (!isFlagsLoading && (!machineFeaturesEnabled || !factoryFeaturesEnabled)) {
       router.replace('/orders')
     }
-  }, [isFlagsLoading, machineFeaturesEnabled, router])
+  }, [isFlagsLoading, machineFeaturesEnabled, factoryFeaturesEnabled, router])
   // Load CAM jobs from API
   useEffect(() => {
     const loadJobs = async () => {
@@ -452,7 +452,7 @@ export default function CamPage() {
     )
   }
 
-  if (!machineFeaturesEnabled) {
+  if (!machineFeaturesEnabled || !factoryFeaturesEnabled) {
     return null
   }
   if (isLoading) {

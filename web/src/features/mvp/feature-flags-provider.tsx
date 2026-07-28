@@ -4,16 +4,20 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 
 interface FeatureFlagsContextType {
   machineFeaturesEnabled: boolean
+  factoryFeaturesEnabled: boolean
   isLoading: boolean
 }
 
 const FeatureFlagsContext = createContext<FeatureFlagsContextType>({
   machineFeaturesEnabled: false,
+  factoryFeaturesEnabled: false,
   isLoading: true,
 })
+ 
 
 export function FeatureFlagsProvider({ children }: { children: React.ReactNode }) {
   const [machineFeaturesEnabled, setMachineFeaturesEnabled] = useState(false)
+  const [factoryFeaturesEnabled, setFactoryFeaturesEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -26,6 +30,7 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
           const data = await res.json()
           if (active) {
             setMachineFeaturesEnabled(!!data.machine_features_enabled)
+            setFactoryFeaturesEnabled(!!data.factory_features_enabled)
           }
         }
       } catch (err) {
@@ -43,7 +48,7 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
   }, [])
 
   return (
-    <FeatureFlagsContext.Provider value={{ machineFeaturesEnabled, isLoading }}>
+    <FeatureFlagsContext.Provider value={{ machineFeaturesEnabled, factoryFeaturesEnabled, isLoading }}>
       {children}
     </FeatureFlagsContext.Provider>
   )

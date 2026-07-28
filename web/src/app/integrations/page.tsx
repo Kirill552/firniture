@@ -27,8 +27,8 @@ import {
   CheckCircle,
   Package,
 } from "lucide-react"
+import { useFeatureFlags } from "@/features/mvp"
 import { useToast } from "@/hooks/use-toast"
-
 type Order = {
   id: string
   customer_ref: string | null
@@ -40,6 +40,7 @@ type Order = {
 type ExportFormat = "excel" | "csv"
 
 export default function IntegrationsPage() {
+  const { factoryFeaturesEnabled, isLoading: flagsLoading } = useFeatureFlags()
   const { toast } = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -117,6 +118,10 @@ export default function IntegrationsPage() {
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  if (!flagsLoading && !factoryFeaturesEnabled) {
+    return <div className="p-6">Раздел отключён</div>
   }
 
   return (

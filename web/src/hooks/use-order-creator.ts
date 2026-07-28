@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getAuthHeader } from "@/lib/auth";
-import { getUploadErrorMessage } from "./upload-errors";
+import { getImageExtractErrorMessage, getUploadErrorMessage } from "./upload-errors";
 import type {
   OrderCreatorMode,
   OrderCreatorParams,
@@ -170,7 +170,7 @@ export function useOrderCreator() {
         setState((prev) => ({
           ...prev,
           mode: "manual",
-          error: data.error || "Не удалось распознать изображение",
+          error: getImageExtractErrorMessage(data.error_type),
           isLoading: false,
           guestUploadGrant: null,
         }));
@@ -211,7 +211,7 @@ export function useOrderCreator() {
       setState((prev) => ({
         ...prev,
         mode: "manual",
-        error: err instanceof Error ? err.message : "Неизвестная ошибка",
+        error: getImageExtractErrorMessage(),
         isLoading: false,
       }));
     }
@@ -235,7 +235,7 @@ export function useOrderCreator() {
     } catch (err) {
       setState((prev) => ({
         ...prev,
-        error: err instanceof Error ? err.message : "Не удалось открыть AI-уточнение",
+        error: "Не удалось открыть диалог уточнения. Проверьте параметры или задайте их вручную.",
       }));
     }
   }, [ensureAnonymousOrder]);
@@ -362,8 +362,8 @@ export function useOrderCreator() {
       });
 
       if (!bomResponse.ok) {
-        const errText = await bomResponse.text();
-        throw new Error(errText || "Не удалось сформировать спецификацию");
+        await bomResponse.text();
+        throw new Error("Не удалось сформировать спецификацию. Проверьте параметры и попробуйте снова.");
       }
 
       const authHeader = getAuthHeader();
@@ -384,7 +384,9 @@ export function useOrderCreator() {
     } catch (err) {
       setState((prev) => ({
         ...prev,
-        error: err instanceof Error ? err.message : "Ошибка",
+        error: err instanceof Error && err.message.startsWith("Укажите")
+          ? err.message
+          : "Не удалось сформировать спецификацию. Проверьте параметры и попробуйте снова.",
         isLoading: false,
         authRequired: false,
       }));

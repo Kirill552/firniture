@@ -163,9 +163,13 @@ class TestBOMGenerateEndpoint:
         assert len(hinges) > 0
         assert hinges[0]["quantity"] >= 4  # Минимум 4 петли на 2 двери
 
-        # Должны быть конфирматы
-        connectors = [h for h in data["hardware"] if h["type"] == "connector"]
-        assert len(connectors) > 0
+        # Конфирматы живут в разделе «Крепёж», а не в фурнитуре: иначе
+        # технолог видел одну и ту же позицию дважды.
+        assert not [h for h in data["hardware"] if h["type"] == "connector"]
+        confirmats = [f for f in data["fasteners"] if "онфирмат" in f["name"]]
+        assert len(confirmats) == 1
+        # Напольная тумба: дно и две царги, по два конфирмата на стык.
+        assert confirmats[0]["quantity"] == 12
 
     async def test_bom_with_drawers(self, client: AsyncClient):
         """Тест BOM для тумбы с ящиками."""

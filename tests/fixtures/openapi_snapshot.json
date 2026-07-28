@@ -153,6 +153,12 @@
       "BalanceResponse": {
         "description": "Баланс фабрики: сколько заказов оплачено вперёд и почём.",
         "properties": {
+          "beta_free": {
+            "default": false,
+            "description": "Бета: оплата отключена",
+            "title": "Beta Free",
+            "type": "boolean"
+          },
           "free_first_available": {
             "title": "Free First Available",
             "type": "boolean"
@@ -429,6 +435,27 @@
             "description": "Толщина кромки",
             "title": "Edge Thickness Mm"
           },
+          "facade_color": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цвет/декор фасада",
+            "title": "Facade Color"
+          },
+          "fixed_shelf_count": {
+            "default": 0,
+            "description": "Количество конструкционных полок",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Fixed Shelf Count",
+            "type": "integer"
+          },
           "height_mm": {
             "description": "Высота корпуса",
             "exclusiveMinimum": 0.0,
@@ -436,9 +463,15 @@
             "title": "Height Mm",
             "type": "integer"
           },
+          "include_facades": {
+            "default": true,
+            "description": "Включать фасады в раскрой",
+            "title": "Include Facades",
+            "type": "boolean"
+          },
           "material": {
             "default": "ЛДСП 16мм",
-            "description": "Материал",
+            "description": "Материал корпуса",
             "title": "Material",
             "type": "string"
           },
@@ -715,6 +748,18 @@
       "CostBreakdownItem": {
         "description": "Детализация стоимости.",
         "properties": {
+          "category": {
+            "default": "materials",
+            "description": "Группа позиции: материалы, фурнитура, крепёж, услуги цеха",
+            "enum": [
+              "materials",
+              "hardware",
+              "fasteners",
+              "services"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
           "name": {
             "description": "Название позиции",
             "title": "Name",
@@ -1423,6 +1468,42 @@
       "FactorySettingsUpdate": {
         "description": "Запрос на обновление настроек (PATCH).",
         "properties": {
+          "bottom_mount": {
+            "anyOf": [
+              {
+                "enum": [
+                  "on_bottom",
+                  "inset"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Схема установки дна: боковины на дне или вкладное дно",
+            "title": "Bottom Mount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "enum": [
+                  "RUB",
+                  "EUR",
+                  "USD",
+                  "KZT",
+                  "BYN",
+                  "RSD"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Валюта цен",
+            "title": "Currency"
+          },
           "cut_depth": {
             "anyOf": [
               {
@@ -1461,6 +1542,20 @@
             ],
             "title": "Edge Thickness Mm"
           },
+          "facade_gap_mm": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Общий зазор фасадов по ширине и высоте, мм",
+            "title": "Facade Gap Mm"
+          },
           "factory_name": {
             "anyOf": [
               {
@@ -1473,6 +1568,22 @@
             ],
             "description": "Название фабрики",
             "title": "Factory Name"
+          },
+          "fastener_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmat",
+                  "dowel"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Тип крепежа: конфирмат или шкант",
+            "title": "Fastener Type"
           },
           "feed_rate_cutting": {
             "anyOf": [
@@ -1513,6 +1624,36 @@
             ],
             "title": "Gap Mm"
           },
+          "hardware_mount": {
+            "anyOf": [
+              {
+                "enum": [
+                  "screws",
+                  "euro_screw"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Чем крепите планки и направляющие",
+            "title": "Hardware Mount"
+          },
+          "legs_height_mm": {
+            "anyOf": [
+              {
+                "maximum": 300.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Высота ножек напольных модулей, мм",
+            "title": "Legs Height Mm"
+          },
           "machine_profile": {
             "anyOf": [
               {
@@ -1530,6 +1671,124 @@
               }
             ],
             "title": "Machine Profile"
+          },
+          "markup_multiplier": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Множитель наценки: затраты × коэффициент = цена клиенту",
+            "title": "Markup Multiplier"
+          },
+          "price_board_m2": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена корпусной плиты за м²",
+            "title": "Price Board M2"
+          },
+          "price_cut_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена распила за погонный метр",
+            "title": "Price Cut M"
+          },
+          "price_drilling_hole": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена присадки за отверстие",
+            "title": "Price Drilling Hole"
+          },
+          "price_edge_hidden_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена скрытой кромки 0,4 мм за метр",
+            "title": "Price Edge Hidden M"
+          },
+          "price_edge_visible_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена видимой кромки 2 мм за метр",
+            "title": "Price Edge Visible M"
+          },
+          "price_edging_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена кромления за метр",
+            "title": "Price Edging M"
+          },
+          "price_facade_board_m2": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена фасадной плиты за м²",
+            "title": "Price Facade Board M2"
+          },
+          "price_hdf_m2": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена ХДФ/ДВП за м²",
+            "title": "Price Hdf M2"
           },
           "safe_height": {
             "anyOf": [
@@ -1570,6 +1829,20 @@
             ],
             "title": "Sheet Width Mm"
           },
+          "shelf_gap_mm": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Зазор полки с каждой стороны, мм",
+            "title": "Shelf Gap Mm"
+          },
           "spindle_speed": {
             "anyOf": [
               {
@@ -1595,6 +1868,20 @@
               }
             ],
             "title": "Thickness Mm"
+          },
+          "tie_beam_height_mm": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 30.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ширина верхних планок (царг), мм",
+            "title": "Tie Beam Height Mm"
           },
           "tool_diameter": {
             "anyOf": [
@@ -1639,13 +1926,18 @@
       "FeaturesResponse": {
         "description": "Ответ о доступных функциях (feature flags).",
         "properties": {
+          "factory_features_enabled": {
+            "title": "Factory Features Enabled",
+            "type": "boolean"
+          },
           "machine_features_enabled": {
             "title": "Machine Features Enabled",
             "type": "boolean"
           }
         },
         "required": [
-          "machine_features_enabled"
+          "machine_features_enabled",
+          "factory_features_enabled"
         ],
         "title": "FeaturesResponse",
         "type": "object"
@@ -1943,11 +2235,30 @@
             "title": "Drawer Count",
             "type": "integer"
           },
+          "facade_color": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цвет/декор фасада",
+            "title": "Facade Color"
+          },
           "height_mm": {
             "exclusiveMinimum": 0.0,
             "maximum": 3000.0,
             "title": "Height Mm",
             "type": "integer"
+          },
+          "include_facades": {
+            "default": true,
+            "description": "Включать фасады в раскрой",
+            "title": "Include Facades",
+            "type": "boolean"
           },
           "material": {
             "default": "ЛДСП 16мм",
@@ -2018,6 +2329,15 @@
           "edge_length_m": {
             "title": "Edge Length M",
             "type": "number"
+          },
+          "fasteners": {
+            "description": "Крепёж: конфирматы, заглушки, полкодержатели",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Fasteners",
+            "type": "array"
           },
           "hardware": {
             "items": {
@@ -2877,6 +3197,12 @@
             "title": "Access",
             "type": "boolean"
           },
+          "beta_free": {
+            "default": false,
+            "description": "Бета: экспорт бесплатен, пейволл скрыт",
+            "title": "Beta Free",
+            "type": "boolean"
+          },
           "free_first_available": {
             "title": "Free First Available",
             "type": "boolean"
@@ -2898,7 +3224,7 @@
                 "type": "null"
               }
             ],
-            "description": "free_first | payment | pack | null",
+            "description": "free_first | payment | pack | beta | null",
             "title": "Reason"
           }
         },
@@ -3175,7 +3501,6 @@
         "description": "Информация о размещённой панели.",
         "properties": {
           "height_mm": {
-            "description": "Высота (после возможного поворота)",
             "title": "Height Mm",
             "type": "number"
           },
@@ -3185,22 +3510,18 @@
           },
           "rotated": {
             "default": false,
-            "description": "Повёрнута ли панель на 90°",
             "title": "Rotated",
             "type": "boolean"
           },
           "width_mm": {
-            "description": "Ширина (после возможного поворота)",
             "title": "Width Mm",
             "type": "number"
           },
           "x": {
-            "description": "X координата левого нижнего угла",
             "title": "X",
             "type": "number"
           },
           "y": {
-            "description": "Y координата левого нижнего угла",
             "title": "Y",
             "type": "number"
           }
@@ -3295,6 +3616,111 @@
           "params"
         ],
         "title": "ProductConfigResponse",
+        "type": "object"
+      },
+      "PurchaseListItemResponse": {
+        "description": "Позиция закупочного листа.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "total_price": {
+            "title": "Total Price",
+            "type": "number"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_price": {
+            "title": "Unit Price",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "quantity",
+          "unit",
+          "unit_price",
+          "total_price"
+        ],
+        "title": "PurchaseListItemResponse",
+        "type": "object"
+      },
+      "PurchaseListResponse": {
+        "description": "Закупочный лист заказа с разбивкой по категориям.",
+        "properties": {
+          "client_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Цена для клиента: затраты × множитель",
+            "title": "Client Price"
+          },
+          "currency": {
+            "default": "RUB",
+            "title": "Currency",
+            "type": "string"
+          },
+          "hardware_total": {
+            "title": "Hardware Total",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "markup_multiplier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Множитель наценки мастера, если он задан",
+            "title": "Markup Multiplier"
+          },
+          "materials_total": {
+            "title": "Materials Total",
+            "type": "number"
+          },
+          "prices_are_defaults": {
+            "title": "Prices Are Defaults",
+            "type": "boolean"
+          },
+          "services_total": {
+            "title": "Services Total",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "materials_total",
+          "hardware_total",
+          "services_total",
+          "total",
+          "prices_are_defaults"
+        ],
+        "title": "PurchaseListResponse",
         "type": "object"
       },
       "RegisterRequest": {
@@ -4650,7 +5076,6 @@
     },
     "/api/v1/integrations/1c/export": {
       "post": {
-        "description": "Экспорт заказа в формате для 1С.\n\nПоддерживаемые форматы:\n- excel: Excel файл (.xlsx) с листами Заказ, Изделия, Панели, Фурнитура\n- csv: Набор CSV файлов в ZIP архиве\n\nВозвращает presigned URL для скачивания (действует 15 минут).",
         "operationId": "export_1c_api_v1_integrations_1c_export_post",
         "requestBody": {
           "content": {
@@ -5077,7 +5502,7 @@
     },
     "/api/v1/orders/{order_id}/bom": {
       "get": {
-        "description": "Получить полную спецификацию (BOM) заказа.\n\nВключает:\n- Основные параметры (габариты, материал)\n- Панели с размерами\n- Фурнитуру\n- Крепёж (конфирматы, заглушки)\n- Кромку\n- Сводку (площадь, % использования листа)",
+        "description": "Получить единую спецификацию всех модулей заказа.",
         "operationId": "get_order_bom_api_v1_orders__order_id__bom_get",
         "parameters": [
           {
@@ -5175,7 +5600,7 @@
     },
     "/api/v1/orders/{order_id}/bom/add-panel": {
       "post": {
-        "description": "Добавить панель в BOM.",
+        "description": "Добавить панель в BOM выбранного модуля.",
         "operationId": "add_panel_to_bom_api_v1_orders__order_id__bom_add_panel_post",
         "parameters": [
           {
@@ -5537,6 +5962,162 @@
         "tags": [
           "Manufacturing Approvals (Task 8)"
         ]
+      }
+    },
+    "/api/v1/orders/{order_id}/products": {
+      "post": {
+        "description": "Добавить кухонный модуль и сразу рассчитать его панели.",
+        "operationId": "add_order_product_api_v1_orders__order_id__products_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Product Data",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Order Product"
+      }
+    },
+    "/api/v1/orders/{order_id}/products/{product_id}": {
+      "delete": {
+        "description": "Удалить модуль из заказа, оставив остальные модули без изменений.",
+        "operationId": "delete_order_product_api_v1_orders__order_id__products__product_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Product Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Order Product"
+      }
+    },
+    "/api/v1/orders/{order_id}/purchase-list": {
+      "get": {
+        "description": "Вернуть закупку в единицах поставщика.",
+        "operationId": "get_order_purchase_list_api_v1_orders__order_id__purchase_list_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Order Purchase List"
       }
     },
     "/api/v1/panels/calculate": {

@@ -164,7 +164,7 @@ export function AiChat({ orderId, initialMessages = [], extractedContext }: AiCh
       const data = await response.json();
 
       if (!data.success && data.error) {
-        throw new Error(data.error);
+        throw new Error('Не удалось получить уточнение. Проверьте параметры и попробуйте снова.');
       }
 
       // После получения ответа от API
@@ -205,7 +205,7 @@ export function AiChat({ orderId, initialMessages = [], extractedContext }: AiCh
       console.error('Error fetching AI response:', error);
       setMessages((prev) => [...prev, {
         role: 'assistant',
-        content: `Ошибка: ${error instanceof Error ? error.message : 'Не удалось получить ответ'}`
+        content: 'Не удалось получить ответ. Проверьте параметры и попробуйте снова.'
       }]);
     } finally {
       setIsLoading(false);

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { LANDING_COPY } from './landing-copy';
 
 export function LandingHero() {
-  const { heroOverline, h1, heroDescription, ctaPrimary, ctaHint } = LANDING_COPY;
+  const { heroOverline, h1, heroDescription, ctaPrimary, ctaBetaBadge, ctaHint } = LANDING_COPY;
 
   return (
     <div className="grid grid-cols-1 items-center gap-x-8 gap-y-10 pb-16 pt-14 lg:grid-cols-12 lg:pb-20 lg:pt-16">
@@ -38,13 +38,19 @@ export function LandingHero() {
         </p>
 
         <div data-rise style={{ animationDelay: '0.34s' }}>
-          <Link
-            href="/new"
-            className="group inline-flex h-14 w-fit items-center gap-3 bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] px-8 text-[17px] font-bold rounded-xl active:scale-[0.98] transition-all duration-150 cursor-pointer shadow-sm"
-          >
-            {ctaPrimary}
-            <span className="transition-transform group-hover:translate-x-1">→</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/new"
+              className="group inline-flex h-14 w-fit items-center gap-3 bg-[#c7ff00] hover:bg-[#aee600] text-[#171a1d] px-8 text-[17px] font-bold rounded-xl active:scale-[0.98] transition-all duration-150 cursor-pointer shadow-sm"
+            >
+              {ctaPrimary}
+              <span className="transition-transform group-hover:translate-x-1">→</span>
+            </Link>
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#171a1d] bg-white px-3 py-1.5 text-[12px] font-bold text-[#171a1d]">
+              <span className="h-2 w-2 rounded-full bg-[#c7ff00]" />
+              {ctaBetaBadge}
+            </span>
+          </div>
           <p className="mt-4 flex max-w-[52ch] items-start gap-2.5 text-[12px] leading-relaxed text-[#66707a]">
             <span className="mt-2 h-px w-6 shrink-0 bg-[#d7dde2]" />
             {ctaHint}

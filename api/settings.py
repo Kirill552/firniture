@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     PRICE_ORDER_RUB: int = 890
     PRICE_PACK10_RUB: int = 7900
     PACK_SIZE: int = 10
+    # Бета: экспорт бесплатен для всех, пейволл скрыт, деньги не берём.
+    # Выключение флага возвращает платную схему без миграций — записи
+    # доступа с reason="beta" остаются валидными.
+    BETA_FREE_MODE: bool = True
     # Guest Capability Token (HMAC-SHA256 secret)
     GUEST_CAPABILITY_SECRET: str = ""  # Empty = no guest tokens allowed (fail closed)
 
@@ -60,6 +64,8 @@ class Settings(BaseSettings):
     GUEST_GRANT_TTL_SECONDS: int = 900  # 15 minutes
     GUEST_DRAFT_TTL_SECONDS: int = 604800  # 7 days
     MVP_MACHINE_FEATURES_ENABLED: bool = False
+    # Функции для цеха, а не для частника: скрыты в бесплатной бете.
+    FACTORY_FEATURES_ENABLED: bool = False
     VISION_PIPELINE_TIMEOUT_SECONDS: int = 45
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024  # 10 MB decoded
     MAX_BASE64_BYTES: int = 14 * 1024 * 1024  # ~14 MB for base64 field

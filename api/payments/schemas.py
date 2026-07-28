@@ -28,10 +28,11 @@ class OrderAccessResponse(BaseModel):
     """Состояние доступа к экспорту конкретного заказа."""
 
     access: bool
-    reason: str | None = Field(description="free_first | payment | pack | null")
+    reason: str | None = Field(description="free_first | payment | pack | beta | null")
     price_rub: int
     pack_credits: int
     free_first_available: bool
+    beta_free: bool = Field(default=False, description="Бета: экспорт бесплатен, пейволл скрыт")
 
 
 class BalanceResponse(BaseModel):
@@ -42,6 +43,7 @@ class BalanceResponse(BaseModel):
     price_rub: int
     pack_price_rub: int
     pack_size: int
+    beta_free: bool = Field(default=False, description="Бета: оплата отключена")
 
 
 class WebhookAck(BaseModel):
