@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOrderCreator } from "@/hooks/use-order-creator";
 import { FileDropzone } from "@/components/vision/file-dropzone";
 import {
@@ -25,6 +25,18 @@ import { Loader2, Keyboard, Check, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { ProductPreview } from "@/components/order/product-preview";
 import type { ModuleShape } from "@/components/order/module-drawing";
+import { AssumptionsStrip, type ShopStandards } from "@/components/order/assumptions-strip";
+import { getAuthHeader } from "@/lib/auth";
+
+// Типовая практика до того, как мастер задал свою. Совпадает с дефолтами бэкенда.
+const DEFAULT_STANDARDS: ShopStandards = {
+  bottom_mount: "on_bottom",
+  tie_beam_height_mm: 70,
+  shelf_gap_mm: 1.5,
+  facade_gap_mm: 4,
+  fastener_type: "confirmat",
+  hardware_mount: "screws",
+};
 
 const MATERIALS = [
   { value: "ЛДСП", label: "ЛДСП" },
@@ -75,6 +87,18 @@ export default function NewOrderPage() {
   const [selectedModule, setSelectedModule] = useState(0);
   const modulesWidth = modules.reduce((sum, module) => sum + module.width, 0);
   const widthDifference = wallWidth - modulesWidth;
+
+  // Стандарты цеха для строки допущений. Гость видит типовые значения,
+  // авторизованный — свои: запрос без токена просто не пройдёт, и останутся дефолты.
+  const [standards, setStandards] = useState<ShopStandards>(DEFAULT_STANDARDS);
+  useEffect(() => {
+    fetch("/api/v1/settings", { headers: getAuthHeader() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.settings) setStandards({ ...DEFAULT_STANDARDS, ...data.settings });
+      })
+      .catch(() => {/* остаёмся на типовых значениях */});
+  }, []);
 
   const addModule = (moduleType: (typeof MODULE_TYPES)[number]) => {
     const added: ModuleShape = {
@@ -244,6 +268,7 @@ export default function NewOrderPage() {
                 onSelect={selectModule}
                 onChange={updateModule}
               />
+              {modules.length > 0 && <AssumptionsStrip standards={standards} />}
             </div>
             {/* Тип изделия нужен, только пока модулей нет: дальше тип задаёт
                 выбранный модуль на пироге, и два разных выбора путали бы. */}

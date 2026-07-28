@@ -1535,6 +1535,23 @@ async def update_settings(
     factory.settings = current_settings
     await db.commit()
 
+    # Пишем, что именно мастер поменял. Наши дефолты по спорным параметрам —
+    # привычка одного цеха; узнать, что цех делает иначе, можно только так.
+    if updated_fields:
+        from api.main import _emit_event
+
+        _emit_event(
+            "settings.changed",
+            {
+                "fields": updated_fields,
+                "values": {
+                    field: current_settings.get(field)
+                    for field in updated_fields
+                    if field in _CALCULATOR_STANDARD_KEYS
+                },
+            },
+        )
+
     return FactorySettingsUpdateResponse(
         success=True,
         updated_fields=updated_fields,
