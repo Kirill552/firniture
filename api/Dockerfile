@@ -19,6 +19,11 @@ RUN uv sync --frozen --no-dev
 COPY api ./api
 COPY shared ./shared
 
+# Конвейер разбора каталогов: нужен на сервере, чтобы заливать фурнитуру
+# в базу одной командой, без копирования файлов в живой контейнер.
+# Выгрузки и PDF в образ не попадают, они отсечены в .dockerignore.
+COPY etl_pipeline ./etl_pipeline
+
 # Копируем alembic для миграций
 COPY alembic ./alembic
 COPY alembic.ini ./

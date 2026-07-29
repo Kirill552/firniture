@@ -1,0 +1,53 @@
+# Контекст сборки api собирается из корня репозитория, поэтому здесь важно
+# отсечь тяжёлое и секретное: иначе демону уходят каталоги фурнитуры на сотни
+# мегабайт и локальное окружение.
+
+# Секреты
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Локальные окружения и кеши
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Фронтенд собирается из своего контекста ./web
+web/node_modules
+web/.next
+web/out
+web/test-results
+web/playwright-report
+node_modules
+
+# Исходные каталоги фурнитуры: сотни мегабайт PDF, в образе не нужны
+furnitura_catalogi
+
+# Выгрузки конвейера и локальные данные
+etl_pipeline/output
+etl_pipeline/knowledge_base
+# Старые отладочные скрипты конвейера: требуют openai, которого нет в рантайме
+etl_pipeline/test_api.py
+etl_pipeline/test_describe.py
+etl_pipeline/test_extract.py
+etl_pipeline/pdf_parser.py
+tests/output
+*.sqlite
+*.db
+
+# Разработка
+.git
+.github
+.claude
+.codex
+.Codex
+.gemini
+docs
+.trash-claude-redesing
+*.md
+!README.md
